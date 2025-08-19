@@ -31,7 +31,7 @@ interface Meeting {
   assigned_to: string
   event_time: string
   event_end_time?: string
-  type: "meeting"
+  // type property removed to match API response
 }
 
 interface Demo {
@@ -53,20 +53,36 @@ interface UnifiedEvent {
 }
 
 const chartConfig = {
+  new: {
+    label: "New Leads",
+    color: "hsl(220, 85%, 55%)",
+  },
   New: {
     label: "New Leads",
     color: "hsl(220, 85%, 55%)",
+  },
+  Qualified: {
+    label: "Qualified",
+    color: "hsl(45, 95%, 50%)",
   },
   "In Progress": {
     label: "In Progress",
     color: "hsl(45, 95%, 50%)",
   },
-  "Meeting Completed": {
+  "Meeting Done": {
     label: "Meeting Done",
     color: "hsl(142, 85%, 45%)",
   },
-  "Demo Completed": {
+  "Meeting Completed": {
+    label: "Meeting Completed",
+    color: "hsl(142, 85%, 45%)",
+  },
+  "Demo Done": {
     label: "Demo Done",
+    color: "hsl(262, 90%, 65%)",
+  },
+  "Demo Completed": {
+    label: "Demo Completed",
     color: "hsl(262, 90%, 65%)",
   },
   Won: {
@@ -76,6 +92,14 @@ const chartConfig = {
   Lost: {
     label: "Lost",
     color: "hsl(0, 90%, 65%)",
+  },
+  Unqualified: {
+    label: "Unqualified",
+    color: "hsl(0, 0%, 60%)",
+  },
+  "Not Our Segment": {
+    label: "Not Our Segment",
+    color: "hsl(0, 0%, 80%)",
   },
 }
 
@@ -120,7 +144,10 @@ export default function DashboardPage() {
             ? leadsData
             : leadsData.filter((lead) => lead.assigned_to === parsedUser.username)
 
-        setLeads(filteredLeads)
+        setLeads(filteredLeads.map((lead: any) => ({
+          ...lead,
+          id: lead.id.toString(),
+        })))
 
         console.log("[v0] Fetching meetings and demos from API...")
         try {
@@ -128,7 +155,7 @@ export default function DashboardPage() {
 
           // Convert to unified format using real API structure
           const allEvents: UnifiedEvent[] = [
-            ...meetingsData.map((meeting: Meeting) => ({
+            ...meetingsData.map((meeting: any) => ({
               id: meeting.id,
               lead_id: meeting.lead_id.toString(),
               assigned_to: meeting.assigned_to,
@@ -136,7 +163,7 @@ export default function DashboardPage() {
               end_time: meeting.event_end_time || meeting.event_time,
               type: "meeting" as const,
             })),
-            ...demosData.map((demo: Demo) => ({
+            ...demosData.map((demo: any) => ({
               id: demo.id,
               lead_id: demo.lead_id.toString(),
               assigned_to: demo.assigned_to,
@@ -272,7 +299,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pb-2">
             <div className="flex flex-col md:block">
-              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[150px] md:max-h-[250px]">
+              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[350px] md:max-h-[450px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <ChartTooltip
@@ -304,11 +331,11 @@ export default function DashboardPage() {
                       data={leadStatusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={30}
-                      outerRadius={60}
+                      innerRadius={60}
+                      outerRadius={120}
                       paddingAngle={2}
                       dataKey="value"
-                      label={({ value, percent }) => `${value} (${(percent * 100).toFixed(0)}%)`}
+                      label={({ value, percent }) => `${value} (${((percent ?? 0) * 100).toFixed(0)}%)`}
                       labelLine={false}
                     >
                       {leadStatusData.map((entry, index) => (
