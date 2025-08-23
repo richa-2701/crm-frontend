@@ -1,3 +1,4 @@
+// frontend/components/leads/lead-history-modal.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -5,14 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, History, Edit, UserCheck, Calendar } from "lucide-react"
-import { leadApi } from "@/lib/api"
+// --- CORRECTED: Import the correct types from the central API file ---
+import { leadApi, ApiLead } from "@/lib/api"
+// --- END CORRECTION ---
 
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-}
+// --- REMOVED: Redundant local interface is no longer needed ---
+// interface Lead { ... }
 
+// Define the HistoryItem type based on the backend schema
 interface HistoryItem {
   timestamp: string
   event_type: string
@@ -21,24 +22,22 @@ interface HistoryItem {
 }
 
 interface LeadHistoryModalProps {
-  lead: Lead
+  lead: ApiLead // Use the correct, imported type
   isOpen: boolean
   onClose: () => void
 }
 
 const actionIcons = {
-  created: Edit,
-  updated: Edit,
-  assigned: UserCheck,
-  status_changed: Calendar,
+  "Lead Creation": Edit,
+  "Activity / Status Change": Calendar,
+  Reassignment: UserCheck,
   default: History,
 }
 
 const actionColors = {
-  created: "bg-green-100 text-green-800",
-  updated: "bg-blue-100 text-blue-800",
-  assigned: "bg-purple-100 text-purple-800",
-  status_changed: "bg-orange-100 text-orange-800",
+  "Lead Creation": "bg-green-100 text-green-800",
+  "Activity / Status Change": "bg-orange-100 text-orange-800",
+  Reassignment: "bg-purple-100 text-purple-800",
   default: "bg-gray-100 text-gray-800",
 }
 
@@ -57,6 +56,7 @@ export function LeadHistoryModal({ lead, isOpen, onClose }: LeadHistoryModalProp
     try {
       setIsLoading(true)
       setError(null)
+      // The lead ID is a number, which is correct
       const data = await leadApi.getHistory(lead.id)
       setHistory(data)
     } catch (err) {
@@ -68,26 +68,12 @@ export function LeadHistoryModal({ lead, isOpen, onClose }: LeadHistoryModalProp
   }
 
   const getActionIcon = (eventType: string) => {
-    const type = eventType.toLowerCase().includes("creation")
-      ? "created"
-      : eventType.toLowerCase().includes("reassignment")
-        ? "assigned"
-        : eventType.toLowerCase().includes("status")
-          ? "status_changed"
-          : "updated"
-    const IconComponent = actionIcons[type as keyof typeof actionIcons] || actionIcons.default
+    const IconComponent = actionIcons[eventType as keyof typeof actionIcons] || actionIcons.default
     return <IconComponent className="h-4 w-4" />
   }
 
   const getActionColor = (eventType: string) => {
-    const type = eventType.toLowerCase().includes("creation")
-      ? "created"
-      : eventType.toLowerCase().includes("reassignment")
-        ? "assigned"
-        : eventType.toLowerCase().includes("status")
-          ? "status_changed"
-          : "updated"
-    return actionColors[type as keyof typeof actionColors] || actionColors.default
+    return actionColors[eventType as keyof typeof actionColors] || actionColors.default
   }
 
   const formatDate = (dateString: string) => {
@@ -117,12 +103,12 @@ export function LeadHistoryModal({ lead, isOpen, onClose }: LeadHistoryModalProp
           <div className="text-center py-8 text-red-500">{error}</div>
         ) : (
           <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-4">
+            <div className="space-y-4 p-1">
               {history.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">No history found for this lead.</div>
               ) : (
-                history.map((item) => (
-                  <div key={`${item.timestamp}-${item.user}`} className="border rounded-lg p-4 space-y-2">
+                history.map((item, index) => (
+                  <div key={`${item.timestamp}-${index}`} className="border rounded-lg p-4 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge className={getActionColor(item.event_type)}>

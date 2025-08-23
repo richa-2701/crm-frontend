@@ -1,3 +1,4 @@
+// frontend/components/leads/lead-activities-modal.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -5,24 +6,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Activity, Calendar, Phone, Mail, MessageSquare } from "lucide-react"
-import { leadApi } from "@/lib/api"
+// --- CORRECTED: Import the correct types from the central API file ---
+import { leadApi, ApiLead, ApiActivity } from "@/lib/api"
+// --- END CORRECTION ---
 
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-}
-
-interface ActivityItem {
-  id: number
-  lead_id: number
-  phase: string
-  details: string
-  created_at: string
-}
+// --- REMOVED: Redundant local interfaces are no longer needed ---
+// interface Lead { ... }
+// interface ActivityItem { ... }
 
 interface LeadActivitiesModalProps {
-  lead: Lead
+  lead: ApiLead // Use the correct, imported type
   isOpen: boolean
   onClose: () => void
 }
@@ -44,7 +37,7 @@ const activityColors = {
 }
 
 export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesModalProps) {
-  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [activities, setActivities] = useState<ApiActivity[]>([]) // Use the correct, imported type
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +51,7 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
     try {
       setIsLoading(true)
       setError(null)
+      // The lead ID is a number, which is correct
       const data = await leadApi.getActivities(lead.id)
       setActivities(data)
     } catch (err) {
@@ -118,7 +112,7 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
           <div className="text-center py-8 text-red-500">{error}</div>
         ) : (
           <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-4">
+            <div className="space-y-4 p-1">
               {activities.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">No activities found for this lead.</div>
               ) : (

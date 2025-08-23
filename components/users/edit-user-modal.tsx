@@ -1,3 +1,4 @@
+// frontend/components/users/edit-user-modal.tsx
 "use client"
 
 import type React from "react"
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { userApi } from "@/lib/api" // Import the API library
 
 interface User {
   id: string
@@ -72,37 +74,45 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setError("")
 
     if (!validateForm()) {
-      setIsLoading(false)
       return
     }
 
     if (!user) {
       setError("User data not found")
-      setIsLoading(false)
       return
     }
 
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+    setIsLoading(true)
+    setError("")
 
-      const updatedUser: User = {
-        ...user,
-        name: formData.name,
+    try {
+      // Make the actual API call to update the user
+      const apiResponse = await userApi.updateUser(Number.parseInt(user.id), {
+        username: formData.name,
+        usernumber: formData.phone,
         email: formData.email,
-        role: formData.role as "admin" | "user",
-        phone: formData.phone,
         department: formData.department,
+        role: formData.role,
+      })
+
+      // Transform the API response to the local User type
+      const updatedUser: User = {
+        id: apiResponse.id.toString(),
+        name: apiResponse.username,
+        email: apiResponse.email || "",
+        role: (apiResponse.role as "admin" | "user") || "user",
+        phone: apiResponse.usernumber,
+        department: apiResponse.department,
+        createdAt: apiResponse.created_at,
       }
 
       onUserUpdated(updatedUser)
       onClose()
-    } catch (err) {
-      setError("Failed to update user. Please try again.")
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || "Failed to update user. Please try again."
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

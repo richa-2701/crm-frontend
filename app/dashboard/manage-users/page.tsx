@@ -1,3 +1,4 @@
+// frontend/app/dashboard/manage-users/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -66,10 +67,11 @@ export default function ManageUsersPage() {
       const transformedUsers: User[] = usersData.map((user: ApiUser) => ({
         id: user.id.toString(),
         name: user.username,
-        email: user.email || `${user.username}@company.com`, // Use actual email from backend if available
-        role: "user" as "admin" | "user", // Updated to match backend user model without roles
+        email: user.email || `${user.username}@company.com`,
+        // Correctly map the role from the API data
+        role: user.role === "admin" ? "admin" : "user",
         phone: user.usernumber,
-        department: user.department || "N/A", // Use actual department from backend
+        department: user.department || "N/A",
         createdAt: user.created_at,
       }))
 

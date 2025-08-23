@@ -16,7 +16,6 @@ import { Label } from "@/components/ui/label"
 interface Lead {
   id: string
   company_name: string
-  contact_name: string
   assigned_to: string
 }
 
@@ -66,7 +65,7 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
               </SelectTrigger>
               <SelectContent>
                 {users
-                  .filter((user) => user.id !== lead.assigned_to)
+                  .filter((user) => user.id !== lead.assigned_to && user.name !== lead.assigned_to)
                   .map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name} ({user.email})

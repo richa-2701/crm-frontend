@@ -45,7 +45,13 @@ export default function PostDemoPage() {
       try {
         const leadsData = await api.getAllLeads()
         console.log("[v0] Fetched leads for post demo:", leadsData.length)
-        setLeads(leadsData)
+        setLeads(
+          leadsData.map((lead: any) => ({
+            id: String(lead.id),
+            company_name: lead.company_name,
+            contact_name: lead.contact_name,
+          }))
+        )
 
         const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
         const scheduledDemos = storedMeetings.filter((m: any) => m.type === "demo")

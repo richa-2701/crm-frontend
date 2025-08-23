@@ -83,8 +83,17 @@ export default function ScheduleDemoPage() {
         console.log("[v0] Fetched leads for demo scheduling:", leadsData.length)
         console.log("[v0] Fetched users for demo scheduling:", usersData.length)
 
-        setLeads(leadsData)
-        setUsers(usersData)
+        setLeads(leadsData.map((lead: any) => ({
+          id: lead.id.toString(),
+          company_name: lead.company_name,
+          contact_name: lead.contact_name,
+        })))
+        setUsers(usersData.map((user: any) => ({
+          id: user.id.toString(),
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        })))
 
         // Load meetings from localStorage (until backend endpoint is available)
         const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
@@ -251,7 +260,7 @@ export default function ScheduleDemoPage() {
                       placeholder="Search and select a lead..."
                       searchPlaceholder="Type to search leads..."
                       emptyMessage="No leads found."
-                      className="h-8 sm:h-10 text-sm w-full min-w-0"
+                      className="h-8 sm:h-10 text-sm w-full min-w-0 overflow-hidden"
                     />
                   </div>
 

@@ -3,12 +3,21 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Card, CardContent } from "@/components/ui/card"
+
+interface Contact {
+  id: number
+  lead_id: number
+  contact_name: string
+  phone: string
+  email: string | null
+  designation: string | null
+}
 
 interface Lead {
   id: string
   company_name: string
-  contact_name: string
-  phone: string
+  contacts: Contact[]
   phone_2?: string
   email: string
   address?: string
@@ -50,33 +59,50 @@ export function LeadDetailsModal({ lead, isOpen, onClose, getUserName }: LeadDet
 
           <Separator />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <h4 className="font-medium text-sm text-muted-foreground">Company Name</h4>
-              <p className="mt-1">{lead.company_name}</p>
-            </div>
-            <div>
-              <h4 className="font-medium text-sm text-muted-foreground">Contact Name</h4>
-              <p className="mt-1">{lead.contact_name}</p>
+          {/* Contact Persons Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Persons</h3>
+            <div className="space-y-3">
+              {lead.contacts && lead.contacts.length > 0 ? (
+                lead.contacts.map((contact, index) => (
+                  <Card key={contact.id || index}>
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <p className="font-semibold">{contact.contact_name}</p>
+                        {contact.designation && <Badge variant="secondary">{contact.designation}</Badge>}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                        <p>
+                          <strong>Phone:</strong> {contact.phone}
+                        </p>
+                        {contact.email && (
+                          <p>
+                            <strong>Email:</strong> {contact.email}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No contact persons listed.</p>
+              )}
             </div>
           </div>
 
+          <Separator />
+          
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="font-medium text-sm text-muted-foreground">Phone</h4>
-              <p className="mt-1">{lead.phone}</p>
+              <h4 className="font-medium text-sm text-muted-foreground">Company Email</h4>
+              <p className="mt-1">{lead.email || "N/A"}</p>
             </div>
-            {lead.phone_2 && (
+             {lead.phone_2 && (
               <div>
-                <h4 className="font-medium text-sm text-muted-foreground">Phone 2</h4>
+                <h4 className="font-medium text-sm text-muted-foreground">Company Phone 2</h4>
                 <p className="mt-1">{lead.phone_2}</p>
               </div>
             )}
-          </div>
-
-          <div>
-            <h4 className="font-medium text-sm text-muted-foreground">Email</h4>
-            <p className="mt-1">{lead.email}</p>
           </div>
 
           {lead.address && (

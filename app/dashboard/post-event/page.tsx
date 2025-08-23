@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -12,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { api } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
+import { FileText, ClipboardList } from "lucide-react"
 
 interface Lead {
   id: string
@@ -19,23 +19,25 @@ interface Lead {
   contact_name: string
 }
 
-interface Meeting {
+interface Event {
   id: string
   lead_id: string
-  event_type: string
+  type: "meeting" | "demo"
 }
 
-export default function PostMeetingPage() {
+export default function PostEventPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [leads, setLeads] = useState<Lead[]>([])
-  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [events, setEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [confirmationMessage, setConfirmationMessage] = useState("")
 
+  const [eventType, setEventType] = useState<"meeting" | "demo">("meeting")
+
   const [formData, setFormData] = useState({
-    meeting_id: "",
+    event_id: "",
     lead_id: "",
     remark: "",
   })
@@ -44,19 +46,13 @@ export default function PostMeetingPage() {
     const fetchLeads = async () => {
       try {
         const leadsData = await api.getAllLeads()
-        console.log("[v0] Fetched leads for post meeting:", leadsData.length)
-        setLeads(
-          leadsData.map((lead: any) => ({
-            id: String(lead.id),
-            company_name: lead.company_name,
-            contact_name: lead.contact_name,
-          }))
-        )
+        console.log(`[v0] Fetched leads for post ${eventType}:`, leadsData.length)
+        setLeads(leadsData)
 
         const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
-        const scheduledMeetings = storedMeetings.filter((m: any) => m.type === "meeting")
-        console.log("[v0] Loaded scheduled meetings:", scheduledMeetings.length)
-        setMeetings(scheduledMeetings)
+        const filteredEvents = storedMeetings.filter((m: any) => m.type === eventType)
+        console.log(`[v0] Loaded scheduled ${eventType}s:`, filteredEvents.length)
+        setEvents(filteredEvents)
       } catch (error) {
         console.error("[v0] Failed to fetch leads:", error)
         toast({
@@ -68,15 +64,15 @@ export default function PostMeetingPage() {
     }
 
     fetchLeads()
-  }, [toast])
+  }, [toast, eventType])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
 
     if (field === "lead_id") {
-      const meeting = meetings.find((m) => m.lead_id === value)
-      if (meeting) {
-        setFormData((prev) => ({ ...prev, meeting_id: meeting.id }))
+      const event = events.find((e) => e.lead_id === value)
+      if (event) {
+        setFormData((prev) => ({ ...prev, event_id: event.id }))
       }
     }
   }
@@ -86,36 +82,37 @@ export default function PostMeetingPage() {
     setIsLoading(true)
 
     try {
-      const meetingData = {
-        meeting_id: Number.parseInt(formData.meeting_id),
+      const eventData = {
+        [`${eventType}_id`]: Number.parseInt(formData.event_id),
         notes: formData.remark,
-        updated_by: "richa", // Get from current user context/auth
+        updated_by: "richa",
       }
 
-      console.log("[v0] Completing meeting with data:", meetingData)
+      console.log(`[v0] Completing ${eventType} with data:`, eventData)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/meetings/complete`, {
+      const endpoint = eventType === "meeting" ? "/web/meetings/complete" : "/web/demos/complete"
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(meetingData),
+        body: JSON.stringify(eventData),
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to complete meeting: ${response.statusText}`)
+        throw new Error(`Failed to complete ${eventType}: ${response.statusText}`)
       }
 
       const result = await response.json()
-      console.log("[v0] Meeting completed successfully:", result)
+      console.log(`[v0] ${eventType} completed successfully:`, result)
 
-      setConfirmationMessage("Meeting is marked done")
+      setConfirmationMessage(`${eventType === "meeting" ? "Meeting" : "Demo"} is marked done`)
       setShowConfirmation(true)
     } catch (error) {
-      console.error("[v0] Failed to complete meeting:", error)
+      console.error(`[v0] Failed to complete ${eventType}:`, error)
       toast({
         title: "Error",
-        description: "Failed to save meeting notes. Please try again.",
+        description: `Failed to save ${eventType} notes. Please try again.`,
         variant: "destructive",
       })
     } finally {
@@ -128,9 +125,9 @@ export default function PostMeetingPage() {
     router.push("/dashboard")
   }
 
-  const leadsWithMeetings = leads.filter((lead) => meetings.some((meeting) => meeting.lead_id === lead.id))
+  const leadsWithEvents = leads.filter((lead) => events.some((event) => event.lead_id === lead.id))
 
-  const leadOptions = leadsWithMeetings.map((lead) => ({
+  const leadOptions = leadsWithEvents.map((lead) => ({
     value: lead.id,
     label: `${lead.company_name} (${lead.contact_name})`,
   }))
@@ -138,13 +135,41 @@ export default function PostMeetingPage() {
   return (
     <div className="space-y-3 sm:space-y-6">
       <div className="px-1">
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Post Meeting</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Record meeting outcome and notes</p>
+        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Post Meeting/Demo</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Record meeting or demo outcome and notes</p>
       </div>
 
       <Card className="border-0 sm:border shadow-none sm:shadow-sm">
         <CardHeader className="pb-3 sm:pb-6">
-          <CardTitle className="text-lg sm:text-xl">Meeting Outcome</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">Event Type</CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={eventType === "meeting" ? "default" : "outline"}
+              onClick={() => setEventType("meeting")}
+              className="flex-1 h-9 text-sm"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Post Meeting
+            </Button>
+            <Button
+              type="button"
+              variant={eventType === "demo" ? "default" : "outline"}
+              onClick={() => setEventType("demo")}
+              className="flex-1 h-9 text-sm"
+            >
+              <ClipboardList className="h-4 w-4 mr-2" />
+              Post Demo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 sm:border shadow-none sm:shadow-sm">
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="text-lg sm:text-xl">{eventType === "meeting" ? "Meeting" : "Demo"} Outcome</CardTitle>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
@@ -165,11 +190,11 @@ export default function PostMeetingPage() {
 
             <div className="space-y-1">
               <Label htmlFor="remark" className="text-xs sm:text-sm">
-                Meeting Notes *
+                {eventType === "meeting" ? "Meeting" : "Demo"} Notes *
               </Label>
               <Textarea
                 id="remark"
-                placeholder="Enter meeting notes and outcomes..."
+                placeholder={`Enter ${eventType} notes and ${eventType === "demo" ? "client feedback" : "outcomes"}...`}
                 value={formData.remark}
                 onChange={(e) => handleInputChange("remark", e.target.value)}
                 rows={3}

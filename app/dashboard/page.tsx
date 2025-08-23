@@ -1,3 +1,4 @@
+//frontend/app/dashboard/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -16,10 +17,18 @@ interface User {
   usernumber: string
 }
 
+interface Contact {
+  id: number
+  contact_name: string
+  phone: string
+  email: string | null
+  designation: string | null
+}
+
 interface Lead {
   id: string
   company_name: string
-  contact_name: string
+  contacts: Contact[] // Updated to an array of contacts
   assigned_to: string
   status: string
   [key: string]: any
@@ -31,7 +40,7 @@ interface Meeting {
   assigned_to: string
   event_time: string
   event_end_time?: string
-  // type property removed to match API response
+  type: "meeting"
 }
 
 interface Demo {
@@ -53,37 +62,25 @@ interface UnifiedEvent {
 }
 
 const chartConfig = {
-  new: {
+  new: { // Changed from "New"
     label: "New Leads",
     color: "hsl(220, 85%, 55%)",
-  },
-  New: {
-    label: "New Leads",
-    color: "hsl(220, 85%, 55%)",
-  },
-  Qualified: {
-    label: "Qualified",
-    color: "hsl(45, 95%, 50%)",
   },
   "In Progress": {
     label: "In Progress",
     color: "hsl(45, 95%, 50%)",
   },
-  "Meeting Done": {
+  "Meeting Done": { // Changed from "Meeting Completed"
     label: "Meeting Done",
     color: "hsl(142, 85%, 45%)",
   },
-  "Meeting Completed": {
-    label: "Meeting Completed",
-    color: "hsl(142, 85%, 45%)",
-  },
-  "Demo Done": {
+  "Demo Done": { // Changed from "Demo Completed"
     label: "Demo Done",
     color: "hsl(262, 90%, 65%)",
   },
-  "Demo Completed": {
-    label: "Demo Completed",
-    color: "hsl(262, 90%, 65%)",
+  Qualified: { // Added this new status based on your screenshot
+    label: "Qualified",
+    color: "hsl(25, 95%, 53%)", // Example color (orange)
   },
   Won: {
     label: "Won/Closed",
@@ -92,14 +89,6 @@ const chartConfig = {
   Lost: {
     label: "Lost",
     color: "hsl(0, 90%, 65%)",
-  },
-  Unqualified: {
-    label: "Unqualified",
-    color: "hsl(0, 0%, 60%)",
-  },
-  "Not Our Segment": {
-    label: "Not Our Segment",
-    color: "hsl(0, 0%, 80%)",
   },
 }
 
@@ -122,6 +111,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<UnifiedEvent[]>([])
   const [leadStatusData, setLeadStatusData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false)
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -137,35 +127,61 @@ export default function DashboardPage() {
 
         console.log("[v0] Fetching leads for dashboard...")
         const leadsData = await api.getAllLeads()
+        console.log("[v0] All leads fetched successfully:", leadsData)
 
         // Filter leads for current user if not admin
         const filteredLeads =
-          parsedUser.role === "Administrator"
+          parsedUser.role === "admin"
             ? leadsData
             : leadsData.filter((lead) => lead.assigned_to === parsedUser.username)
 
-        setLeads(filteredLeads.map((lead: any) => ({
+        // Convert id to string for type compatibility
+        setLeads(filteredLeads.map((lead) => ({
           ...lead,
           id: lead.id.toString(),
         })))
 
         console.log("[v0] Fetching meetings and demos from API...")
         try {
-          const [meetingsData, demosData] = await Promise.all([api.getScheduledMeetings(), api.getScheduledDemos()])
+          console.log("[v0] Fetching scheduled meetings from API...")
+          console.log("[v0] Fetching scheduled demos from API...")
+          const [meetingsDataRaw, demosDataRaw] = await Promise.all([api.getScheduledMeetings(), api.getScheduledDemos()])
 
-          // Convert to unified format using real API structure
+          console.log("[v0] Meetings fetched successfully:", meetingsDataRaw.length, "meetings")
+          console.log("[v0] Demos fetched successfully:", demosDataRaw.length, "demos")
+
+          // Transform meetingsDataRaw to Meeting[]
+          const meetingsData: Meeting[] = meetingsDataRaw.map((meeting: any) => ({
+            id: meeting.id.toString(),
+            lead_id: meeting.lead_id.toString(),
+            assigned_to: meeting.assigned_to,
+            event_time: meeting.event_time,
+            event_end_time: meeting.event_end_time,
+            type: "meeting",
+          }))
+
+          // Transform demosDataRaw to Demo[]
+          const demosData: Demo[] = demosDataRaw.map((demo: any) => ({
+            id: demo.id.toString(),
+            lead_id: demo.lead_id.toString(),
+            assigned_to: demo.assigned_to,
+            start_time: demo.start_time,
+            event_end_time: demo.event_end_time,
+            type: "demo",
+          }))
+
           const allEvents: UnifiedEvent[] = [
-            ...meetingsData.map((meeting: any) => ({
+            ...meetingsData.map((meeting) => ({
               id: meeting.id,
-              lead_id: meeting.lead_id.toString(),
+              lead_id: meeting.lead_id.toString(), // Ensure lead_id is string for consistent matching
               assigned_to: meeting.assigned_to,
               start_time: meeting.event_time,
               end_time: meeting.event_end_time || meeting.event_time,
               type: "meeting" as const,
             })),
-            ...demosData.map((demo: any) => ({
+            ...demosData.map((demo) => ({
               id: demo.id,
-              lead_id: demo.lead_id.toString(),
+              lead_id: demo.lead_id.toString(), // Ensure lead_id is string for consistent matching
               assigned_to: demo.assigned_to,
               start_time: demo.start_time,
               end_time: demo.event_end_time || demo.start_time,
@@ -173,12 +189,19 @@ export default function DashboardPage() {
             })),
           ]
 
-          // Filter events for current user if not admin
           const filteredEvents =
-            parsedUser.role === "Administrator"
+            parsedUser.role === "admin"
               ? allEvents
-              : allEvents.filter((event) => event.assigned_to === parsedUser.username)
+              : allEvents.filter((event) => {
+                  // Handle both username and phone number formats in assigned_to
+                  return (
+                    event.assigned_to === parsedUser.username ||
+                    event.assigned_to === parsedUser.usernumber ||
+                    event.assigned_to.toLowerCase().includes(parsedUser.username.toLowerCase())
+                  )
+                })
 
+          console.log("[v0] Filtered events for user:", filteredEvents.length, "events")
           setEvents(filteredEvents)
         } catch (error) {
           console.error("[v0] Error fetching meetings/demos:", error)
@@ -186,21 +209,19 @@ export default function DashboardPage() {
         }
 
         // Calculate lead status data for pie chart
-        const statusCounts = filteredLeads.reduce(
-          (acc, lead) => {
-            const status = lead.status || "Unknown"
-            acc[status] = (acc[status] || 0) + 1
-            return acc
-          },
-          {} as Record<string, number>,
-        )
+        const statusCounts = filteredLeads.reduce((acc, lead) => {
+            const status = lead.status || "Unknown";
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
 
         const chartData = Object.entries(statusCounts).map(([status, count]) => ({
-          name: status,
-          value: count,
-          color: chartConfig[status as keyof typeof chartConfig]?.color || "hsl(var(--muted))",
-          label: chartConfig[status as keyof typeof chartConfig]?.label || status,
-        }))
+            name: status,
+            value: count,
+            // The `fill` property is what the <Cell> component uses directly.
+            fill: chartConfig[status as keyof typeof chartConfig]?.color || "hsl(var(--muted))",
+            label: chartConfig[status as keyof typeof chartConfig]?.label || status,
+        }));
 
         setLeadStatusData(chartData)
       } catch (error) {
@@ -220,17 +241,28 @@ export default function DashboardPage() {
     return events
       .filter((event) => new Date(event.start_time).toDateString() === todayString)
       .map((event) => {
-        const lead = leads.find((l) => l.id === event.lead_id)
+        const lead = leads.find((l) => l.id.toString() === event.lead_id.toString())
+        // Safely get the first contact
+        const primaryContact = lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null
         const startTime = new Date(event.start_time)
         const endTime = new Date(event.end_time)
+
+        console.log(
+          "[v0] Matching event lead_id:",
+          event.lead_id,
+          "with leads:",
+          leads.map((l) => l.id),
+          "found:",
+          lead?.company_name,
+        )
 
         return {
           id: event.id,
           type: event.type,
-          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || "Unknown"}`,
+          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || `Lead #${event.lead_id}`}`, // Show lead ID instead of "Unknown"
           time: `${startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-          contact: lead?.contact_name || "Unknown",
-          phone: lead?.phone || "",
+          contact: primaryContact?.contact_name || "Contact Info Pending", // More descriptive fallback
+          phone: primaryContact?.phone || "",
         }
       })
   }
@@ -245,7 +277,9 @@ export default function DashboardPage() {
         return eventDate > today && eventDate <= nextWeek
       })
       .map((event) => {
-        const lead = leads.find((l) => l.id === event.lead_id)
+        const lead = leads.find((l) => l.id.toString() === event.lead_id.toString())
+        // Safely get the first contact
+        const primaryContact = lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null
         const eventDate = new Date(event.start_time)
         const endTime = new Date(event.end_time)
         const isToday = eventDate.toDateString() === today.toDateString()
@@ -258,10 +292,10 @@ export default function DashboardPage() {
         return {
           id: event.id,
           type: event.type,
-          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || "Unknown"}`,
+          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || `Lead #${event.lead_id}`}`, // Show lead ID instead of "Unknown"
           date: dateLabel,
           time: `${eventDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-          contact: lead?.contact_name || "Unknown",
+          contact: primaryContact?.contact_name || "Contact Info Pending", // More descriptive fallback
         }
       })
   }
@@ -282,7 +316,7 @@ export default function DashboardPage() {
       <div className="mb-3">
         <h1 className="text-xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-xs md:text-base text-muted-foreground">
-          Welcome back, {user.username}!{user.role === "Administrator" ? " (Admin)" : " (User)"}
+          Welcome back, {user.username}!{user.role === "admin" ? " (Admin)" : " (User)"}
         </p>
       </div>
 
@@ -292,14 +326,14 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm md:text-lg">Lead Status Distribution</CardTitle>
             <CardDescription className="text-xs hidden md:block">
-              {user.role === "Administrator"
+              {user.role === "admin"
                 ? "Distribution of all leads by status"
                 : "Distribution of your assigned leads by status"}
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-2">
             <div className="flex flex-col md:block">
-              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[350px] md:max-h-[450px]">
+              <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[150px] md:max-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <ChartTooltip
@@ -331,15 +365,15 @@ export default function DashboardPage() {
                       data={leadStatusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
+                      innerRadius={30}
+                      outerRadius={60}
                       paddingAngle={2}
                       dataKey="value"
                       label={({ value, percent }) => `${value} (${((percent ?? 0) * 100).toFixed(0)}%)`}
                       labelLine={false}
                     >
                       {leadStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
                   </PieChart>
@@ -373,7 +407,7 @@ export default function DashboardPage() {
                   <Calendar className="h-3 w-3" />
                   <h3 className="text-xs font-medium">Today</h3>
                 </div>
-                <div className="space-y-1 max-h-[120px] md:max-h-[200px] overflow-y-auto">
+                <div className="space-y-1 h-[180px] md:h-[280px] overflow-y-auto">
                   {todaysTasks.length > 0 ? (
                     todaysTasks.slice(0, 2).map((task) => (
                       <div key={task.id} className="flex items-center gap-2 rounded border p-1.5">
@@ -402,27 +436,34 @@ export default function DashboardPage() {
                   <Clock className="h-3 w-3" />
                   <h3 className="text-xs font-medium">Upcoming (Next 7 Days)</h3>
                 </div>
-                <div className="space-y-1 max-h-[120px] md:max-h-[200px] overflow-y-auto">
+                <div className="space-y-1 h-[180px] md:h-[280px] overflow-y-auto">
                   {upcomingTasks.length > 0 ? (
-                    upcomingTasks.slice(0, 2).map((task) => (
-                      <div key={task.id} className="flex items-center gap-2 rounded border p-1.5">
-                        <TaskTypeIcon type={task.type} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{task.title}</p>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground truncate">{task.contact}</p>
-                            <span className="text-xs text-muted-foreground">
-                              {task.date} {task.time}
-                            </span>
+                    <>
+                      {(showAllUpcoming ? upcomingTasks : upcomingTasks.slice(0, 5)).map((task) => (
+                        <div key={task.id} className="flex items-center gap-2 rounded border p-1.5">
+                          <TaskTypeIcon type={task.type} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{task.title}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground truncate">{task.contact}</p>
+                              <span className="text-xs text-muted-foreground">
+                                {task.date} {task.time}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                      {upcomingTasks.length > 5 && (
+                        <button
+                          onClick={() => setShowAllUpcoming(!showAllUpcoming)}
+                          className="w-full text-xs text-blue-600 hover:text-blue-800 text-center py-1 hover:bg-blue-50 rounded transition-colors"
+                        >
+                          {showAllUpcoming ? "Show Less" : `Show More (+${upcomingTasks.length - 5} more)`}
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground">No upcoming tasks</p>
-                  )}
-                  {upcomingTasks.length > 2 && (
-                    <p className="text-xs text-muted-foreground text-center">+{upcomingTasks.length - 2} more</p>
                   )}
                 </div>
               </div>
@@ -435,13 +476,13 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
             <CardTitle className="text-xs font-medium">
-              {user.role === "Administrator" ? "Total Leads" : "My Leads"}
+              {user.role === "admin" ? "Total Leads" : "My Leads"}
             </CardTitle>
             <Users className="h-3 w-3 text-muted-foreground" />
           </CardHeader>
           <CardContent className="pb-2">
             <div className="text-lg md:text-2xl font-bold">{leads.length}</div>
-            <p className="text-xs text-muted-foreground">{user.role === "Administrator" ? "All leads" : "Assigned"}</p>
+            <p className="text-xs text-muted-foreground">{user.role === "admin" ? "All leads" : "Assigned"}</p>
           </CardContent>
         </Card>
         <Card>

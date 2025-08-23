@@ -1,3 +1,4 @@
+// frontend/components/users/create-user-modal.tsx
 "use client"
 
 import type React from "react"
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { authApi } from "@/lib/api" // Import the API library
 
 interface User {
   id: string
@@ -45,8 +47,9 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
   }
 
   const validateForm = () => {
-    if (!formData.name || !formData.email || !formData.password || !formData.role) {
-      setError("Please fill in all required fields")
+    // A phone number is required by the backend's UserCreate schema
+    if (!formData.name || !formData.email || !formData.password || !formData.role || !formData.phone) {
+      setError("Please fill in all required fields, including Phone Number")
       return false
     }
 
@@ -71,34 +74,33 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setError("")
 
     if (!validateForm()) {
-      setIsLoading(false)
       return
     }
 
+    setIsLoading(true)
+    setError("")
+
     try {
-      // Check if email already exists
-      const existingUsers = JSON.parse(localStorage.getItem("users") || "[]")
-      if (existingUsers.some((user: any) => user.email === formData.email)) {
-        setError("A user with this email already exists")
-        setIsLoading(false)
-        return
-      }
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      const newUser: User = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: formData.name,
+      // Make the actual API call to the register endpoint
+      const apiResponse = await authApi.register({
+        username: formData.name,
+        password: formData.password,
+        usernumber: formData.phone,
         email: formData.email,
-        role: formData.role as "admin" | "user",
-        phone: formData.phone,
         department: formData.department,
-        createdAt: new Date().toISOString(),
+      })
+
+      // Transform the API response to the local User type
+      const newUser: User = {
+        id: apiResponse.id.toString(),
+        name: apiResponse.username,
+        email: apiResponse.email || "",
+        role: (apiResponse.role as "admin" | "user") || "user",
+        phone: apiResponse.usernumber,
+        department: apiResponse.department,
+        createdAt: apiResponse.created_at,
       }
 
       onUserCreated(newUser)
@@ -115,8 +117,10 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
       })
 
       onClose()
-    } catch (err) {
-      setError("Failed to create user. Please try again.")
+    } catch (err: any) {
+      // Display the actual error from the API if possible
+      const errorMessage = err.response?.data?.detail || "Failed to create user. Please try again."
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -211,12 +215,13 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-phone">Phone Number</Label>
+              <Label htmlFor="create-phone">Phone Number *</Label>
               <Input
                 id="create-phone"
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => handleInputChange("phone", e.target.value)}
+                required
               />
             </div>
           </div>

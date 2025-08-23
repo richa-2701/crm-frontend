@@ -1,54 +1,47 @@
-interface User {
-  id: string
-  name: string
-  email: string
-  role: "admin" | "user"
-}
+// frontend/lib/rbac.ts
 
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-  assigned_to: string
-  status: string
-  [key: string]: any
-}
+// --- We use the types imported from api.ts for consistency ---
+import { ApiUser, ApiLead, ApiMeeting } from "./api";
 
-interface Meeting {
-  id: string
-  lead_id: string
-  assigned_to: string
-  start_time: string
-  end_time: string
-  type: "meeting" | "demo"
-}
 
-export function filterLeadsByRole(leads: Lead[], user: User): Lead[] {
-  if (user.role === "admin") {
-    return leads
+export function filterLeadsByRole(leads: ApiLead[], user: ApiUser): ApiLead[] {
+  // Check against the role from your backend, e.g., "Administrator"
+  if (user.role === "Administrator") {
+    return leads;
   }
 
-  // Company users only see leads assigned to them
-  return leads.filter((lead) => lead.assigned_to === user.id)
+  // --- THIS IS THE CORRECTED LINE ---
+  // We filter based on the individual `lead` object's `assigned_to` property
+  // and compare it to the user's `username`, as defined by the backend logic.
+  return leads.filter((lead) => lead.assigned_to === user.username);
+  // --- END CORRECTION ---
 }
 
-export function filterMeetingsByRole(meetings: Meeting[], user: User): Meeting[] {
-  if (user.role === "admin") {
-    return meetings
+// --- CORRECTED: Updated to use ApiMeeting and ApiUser types ---
+export function filterMeetingsByRole(meetings: ApiMeeting[], user: ApiUser): ApiMeeting[] {
+  if (user.role === "Administrator") {
+    return meetings;
   }
 
-  // Company users only see meetings assigned to them
-  return meetings.filter((meeting) => meeting.assigned_to === user.id)
+  // Company users only see meetings assigned to them by username
+  return meetings.filter((meeting) => meeting.assigned_to === user.username);
 }
+// --- END CORRECTION ---
 
-export function canViewAllData(user: User): boolean {
-  return user.role === "admin"
+// --- CORRECTED: Updated to use the ApiUser type ---
+export function canViewAllData(user: ApiUser): boolean {
+  return user.role === "Administrator";
 }
+// --- END CORRECTION ---
 
-export function canManageAllLeads(user: User): boolean {
-  return user.role === "admin"
+// --- CORRECTED: Updated to use the ApiUser type ---
+export function canManageAllLeads(user: ApiUser): boolean {
+  return user.role === "Administrator";
 }
+// --- END CORRECTION ---
 
-export function canAssignToOthers(user: User): boolean {
-  return user.role === "admin"
+// --- CORRECTED: Updated to use the ApiUser type ---
+export function canAssignToOthers(user: ApiUser): boolean {
+  return user.role === "Administrator";
 }
+// --- END CORRECTION ---

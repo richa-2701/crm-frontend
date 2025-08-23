@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { X, Send, Bot, User, Loader2, MessageCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { chatApi } from "@/lib/api"
+import { chatApi, ApiUser } from "@/lib/api"
 
 interface Message {
   id: string
@@ -25,17 +25,12 @@ interface Message {
 }
 
 interface CRMChatbotProps {
-  userRole: "admin" | "user"
-  currentUser: {
-    id: string
-    name: string
-    email: string
-  }
+  currentUser: ApiUser
   isOpen: boolean
   onClose: () => void
 }
 
-export function CRMChatbot({ userRole, currentUser, isOpen, onClose }: CRMChatbotProps) {
+export function CRMChatbot({ currentUser, isOpen, onClose }: CRMChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -78,7 +73,7 @@ export function CRMChatbot({ userRole, currentUser, isOpen, onClose }: CRMChatbo
     setIsLoading(true)
 
     try {
-      const response = await chatApi.sendMessage(message, currentUser.id)
+      const response = await chatApi.sendMessage(message, currentUser.usernumber)
 
       const botMessage: Message = {
         id: Date.now().toString(),

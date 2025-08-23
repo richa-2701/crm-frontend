@@ -1,9 +1,11 @@
+// frontend/components/users/delete-user-modal.tsx
 "use client"
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle, AlertCircle } from "lucide-react"
+import { userApi } from "@/lib/api" // Import the API library
 
 interface User {
   id: string
@@ -33,13 +35,14 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
     setError("")
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Make the actual API call to delete the user
+      await userApi.deleteUser(Number.parseInt(user.id))
 
       onUserDeleted(user.id)
       onClose()
-    } catch (err) {
-      setError("Failed to delete user. Please try again.")
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || "Failed to delete user. Please try again."
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

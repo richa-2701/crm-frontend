@@ -12,13 +12,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { leadApi, userApi, type ApiUser } from "@/lib/api"
-import { Loader2 } from "lucide-react"
+import { Loader2, PlusCircle, Trash2 } from "lucide-react"
 
 interface User {
   id: string
   username: string
   email: string
   role: string
+}
+
+interface Contact {
+  contact_name: string
+  phone: string
+  email: string
+  designation: string
 }
 
 const leadTypes = ["Hot Lead", "Cold Lead", "Not Our Segment"]
@@ -29,12 +36,13 @@ export default function CreateLeadPage() {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [companyUsers, setCompanyUsers] = useState<User[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([
+    { contact_name: "", phone: "", email: "", designation: "" },
+  ])
   const [formData, setFormData] = useState({
     company_name: "",
-    contact_name: "",
-    phone: "",
     phone_2: "",
-    email: "",
+    email: "", // Main company email
     address: "",
     team_size: "",
     turnover: "",
@@ -45,7 +53,7 @@ export default function CreateLeadPage() {
     machine_specification: "",
     challenges: "",
     remark: "",
-    lead_type: "", // Added lead_type field
+    lead_type: "",
   })
 
   useEffect(() => {
@@ -120,6 +128,23 @@ export default function CreateLeadPage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleContactChange = (index: number, field: keyof Contact, value: string) => {
+    const newContacts = [...contacts]
+    newContacts[index][field] = value
+    setContacts(newContacts)
+  }
+
+  const addContact = () => {
+    setContacts([...contacts, { contact_name: "", phone: "", email: "", designation: "" }])
+  }
+
+  const removeContact = (index: number) => {
+    if (contacts.length > 1) {
+      const newContacts = contacts.filter((_, i) => i !== index)
+      setContacts(newContacts)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -133,6 +158,7 @@ export default function CreateLeadPage() {
         assigned_to: assignedUser?.username || formData.assigned_to,
         created_by: user?.username || user?.id || "unknown",
         source: formData.source || "Website",
+        contacts: contacts, // Add the contacts array to the payload
       }
 
       try {
@@ -195,49 +221,99 @@ export default function CreateLeadPage() {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="contact_name" className="text-xs sm:text-sm">
-                  Concern Person Name *
-                </Label>
-                <Input
-                  id="contact_name"
-                  value={formData.contact_name}
-                  onChange={(e) => handleInputChange("contact_name", e.target.value)}
-                  required
-                  className="h-8 sm:h-10 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
                 <Label htmlFor="email" className="text-xs sm:text-sm">
-                  Email *
+                  Company Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
-                  required
                   className="h-8 sm:h-10 text-sm"
                 />
               </div>
             </div>
 
+            {/* Dynamic Contact Persons Section */}
+            <div className="space-y-4 rounded-md border p-4">
+              <h3 className="text-md font-semibold">Contact Persons</h3>
+              {contacts.map((contact, index) => (
+                <div key={index} className="space-y-3 rounded-md border p-3 relative">
+                  {contacts.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1 right-1 h-6 w-6"
+                      onClick={() => removeContact(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <div className="grid gap-3 grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`contact_name_${index}`} className="text-xs sm:text-sm">
+                        Full Name *
+                      </Label>
+                      <Input
+                        id={`contact_name_${index}`}
+                        value={contact.contact_name}
+                        onChange={(e) => handleContactChange(index, "contact_name", e.target.value)}
+                        required
+                        className="h-8 sm:h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`designation_${index}`} className="text-xs sm:text-sm">
+                        Designation
+                      </Label>
+                      <Input
+                        id={`designation_${index}`}
+                        value={contact.designation}
+                        onChange={(e) => handleContactChange(index, "designation", e.target.value)}
+                        className="h-8 sm:h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`phone_${index}`} className="text-xs sm:text-sm">
+                        Phone *
+                      </Label>
+                      <Input
+                        id={`phone_${index}`}
+                        type="tel"
+                        value={contact.phone}
+                        onChange={(e) => handleContactChange(index, "phone", e.target.value)}
+                        required
+                        className="h-8 sm:h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`contact_email_${index}`} className="text-xs sm:text-sm">
+                        Email
+                      </Label>
+                      <Input
+                        id={`contact_email_${index}`}
+                        type="email"
+                        value={contact.email}
+                        onChange={(e) => handleContactChange(index, "email", e.target.value)}
+                        className="h-8 sm:h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Add Another Contact
+              </Button>
+            </div>
+
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1">
-                <Label htmlFor="phone" className="text-xs sm:text-sm">
-                  Phone *
-                </Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange("phone", e.target.value)}
-                  required
-                  className="h-8 sm:h-10 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
                 <Label htmlFor="phone_2" className="text-xs sm:text-sm">
-                  Phone 2
+                  Company Phone 2
                 </Label>
                 <Input
                   id="phone_2"

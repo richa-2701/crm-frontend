@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { AlertCircle, CheckCircle, User, Lock, Settings } from "lucide-react"
+import { AlertCircle, CheckCircle, User, Lock, Settings, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 
 interface UserData {
@@ -30,6 +30,11 @@ export default function ProfilePage() {
   const [user, setUser] = useState<UserData | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  })
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -73,9 +78,15 @@ export default function ProfilePage() {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      const updatedUser = {
-        ...user,
-        ...formData,
+      const updatedUser: UserData = {
+        id: user!.id,
+        username: formData.name,
+        email: formData.email,
+        role: user!.role,
+        phone: user!.phone,
+        usernumber: formData.phone || user!.usernumber,
+        department: formData.department,
+        createdAt: user!.createdAt,
       }
 
       localStorage.setItem("user", JSON.stringify(updatedUser))
@@ -108,21 +119,43 @@ export default function ProfilePage() {
     }
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setPasswordData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: user?.username,
+          old_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+        }),
       })
-      setIsChangingPassword(false)
-      setSuccess("Password changed successfully!")
+
+      const data = await response.json()
+
+      if (response.ok && data.status === "success") {
+        setPasswordData({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        })
+        setIsChangingPassword(false)
+        setSuccess("Password changed successfully!")
+      } else {
+        setError(data.message || "Failed to change password. Please check your current password.")
+      }
     } catch (err) {
       setError("Failed to change password. Please try again.")
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const togglePasswordVisibility = (field: "current" | "new" | "confirm") => {
+    setShowPasswords((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }))
   }
 
   if (!user) {
@@ -136,7 +169,7 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground">Manage your account settings and preferences</p>
         </div>
-        {user.role === "admin" && (
+        {user.role === "Administrator" && (
           <Link href="/dashboard/manage-users">
             <Button>
               <Settings className="h-4 w-4 mr-2" />
@@ -286,33 +319,69 @@ export default function ProfilePage() {
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="currentPassword"
+                      type={showPasswords.current ? "text" : "password"}
+                      value={passwordData.currentPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      required
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => togglePasswordVisibility("current")}
+                    >
+                      {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="newPassword"
+                      type={showPasswords.new ? "text" : "password"}
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      required
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => togglePasswordVisibility("new")}
+                    >
+                      {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showPasswords.confirm ? "text" : "password"}
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      required
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => togglePasswordVisibility("confirm")}
+                    >
+                      {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isLoading}>

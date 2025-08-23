@@ -1,3 +1,4 @@
+// frontend/components/layout/navbar.tsx
 "use client"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -9,17 +10,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { Moon, Sun, LogOut, Menu, User, Settings } from "lucide-react"
+import { Moon, Sun, LogOut, Menu, User, Settings, Users } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
+import { ApiUser } from "@/lib/api"
 
 interface NavbarProps {
-  user: {
-    id: string
-    username: string
-    email: string
-    role: string
-  }
+  user: ApiUser
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -32,13 +29,7 @@ export function Navbar({ user }: NavbarProps) {
   }
 
   const toggleTheme = () => {
-    if (theme === "dark") {
-      setTheme("light")
-    } else if (theme === "light") {
-      setTheme("dark")
-    } else {
-      setTheme("dark")
-    }
+    setTheme(theme === "dark" ? "light" : "dark")
   }
 
   return (
@@ -51,12 +42,33 @@ export function Navbar({ user }: NavbarProps) {
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-4">
-          <Link href="/dashboard/leads">
-            <Button variant="ghost" size="sm" className="h-8 px-3">
-              <Menu className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Leads</span>
-            </Button>
-          </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-3 group">
+                <Settings className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Management</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/leads">
+                  <Menu className="mr-2 h-4 w-4" />
+                  <span>Leads</span>
+                </Link>
+              </DropdownMenuItem>
+              {/* --- THIS IS THE CORRECTED LOGIC --- */}
+              {/* We now check against "Administrator", which is the value from the backend. */}
+              {user.role === "admin" && (
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/manage-users">
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Manage Users</span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {/* --- END CORRECTION --- */}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-8 w-8 sm:h-9 sm:w-9">
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -87,14 +99,6 @@ export function Navbar({ user }: NavbarProps) {
                   <span>Profile</span>
                 </Link>
               </DropdownMenuItem>
-              {user.role === "admin" && (
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard/manage-users">
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Manage Users</span>
-                  </Link>
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />

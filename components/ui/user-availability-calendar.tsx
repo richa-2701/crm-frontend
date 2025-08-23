@@ -33,6 +33,12 @@ interface UserEvent {
   assigned_to: string
 }
 
+interface Lead {
+  id: number
+  company_name: string
+  contact_name: string
+}
+
 interface UserAvailabilityCalendarProps {
   className?: string
   showAllUsers?: boolean
@@ -49,27 +55,34 @@ export function UserAvailabilityCalendar({
   const [events, setEvents] = useState<UserEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<any[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
 
   useEffect(() => {
     const fetchUserAvailability = async () => {
       try {
         setLoading(true)
 
-        // Fetch meetings and demos
-        const [meetingsData, demosData, usersData] = await Promise.all([
+        const [meetingsData, demosData, usersData, leadsData] = await Promise.all([
           api.getScheduledMeetings(),
           api.getScheduledDemos(),
           api.getUsers(),
+          api.getLeads(),
         ])
 
         setUsers(usersData)
+        setLeads(leadsData)
+
+        const getLeadName = (leadId: string) => {
+          const lead = leadsData.find((l: Lead) => l.id.toString() === leadId.toString())
+          return lead ? lead.company_name : `Lead #${leadId}`
+        }
 
         // Convert to unified format
         const allEvents: UserEvent[] = [
           ...meetingsData.map((meeting: Meeting) => ({
             id: meeting.id,
             type: "meeting" as const,
-            title: `Meeting - Lead ${meeting.lead_id}`,
+            title: `Meeting - ${getLeadName(meeting.lead_id)}`,
             start_time: meeting.event_time,
             end_time: meeting.event_end_time || meeting.event_time,
             assigned_to: meeting.assigned_to,
@@ -77,7 +90,7 @@ export function UserAvailabilityCalendar({
           ...demosData.map((demo: Demo) => ({
             id: demo.id,
             type: "demo" as const,
-            title: `Demo - Lead ${demo.lead_id}`,
+            title: `Demo - ${getLeadName(demo.lead_id)}`,
             start_time: demo.start_time,
             end_time: demo.event_end_time || demo.start_time,
             assigned_to: demo.assigned_to,

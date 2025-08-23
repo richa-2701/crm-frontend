@@ -1,5 +1,5 @@
+// frontend/components/layout/dashboard-shell.tsx
 "use client"
-
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -7,21 +7,16 @@ import { Navbar } from "./navbar"
 import { Sidebar } from "./sidebar"
 import { BottomNav } from "./bottom-nav"
 import { CRMChatbot, FloatingChatbotButton } from "@/components/chatbot/crm-chatbot"
-
-interface User {
-  id: string
-  username: string
-  email: string
-  role: string
-  usernumber?: string
-  department?: string
-}
+import { ApiUser } from "@/lib/api"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<ApiUser | null>(null)
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const router = useRouter()
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -32,32 +27,31 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     try {
       setUser(JSON.parse(userData))
     } catch (error) {
-      console.error("[v0] Error parsing user data:", error)
+      console.error("Error parsing user data from localStorage:", error)
       localStorage.removeItem("user")
       router.push("/login")
     }
   }, [router])
 
   if (!user) {
-    return <div>Loading...</div>
+    return <div className="flex h-screen w-full items-center justify-center">Loading...</div>
   }
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar user={user} />
-      <div className="flex h-[calc(100vh-4rem)]">
-        <div className="hidden md:block">
-          <Sidebar
-            userRole={user.role}
-            currentUser={user}
-            isCollapsed={isSidebarCollapsed}
-            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-        </div>
+      <div className="flex">
+        <Sidebar
+          currentUser={user}
+          isCollapsed={isSidebarCollapsed}
+          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+        {/* --- CORRECTED: This main element is now correctly positioned relative to the sidebar --- */}
         <main
-          className={`flex-1 overflow-auto transition-all duration-300 ${
+          className={cn(
+            "flex-1 overflow-auto transition-all duration-300 pt-16", // pt-16 to account for navbar height
             isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
-          } md:ml-0`}
+          )}
         >
           <div className="p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
             <div className="mx-auto max-w-7xl">{children}</div>
@@ -65,12 +59,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
 
-      <FloatingChatbotButton onClick={() => setIsChatbotOpen(true)} />
+      {!isChatbotOpen && <FloatingChatbotButton onClick={() => setIsChatbotOpen(true)} />}
 
       <CRMChatbot
-        userRole={user.role}
         currentUser={user}
         isOpen={isChatbotOpen}
         onClose={() => setIsChatbotOpen(false)}

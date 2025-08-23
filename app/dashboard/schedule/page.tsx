@@ -3,7 +3,6 @@
 import type React from "react"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { UserAvailabilityCalendar } from "@/components/ui/user-availability-calendar"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -13,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Calendar, Monitor } from "lucide-react"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { api } from "@/lib/api"
 
@@ -39,7 +38,7 @@ interface Meeting {
   type: "meeting" | "demo"
 }
 
-export default function ScheduleMeetingPage() {
+export default function SchedulePage() {
   const router = useRouter()
   const { toast } = useToast()
   const [leads, setLeads] = useState<Lead[]>([])
@@ -52,6 +51,8 @@ export default function ScheduleMeetingPage() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [confirmationMessage, setConfirmationMessage] = useState("")
 
+  const [scheduleType, setScheduleType] = useState<"meeting" | "demo">("meeting")
+
   const [formData, setFormData] = useState({
     lead_id: "",
     assigned_to: "",
@@ -62,7 +63,8 @@ export default function ScheduleMeetingPage() {
   const handleStartTimeChange = (startTime: string) => {
     setFormData((prev) => {
       const start = new Date(startTime)
-      const end = new Date(start.getTime() + 60 * 60 * 1000) // Add 1 hour
+      const duration = scheduleType === "meeting" ? 60 : 120
+      const end = new Date(start.getTime() + duration * 60 * 1000)
       const endTimeString = end.toISOString().slice(0, 16)
 
       return {
@@ -80,19 +82,12 @@ export default function ScheduleMeetingPage() {
       try {
         const [leadsData, usersData] = await Promise.all([api.getAllLeads(), api.getUsers()])
 
-        console.log("[v0] Fetched leads for meeting scheduling:", leadsData.length)
-        console.log("[v0] Fetched users for meeting scheduling:", usersData.length)
+        console.log(`[v0] Fetched leads for ${scheduleType} scheduling:`, leadsData.length)
+        console.log(`[v0] Fetched users for ${scheduleType} scheduling:`, usersData.length)
 
-        setLeads(leadsData.map((lead: any) => ({
-          ...lead,
-          id: String(lead.id),
-        })))
-        setUsers(usersData.map((user: any) => ({
-          ...user,
-          id: String(user.id),
-        })))
+        setLeads(leadsData)
+        setUsers(usersData)
 
-        // Load meetings from localStorage (until backend endpoint is available)
         const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
         setMeetings(storedMeetings)
       } catch (error) {
@@ -106,7 +101,7 @@ export default function ScheduleMeetingPage() {
     }
 
     fetchData()
-  }, [toast])
+  }, [toast, scheduleType])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -149,7 +144,6 @@ export default function ScheduleMeetingPage() {
     setIsLoading(true)
 
     try {
-      // Check availability
       const isAvailable = checkAvailability(formData.assigned_to, formData.start_time, formData.end_time)
 
       if (!isAvailable) {
@@ -161,9 +155,9 @@ export default function ScheduleMeetingPage() {
       }
 
       const assignedUser = users.find((u) => u.username === formData.assigned_to)
-      const currentUser = users.find((u) => u.username === "richa") // Get current user from context/auth
+      const currentUser = users.find((u) => u.username === "richa")
 
-      const meetingData = {
+      const eventData = {
         lead_id: Number.parseInt(formData.lead_id),
         assigned_to_user_id: Number.parseInt(assignedUser?.id || "1"),
         start_time: formData.start_time,
@@ -171,43 +165,43 @@ export default function ScheduleMeetingPage() {
         created_by_user_id: Number.parseInt(currentUser?.id || "1"),
       }
 
-      console.log("[v0] Scheduling meeting with data:", meetingData)
+      console.log(`[v0] Scheduling ${scheduleType} with data:`, eventData)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/meetings/schedule`, {
+      const endpoint = scheduleType === "meeting" ? "/web/meetings/schedule" : "/web/demos/schedule"
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(meetingData),
+        body: JSON.stringify(eventData),
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to schedule meeting: ${response.statusText}`)
+        throw new Error(`Failed to schedule ${scheduleType}: ${response.statusText}`)
       }
 
       const result = await response.json()
-      console.log("[v0] Meeting scheduled successfully:", result)
+      console.log(`[v0] ${scheduleType} scheduled successfully:`, result)
 
-      // Update local storage for UI consistency
-      const newMeeting = {
+      const newEvent = {
         id: result.id.toString(),
         lead_id: formData.lead_id,
         assigned_to: formData.assigned_to,
         start_time: formData.start_time,
         end_time: formData.end_time,
-        type: "meeting",
+        type: scheduleType,
       }
 
-      const updatedMeetings = [...meetings, newMeeting]
+      const updatedMeetings = [...meetings, newEvent]
       localStorage.setItem("meetings", JSON.stringify(updatedMeetings))
 
-      setConfirmationMessage("Meeting has scheduled")
+      setConfirmationMessage(`${scheduleType === "meeting" ? "Meeting" : "Demo"} has scheduled`)
       setShowConfirmation(true)
     } catch (error) {
-      console.error("[v0] Failed to schedule meeting:", error)
+      console.error(`[v0] Failed to schedule ${scheduleType}:`, error)
       toast({
         title: "Error",
-        description: "Failed to schedule meeting. Please try again.",
+        description: `Failed to schedule ${scheduleType}. Please try again.`,
         variant: "destructive",
       })
     } finally {
@@ -220,11 +214,6 @@ export default function ScheduleMeetingPage() {
     router.push("/dashboard")
   }
 
-  const getLeadName = (leadId: string) => {
-    const lead = leads.find((l) => l.id === leadId)
-    return lead ? `${lead.company_name} (${lead.contact_name})` : ""
-  }
-
   const getUserName = (username: string) => {
     const user = users.find((u) => u.username === username)
     return user ? user.username : ""
@@ -235,23 +224,48 @@ export default function ScheduleMeetingPage() {
     label: `${lead.company_name} (${lead.contact_name})`,
   }))
 
-  const getSelectedLeadLabel = (leadId: string) => {
-    const lead = leads.find((l) => l.id === leadId)
-    return lead ? `${lead.company_name} (${lead.contact_name})` : ""
-  }
-
   return (
     <div className="space-y-3 sm:space-y-6">
       <div className="px-1">
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Schedule Meeting</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Schedule a meeting with a lead</p>
+        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Schedule Meeting/Demo</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Schedule a meeting or demo with a lead</p>
       </div>
+
+      <Card className="border-0 sm:border shadow-none sm:shadow-sm">
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="text-lg sm:text-xl">Event Type</CardTitle>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={scheduleType === "meeting" ? "default" : "outline"}
+              onClick={() => setScheduleType("meeting")}
+              className="flex-1 h-9 text-sm"
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Schedule Meeting
+            </Button>
+            <Button
+              type="button"
+              variant={scheduleType === "demo" ? "default" : "outline"}
+              onClick={() => setScheduleType("demo")}
+              className="flex-1 h-9 text-sm"
+            >
+              <Monitor className="h-4 w-4 mr-2" />
+              Schedule Demo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Card className="border-0 sm:border shadow-none sm:shadow-sm">
             <CardHeader className="pb-3 sm:pb-6">
-              <CardTitle className="text-lg sm:text-xl">Meeting Details</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">
+                {scheduleType === "meeting" ? "Meeting" : "Demo"} Details
+              </CardTitle>
             </CardHeader>
             <CardContent className="px-3 sm:px-6">
               <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
@@ -357,7 +371,7 @@ export default function ScheduleMeetingPage() {
 
                 <div className="flex gap-2 pt-2">
                   <Button type="submit" disabled={isLoading} className="flex-1 h-9 text-sm">
-                    {isLoading ? "Scheduling..." : "Schedule Meeting"}
+                    {isLoading ? "Scheduling..." : `Schedule ${scheduleType === "meeting" ? "Meeting" : "Demo"}`}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => router.back()} className="h-9 text-sm px-4">
                     Cancel
