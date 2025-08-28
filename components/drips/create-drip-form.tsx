@@ -90,7 +90,6 @@ export function CreateDripForm({ currentUser, existingDrip = null }: CreateDripF
     useEffect(() => {
         api.getMessages().then(setMessages).catch(() => toast({ title: "Error", description: "Could not load messages for dropdown.", variant: "destructive" }));
 
-        // --- CHANGE 2: Populate form if in edit mode ---
         if (isEditMode && existingDrip) {
             setDripName(existingDrip.drip_name);
             const initialSteps = existingDrip.steps.map(step => ({
