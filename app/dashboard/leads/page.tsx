@@ -22,6 +22,10 @@ import {
   Loader2,
   Activity,
   History,
+  FileText as QuotationIcon, 
+  FileDown,
+  MessageSquareQuote,
+  XIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { LeadDetailsModal } from "@/components/leads/lead-details-modal"
@@ -29,8 +33,9 @@ import { ReassignLeadModal } from "@/components/leads/reassign-lead-modal"
 import { EditLeadModal } from "@/components/leads/edit-lead-modal"
 import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
-import { canManageAllLeads } from "@/lib/rbac"
-import { leadApi, userApi, type ApiLead, type ApiUser } from "@/lib/api"
+// import { canManageAllLeads } from "@/lib/rbac"
+import { api, leadApi, userApi, type ApiLead, type ApiUser } from "@/lib/api" // Import `api`
+import { useToast } from "@/hooks/use-toast" // Import useToast
 import {
   DndContext,
   closestCenter,
@@ -50,6 +55,8 @@ import {
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import React from "react"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface Contact {
   id: number
@@ -86,7 +93,7 @@ interface CompanyUser {
   id: string
   name: string
   email: string
-  role: "admin" | "user"
+  role: string // Changed to string to match ApiUser role
 }
 
 const statusColors = {
@@ -137,6 +144,7 @@ function SortableTableRow({
   handleViewHistory,
   handleReassignLead,
   handleEditLead,
+  handleDownloadPdf,
   canManageAllLeads: canManage,
   user,
 }: {
@@ -148,6 +156,7 @@ function SortableTableRow({
   handleViewHistory: (lead: Lead) => void
   handleReassignLead: (lead: Lead) => void
   handleEditLead: (lead: Lead) => void
+  handleDownloadPdf: (lead: Lead) => void
   canManageAllLeads: boolean
   user: CompanyUser
 }) {
@@ -164,7 +173,6 @@ function SortableTableRow({
       return column.render(lead)
     }
 
-    // Get primary contact for display in table
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null
 
     switch (column.key) {
@@ -209,7 +217,7 @@ function SortableTableRow({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                onPointerDown={(e) => e.stopPropagation()} // <-- THE FIX IS HERE
+                onPointerDown={(e) => e.stopPropagation()}
               >
                 <DropdownMenuItem onClick={() => handleViewDetails(lead)}>
                   <Eye className="mr-2 h-4 w-4" />
@@ -222,6 +230,16 @@ function SortableTableRow({
                 <DropdownMenuItem onClick={() => handleViewHistory(lead)}>
                   <History className="mr-2 h-4 w-4" />
                   History
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`/dashboard/view-quotations/${lead.id}`}>
+                    <QuotationIcon className="mr-2 h-4 w-4" />
+                    <span>View Quotations</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadPdf(lead)}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Download PDF
                 </DropdownMenuItem>
                 {lead.status === "Meeting Scheduled" && (
                   <DropdownMenuItem>
@@ -250,10 +268,8 @@ function SortableTableRow({
           </TableCell>
         )
       default:
-        // Fallback for any other keys, safely accessing lead properties
         const key = column.key as keyof Lead
         const cellValue = lead[key]
-        // Ensure we don't try to render objects directly
         return <TableCell>{typeof cellValue === "string" || typeof cellValue === "number" ? cellValue : ""}</TableCell>
     }
   }
@@ -289,6 +305,9 @@ export default function LeadsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([])
+  const [showPdfDialog, setShowPdfDialog] = useState(false)
+  const [leadForPdf, setLeadForPdf] = useState<Lead | null>(null)
+  const { toast } = useToast(); // Initialize toast
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { id: "company_name", label: "Lead Name", key: "company_name" },
     { id: "contact_name", label: "Contact Name", key: "contact_name" },
@@ -346,26 +365,11 @@ export default function LeadsPage() {
             id: user.id.toString(),
             name: user.username,
             email: user.email || `${user.username}@company.com`,
-            role: "user" as "admin" | "user",
+            role: user.role || "user",
           }))
-
-          const currentUserExists = transformedUsers.some(
-            (u) => u.name === parsedUser.username || u.id === parsedUser.id?.toString(),
-          )
-
-          if (!currentUserExists) {
-            transformedUsers.push({
-              id: parsedUser.id?.toString() || "current",
-              name: parsedUser.username || parsedUser.name || "Current User",
-              email: parsedUser.email || `${parsedUser.username}@company.com`,
-              role: parsedUser.role || "user",
-            })
-          }
 
           setAllLeads(transformedLeads)
           setCompanyUsers(transformedUsers)
-
-          console.log("[v0] Successfully loaded data from API")
 
           if (parsedUser.role === "admin") {
             setViewMode("all")
@@ -373,25 +377,19 @@ export default function LeadsPage() {
             setFilteredLeads(transformedLeads)
           } else {
             setViewMode("my")
-            const userIdentifier = parsedUser.username || parsedUser.name || parsedUser.id?.toString()
             const myLeads = transformedLeads.filter(
-              (lead) =>
-                lead.assigned_to === userIdentifier ||
-                lead.assigned_to === parsedUser.username ||
-                lead.assigned_to === parsedUser.id?.toString(),
+              (lead) => lead.assigned_to === parsedUser.username
             )
             setLeads(myLeads)
             setFilteredLeads(myLeads)
           }
         } catch (apiError) {
-          console.error("[v0] API failed:", apiError)
           throw new Error(
-            `Failed to connect to backend API: ${apiError instanceof Error ? apiError.message : "Unknown error"}`,
+            `Failed to connect to backend API: ${apiError instanceof Error ? apiError.message : "Unknown error"}`
           )
         }
       } catch (err) {
-        console.error("[v0] Failed to fetch data:", err)
-        setError(err instanceof Error ? err.message : "Failed to load leads. Please check your backend connection.")
+        setError(err instanceof Error ? err.message : "Failed to load leads.")
       } finally {
         setIsLoading(false)
       }
@@ -400,34 +398,22 @@ export default function LeadsPage() {
     fetchData()
   }, [])
 
-  // frontend/app/dashboard/leads/page.tsx
-
-useEffect(() => {
+  useEffect(() => {
     if (user) {
       if (viewMode === "my") {
-        // CORRECTED: The user object from localStorage has a 'username' property,
-        // not a 'name' property. We must access the correct property.
-        // We cast to `any` to bypass the incorrect TypeScript type definition for `CompanyUser`.
-        const currentUsername = (user as any).username;
-        const currentUserId = user.id?.toString();
-
-        const myLeads = allLeads.filter(
-          (lead) => 
-            (currentUsername && lead.assigned_to === currentUsername) || 
-            (currentUserId && lead.assigned_to === currentUserId)
-        );
-        setLeads(myLeads);
+        const myLeads = allLeads.filter((lead) => lead.assigned_to === user.name)
+        setLeads(myLeads)
       } else {
-        setLeads(allLeads);
+        setLeads(allLeads)
       }
     }
-}, [viewMode, user, allLeads]);
+  }, [viewMode, user, allLeads])
 
   useEffect(() => {
     const filtered = leads.filter(
       (lead) =>
         lead.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (lead.contacts && lead.contacts.some(c => c.contact_name.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+        (lead.contacts && lead.contacts.some((c) => c.contact_name.toLowerCase().includes(searchTerm.toLowerCase()))) ||
         lead.email.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredLeads(filtered)
@@ -463,18 +449,41 @@ useEffect(() => {
     setShowHistoryModal(true)
   }
 
+  // --- THIS IS THE CORRECTED FUNCTION ---
   const handleReassignComplete = async (leadId: string, newUserId: string) => {
-    try {
-      const newUser = companyUsers.find((u) => u.id === newUserId)
-      if (!newUser) return
+    const newUser = companyUsers.find((u) => u.id === newUserId)
+    if (!newUser) {
+      toast({ title: "Error", description: "Selected user not found.", variant: "destructive" });
+      return;
+    }
 
+    try {
+      // 1. Call the API to update the database
+      await api.updateLead(Number(leadId), { assigned_to: newUser.name });
+
+      // 2. If successful, update the local state to reflect the change immediately
       const updatedAllLeads = allLeads.map((lead) =>
         lead.id === leadId ? { ...lead, assigned_to: newUser.name, updated_at: new Date().toISOString() } : lead,
-      )
-      setAllLeads(updatedAllLeads)
-      setShowReassignModal(false)
+      );
+      setAllLeads(updatedAllLeads);
+      
+      // 3. Show a success message
+      toast({
+        title: "Success!",
+        description: `Lead has been reassigned to ${newUser.name}.`,
+      });
+
     } catch (error) {
-      console.error("Failed to reassign lead:", error)
+      console.error("Failed to reassign lead:", error);
+      // 4. Show an error message if the API call fails
+      toast({
+        title: "Reassignment Failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      // 5. Close the modal regardless of success or failure
+      setShowReassignModal(false);
     }
   }
 
@@ -499,27 +508,86 @@ useEffect(() => {
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
+    if (!over) return;
 
-    if (active.id !== over?.id) {
+    if (active.id !== over.id) {
       const isColumnDrag = columns.some((col) => col.id === active.id)
-
       if (isColumnDrag) {
         setColumns((items) => {
           const oldIndex = items.findIndex((item) => item.id === active.id)
-          const newIndex = items.findIndex((item) => item.id === over?.id)
+          const newIndex = items.findIndex((item) => item.id === over.id)
           return arrayMove(items, oldIndex, newIndex)
         })
       } else {
         setFilteredLeads((items) => {
           const oldIndex = items.findIndex((item) => item.id === active.id)
-          const newIndex = items.findIndex((item) => item.id === over?.id)
-
+          const newIndex = items.findIndex((item) => item.id === over.id)
           const newOrder = arrayMove(items, oldIndex, newIndex)
-          setLeads(newOrder) // Also update the base 'leads' array to maintain order across searches
+          setLeads(newOrder)
           return newOrder
         })
       }
     }
+  }
+
+  const handleDownloadPdf = (lead: Lead) => {
+    setLeadForPdf(lead)
+    setShowPdfDialog(true)
+  }
+
+  const downloadLeadAsPdf = (lead: Lead, includeRemark: boolean) => {
+    const doc = new jsPDF()
+    doc.setFontSize(20)
+    doc.text(`Lead Details: ${lead.company_name}`, 14, 22)
+    const leadData = [
+      ["Company", lead.company_name],
+      ["Status", lead.status],
+      ["Assigned To", getUserName(lead.assigned_to)],
+      ["Source", lead.source || "N/A"],
+      ["Lead Type", lead.lead_type || "N/A"],
+      ["Email", lead.email || "N/A"],
+      ["Address", lead.address || "N/A"],
+      ["Team Size", lead.team_size || "N/A"],
+      ["Turnover", lead.turnover || "N/A"],
+      ["Current System", lead.current_system || "N/A"],
+      ["Challenges", lead.challenges || "N/A"],
+      ["Machine Spec.", lead.machine_specification || "N/A"],
+    ]
+
+    autoTable(doc, {
+      startY: 30,
+      head: [["Field", "Value"]],
+      body: leadData,
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185] },
+    })
+
+    let lastY = (doc as any).lastAutoTable.finalY
+    if (lead.contacts && lead.contacts.length > 0) {
+      doc.setFontSize(14)
+      doc.text("Contact Persons", 14, lastY + 15)
+      const contactData = lead.contacts.map((c) => [c.contact_name, c.phone, c.email || "N/A", c.designation || "N/A"])
+      autoTable(doc, {
+        startY: lastY + 20,
+        head: [["Name", "Phone", "Email", "Designation"]],
+        body: contactData,
+        theme: "striped",
+        headStyles: { fillColor: [41, 128, 185] },
+      })
+      lastY = (doc as any).lastAutoTable.finalY
+    }
+
+    if (includeRemark && lead.remark) {
+      doc.setFontSize(14)
+      doc.text("Remarks", 14, lastY + 15)
+      const splitRemark = doc.splitTextToSize(lead.remark, 180)
+      doc.setFontSize(10)
+      doc.text(splitRemark, 14, lastY + 22)
+    }
+
+    doc.save(`Lead_${lead.company_name.replace(/\s/g, "_")}.pdf`)
+    setShowPdfDialog(false)
+    setLeadForPdf(null)
   }
 
   if (isLoading) {
@@ -626,6 +694,7 @@ useEffect(() => {
                       handleViewHistory={handleViewHistory}
                       handleReassignLead={handleReassignLead}
                       handleEditLead={handleEditLead}
+                      handleDownloadPdf={handleDownloadPdf}
                       canManageAllLeads={canManageAllLeads(user)}
                       user={user}
                     />
@@ -679,6 +748,38 @@ useEffect(() => {
           />
         </>
       )}
+
+      {showPdfDialog && leadForPdf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Download Lead PDF</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setShowPdfDialog(false)}>
+                <XIcon className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-6">
+                Do you want to include the "Remarks" section in the PDF for <strong>{leadForPdf.company_name}</strong>?
+              </p>
+              <div className="flex justify-end space-x-4">
+                <Button variant="outline" onClick={() => downloadLeadAsPdf(leadForPdf, false)}>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Without Remarks
+                </Button>
+                <Button onClick={() => downloadLeadAsPdf(leadForPdf, true)}>
+                  <MessageSquareQuote className="mr-2 h-4 w-4" />
+                  With Remarks
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
+}
+
+function canManageAllLeads(user: CompanyUser): boolean {
+  return user.role === "admin";
 }

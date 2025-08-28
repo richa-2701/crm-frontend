@@ -7,38 +7,42 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { api, ApiLead, ApiUser, ApiReminder } from "@/lib/api"
-// --- REMOVED: useRouter is no longer needed ---
+import { formatDateTime } from "@/lib/date-format";
+import { api, ApiUser } from "@/lib/api"
 
 interface FormProps {
   currentUser: ApiUser;
 }
 
+
 interface PendingDiscussion {
     leadId: number;
     companyName: string;
     message: string;
+    remindTime: string; 
 }
 
 export function DiscussionDoneForm({ currentUser }: FormProps) {
     const { toast } = useToast();
-    // --- REMOVED: router is no longer needed ---
     const [pendingDiscussions, setPendingDiscussions] = useState<PendingDiscussion[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({ leadCompanyName: "", details: "" });
 
-    // --- Renamed to be more descriptive ---
     const fetchAndSetPendingDiscussions = async () => {
         setIsLoading(true);
         try {
             const [reminders, leads] = await Promise.all([api.getPendingDiscussions(), api.getLeads()]);
             const leadMap = new Map<number, string>();
             leads.forEach(lead => leadMap.set(lead.id, lead.company_name));
+
             const discussions = reminders.map(reminder => ({
                 leadId: reminder.lead_id,
                 companyName: leadMap.get(reminder.lead_id) || `Lead ID ${reminder.lead_id}`,
                 message: reminder.message,
+                remindTime: reminder.remind_time, 
             }));
+
+            
             const uniqueDiscussions = Array.from(new Map(discussions.map(d => [d.leadId, d])).values());
             setPendingDiscussions(uniqueDiscussions);
         } catch (error) {
@@ -50,9 +54,8 @@ export function DiscussionDoneForm({ currentUser }: FormProps) {
 
     useEffect(() => {
         fetchAndSetPendingDiscussions();
-    }, [toast]);
+    }, []); 
     
-    // --- THIS IS THE CORRECTED FUNCTION ---
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.leadCompanyName || !formData.details.trim()) {
@@ -67,10 +70,7 @@ export function DiscussionDoneForm({ currentUser }: FormProps) {
             const response = await api.sendMessage(message, currentUser.usernumber);
             toast({ title: "Success", description: response.reply });
             
-            // Clear the form
             setFormData({ leadCompanyName: "", details: "" });
-
-            // Refresh the list of pending discussions since one was just completed
             fetchAndSetPendingDiscussions();
 
         } catch (error) {
@@ -79,7 +79,6 @@ export function DiscussionDoneForm({ currentUser }: FormProps) {
             setIsLoading(false);
         }
     };
-    // --- END CORRECTION ---
 
     return (
         <Card>
@@ -96,9 +95,12 @@ export function DiscussionDoneForm({ currentUser }: FormProps) {
                                 {pendingDiscussions.length > 0 ? (
                                     pendingDiscussions.map(discussion => (
                                         <SelectItem key={discussion.leadId} value={discussion.companyName}>
-                                            <div className="flex flex-col">
+                                            <div className="flex flex-col space-y-1">
                                                 <span className="font-semibold">{discussion.companyName}</span>
                                                 <span className="text-xs text-muted-foreground truncate">{discussion.message}</span>
+                                                <span className="text-xs text-blue-600 dark:text-blue-400">
+                                                    Scheduled for: {formatDateTime(discussion.remindTime)}
+                                                </span>
                                             </div>
                                         </SelectItem>
                                     ))

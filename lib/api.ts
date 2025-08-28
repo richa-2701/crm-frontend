@@ -53,6 +53,7 @@ export interface ApiActivity {
   details: string
   phase: string
   created_at: string
+  attachment_path?: string
 }
 
 export interface ApiMeeting {
@@ -143,6 +144,12 @@ export interface ApiReminder {
     assigned_to: string;
     status: string;
     created_at: string;
+}
+
+export interface ApiBulkUploadResponse {
+  status: string
+  successful_imports: number
+  errors: string[]
 }
 
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -539,6 +546,65 @@ export const leadApi = {
       throw error
     }
   },
+   async addActivityWithAttachment(
+    leadId: number,
+    details: string,
+    file?: File,
+  ): Promise<ApiActivity> {
+    const formData = new FormData()
+    formData.append("details", details)
+    if (file) {
+      formData.append("file", file)
+    }
+
+    const response = await fetch(`${API_BASE_URL}/web/leads/${leadId}/activity`, {
+      method: "POST",
+      headers: { "ngrok-skip-browser-warning": "true" },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to add activity: ${response.status} - ${errorText}`)
+    }
+    return response.json()
+  },
+
+  
+  async uploadBulkLeads(file: File): Promise<ApiBulkUploadResponse> {
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const response = await fetch(`${API_BASE_URL}/web/leads/upload-bulk`, {
+      method: "POST",
+      headers: { "ngrok-skip-browser-warning": "true" },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || "Failed to upload file.")
+    }
+    return response.json()
+  },
+
+  async assignDripToLead(leadId: number, dripSequenceId: number): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/web/leads/assign-drip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead_id: leadId,
+        drip_sequence_id: dripSequenceId,
+      }),
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to assign drip sequence.");
+    }
+    return response.json();
+  },
+
+// ...
 }
 
 
@@ -701,6 +767,8 @@ export const api = {
   createLead: leadApi.createLead,
   updateLead: leadApi.updateLead,
   getActivities: leadApi.getActivities,
+  addActivityWithAttachment: leadApi.addActivityWithAttachment,
+  uploadBulkLeads: leadApi.uploadBulkLeads,
   getHistory: leadApi.getHistory,
 
   // Chat methods
@@ -723,6 +791,7 @@ export const api = {
   updateDripSequence: dripSequenceApi.updateDripSequence,
   deleteDripSequence: dripSequenceApi.deleteDripSequence,
   getPendingDiscussions: (): Promise<ApiReminder[]> => fetcher("/web/discussions/pending"),
+  assignDripToLead: leadApi.assignDripToLead,
 }
 
 

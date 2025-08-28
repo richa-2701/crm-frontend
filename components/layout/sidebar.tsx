@@ -1,14 +1,16 @@
-// frontend/components/layout/sidebar.tsx
+//frontend/components/layout/sidebar.tsx
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
+// --- CHANGE 1: No longer need useState ---
+// import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare } from "lucide-react"
+// --- CHANGE 2: No longer need useIsMobile or Sheet components ---
+// import { useIsMobile } from "@/hooks/use-mobile"
+import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+// import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChevronRight, ChevronLeft } from "lucide-react"
 import { ApiUser } from "@/lib/api"
@@ -17,10 +19,12 @@ interface SidebarProps {
   currentUser: ApiUser
   isCollapsed?: boolean
   onToggle?: () => void
+  // --- CHANGE 3: Add onItemClick prop to pass down ---
+  onItemClick?: () => void
 }
 
-// --- CORRECTED: Updated navigation items for unified pages ---
 const navigationItems = [
+  // ... (items remain the same)
   {
     title: "Dashboard",
     href: "/dashboard",
@@ -33,18 +37,28 @@ const navigationItems = [
   },
   {
     title: "Schedule Meeting/Demo",
-    href: "/dashboard/schedule", // Points to the new unified page
+    href: "/dashboard/schedule",
     icon: Calendar,
   },
   {
     title: "Post Meeting/Demo",
-    href: "/dashboard/post-event", // Points to the new unified page
+    href: "/dashboard/post-event",
     icon: FileText,
   },
   {
-    title: "Discussion", // <-- NEW ITEM
+    title: "Discussion",
     href: "/dashboard/discussion",
     icon: MessageSquare,
+  },
+  {
+    title: "Add Quotation",
+    href: "/dashboard/add-quotation",
+    icon: Upload,
+  },
+  {
+    title: "Bulk Upload Leads",
+    href: "/dashboard/bulk-upload",
+    icon: UploadCloud,
   },
 ]
 
@@ -69,7 +83,8 @@ function DripSequenceMenu({ isCollapsed, onItemClick }: { isCollapsed?: boolean,
     );
 }
 
-function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: SidebarProps & { onItemClick?: () => void }) {
+// --- CHANGE 4: The name is now more specific ---
+export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: SidebarProps) {
   const pathname = usePathname()
   return (
     <div className="flex h-full flex-col">
@@ -101,32 +116,11 @@ function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: Sideb
   )
 }
 
+// --- CHANGE 5: The main export is simplified to only handle the desktop view ---
 export function Sidebar({ currentUser, isCollapsed = false, onToggle }: SidebarProps) {
-  const isMobile = useIsMobile()
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  if (isMobile) {
-    return (
-      <>
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="fixed top-4 left-4 z-40 md:hidden">
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">Open Menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
-            <SidebarContent currentUser={currentUser} onItemClick={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
-      </>
-    )
-  }
-
   return (
-    // --- CORRECTED: Removed md:inset-y-16 to allow it to be positioned correctly ---
     <aside className={cn("hidden md:fixed md:inset-y-0 md:flex md:flex-col md:z-30 transition-all duration-300", isCollapsed ? "md:w-16" : "md:w-64")}>
-      <div className="flex flex-col flex-1 min-h-0 border-r bg-card pt-16"> {/* Added pt-16 to push content below navbar */}
+      <div className="flex flex-col flex-1 min-h-0 border-r bg-card pt-16">
         <SidebarContent currentUser={currentUser} isCollapsed={isCollapsed} />
       </div>
       <Button variant="ghost" size="icon" onClick={onToggle} className="absolute -right-3 top-20 z-40 h-6 w-6 rounded-full border bg-background shadow-md hover:bg-accent">

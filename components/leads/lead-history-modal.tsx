@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, History, Edit, UserCheck, Calendar } from "lucide-react"
 // --- CORRECTED: Import the correct types from the central API file ---
 import { leadApi, ApiLead } from "@/lib/api"
-// --- END CORRECTION ---
+import { formatDateTime } from "@/lib/date-format";
 
 // --- REMOVED: Redundant local interface is no longer needed ---
 // interface Lead { ... }
@@ -117,7 +117,7 @@ export function LeadHistoryModal({ lead, isOpen, onClose }: LeadHistoryModalProp
                         </Badge>
                         {item.user && <span className="text-sm text-muted-foreground">by {item.user}</span>}
                       </div>
-                      <span className="text-sm text-muted-foreground">{formatDate(item.timestamp)}</span>
+                      <span className="text-sm text-muted-foreground">{formatDateTime(item.timestamp)}</span>
                     </div>
                     <p className="text-sm">{item.details}</p>
                   </div>

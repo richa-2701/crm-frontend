@@ -1,3 +1,4 @@
+//frontend/app/dashboard/schedule-meeting/page.tsx
 "use client"
 
 import type React from "react"
@@ -57,23 +58,28 @@ export default function ScheduleMeetingPage() {
     assigned_to: "",
     start_time: "",
     end_time: "",
+    duration: "60", // Default meeting duration: 60 minutes
   })
 
-  const handleStartTimeChange = (startTime: string) => {
-    setFormData((prev) => {
-      const start = new Date(startTime)
-      const end = new Date(start.getTime() + 60 * 60 * 1000) // Add 1 hour
-      const endTimeString = end.toISOString().slice(0, 16)
+  // Effect to automatically calculate end_time when start_time or duration changes
+  useEffect(() => {
+    if (formData.start_time && formData.duration) {
+      const durationInMinutes = parseInt(formData.duration, 10)
+      if (!isNaN(durationInMinutes) && durationInMinutes > 0) {
+        const start = new Date(formData.start_time)
+        const end = new Date(start.getTime() + durationInMinutes * 60 * 1000)
+        const endTimeString = end.toISOString().slice(0, 16)
 
-      return {
-        ...prev,
-        start_time: startTime,
-        end_time: endTimeString,
+        // To prevent potential infinite loops, only update if the value has changed
+        if (formData.end_time !== endTimeString) {
+          setFormData((prev) => ({
+            ...prev,
+            end_time: endTimeString,
+          }))
+        }
       }
-    })
-    setAvailabilityError(null)
-    setShowCalendar(false)
-  }
+    }
+  }, [formData.start_time, formData.duration, formData.end_time])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -115,6 +121,7 @@ export default function ScheduleMeetingPage() {
   }
 
   const checkAvailability = (assignedTo: string, startTime: string, endTime: string): boolean => {
+    if (!startTime || !endTime) return true // Don't check if time is not set yet
     const start = new Date(startTime)
     const end = new Date(endTime)
 
@@ -302,22 +309,23 @@ export default function ScheduleMeetingPage() {
                       id="start_time"
                       type="datetime-local"
                       value={formData.start_time}
-                      onChange={(e) => handleStartTimeChange(e.target.value)}
+                      onChange={(e) => handleInputChange("start_time", e.target.value)}
                       required
                       className="h-8 sm:h-10 text-sm"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="end_time" className="text-xs sm:text-sm">
-                      End Date & Time *
+                    <Label htmlFor="duration" className="text-xs sm:text-sm">
+                      Duration (minutes) *
                     </Label>
                     <Input
-                      id="end_time"
-                      type="datetime-local"
-                      value={formData.end_time}
-                      onChange={(e) => handleInputChange("end_time", e.target.value)}
+                      id="duration"
+                      type="number"
+                      value={formData.duration}
+                      onChange={(e) => handleInputChange("duration", e.target.value)}
                       required
+                      min="1"
                       className="h-8 sm:h-10 text-sm"
                     />
                   </div>

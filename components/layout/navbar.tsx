@@ -14,12 +14,16 @@ import { Moon, Sun, LogOut, Menu, User, Settings, Users } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { ApiUser } from "@/lib/api"
+// --- CHANGE 1: Import React to handle children ---
+import React from "react"
 
 interface NavbarProps {
   user: ApiUser
+  // --- CHANGE 2: Add children prop ---
+  children?: React.ReactNode
 }
 
-export function Navbar({ user }: NavbarProps) {
+export function Navbar({ user, children }: NavbarProps) {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
 
@@ -35,7 +39,9 @@ export function Navbar({ user }: NavbarProps) {
   return (
     <nav className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center">
+        <div className="flex items-center gap-4">
+          {/* --- CHANGE 3: Render the children here --- */}
+          {children}
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight cursor-pointer">INDUS CRM</h1>
           </Link>
@@ -56,8 +62,6 @@ export function Navbar({ user }: NavbarProps) {
                   <span>Leads</span>
                 </Link>
               </DropdownMenuItem>
-              {/* --- THIS IS THE CORRECTED LOGIC --- */}
-              {/* We now check against "Administrator", which is the value from the backend. */}
               {user.role === "admin" && (
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/manage-users">
@@ -66,7 +70,6 @@ export function Navbar({ user }: NavbarProps) {
                   </Link>
                 </DropdownMenuItem>
               )}
-              {/* --- END CORRECTION --- */}
             </DropdownMenuContent>
           </DropdownMenu>
 

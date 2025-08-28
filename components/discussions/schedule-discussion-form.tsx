@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { api, ApiLead, ApiUser } from "@/lib/api"
-// --- REMOVED: useRouter is no longer needed ---
 
 interface FormProps {
   currentUser: ApiUser;
@@ -16,7 +15,6 @@ interface FormProps {
 
 export function ScheduleDiscussionForm({ currentUser }: FormProps) {
     const { toast } = useToast();
-    // --- REMOVED: router is no longer needed ---
     const [leads, setLeads] = useState<ApiLead[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({ leadId: "", details: "" });
@@ -25,7 +23,6 @@ export function ScheduleDiscussionForm({ currentUser }: FormProps) {
         api.getLeads().then(setLeads).catch(() => toast({ title: "Error", description: "Failed to fetch leads." }));
     }, [toast]);
 
-    // --- THIS IS THE CORRECTED FUNCTION ---
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.leadId || !formData.details.trim()) {
@@ -46,7 +43,6 @@ export function ScheduleDiscussionForm({ currentUser }: FormProps) {
             const response = await api.sendMessage(message, currentUser.usernumber);
             toast({ title: "Success", description: response.reply });
 
-            // Clear the form for the next entry
             setFormData({ leadId: "", details: "" });
 
         } catch (error) {
@@ -55,7 +51,6 @@ export function ScheduleDiscussionForm({ currentUser }: FormProps) {
             setIsLoading(false);
         }
     };
-    // --- END CORRECTION ---
 
     return (
         <Card>

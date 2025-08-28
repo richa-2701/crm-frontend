@@ -8,14 +8,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Activity, Calendar, Phone, Mail, MessageSquare } from "lucide-react"
 // --- CORRECTED: Import the correct types from the central API file ---
 import { leadApi, ApiLead, ApiActivity } from "@/lib/api"
-// --- END CORRECTION ---
+import { formatDateTime } from "@/lib/date-format";
 
 // --- REMOVED: Redundant local interfaces are no longer needed ---
 // interface Lead { ... }
 // interface ActivityItem { ... }
 
 interface LeadActivitiesModalProps {
-  lead: ApiLead // Use the correct, imported type
+  lead: ApiLead | null // Use the correct, imported type
   isOpen: boolean
   onClose: () => void
 }
@@ -125,7 +125,7 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
                           <span className="ml-1">{activity.phase}</span>
                         </Badge>
                       </div>
-                      <span className="text-sm text-muted-foreground">{formatDate(activity.created_at)}</span>
+                      <span className="text-sm text-muted-foreground">{formatDateTime(activity.created_at)}</span>
                     </div>
                     <p className="text-sm">{activity.details}</p>
                   </div>

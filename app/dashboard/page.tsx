@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
 import { Calendar, Clock, Users, Phone } from "lucide-react"
+import { formatDate, formatTime, formatDateTime } from "@/lib/date-format"
 import { api } from "@/lib/api"
 
 interface User {
@@ -112,6 +113,7 @@ export default function DashboardPage() {
   const [leadStatusData, setLeadStatusData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
+  const [showAllToday, setShowAllToday] = useState(false) // Added state for today's tasks
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -139,6 +141,7 @@ export default function DashboardPage() {
         setLeads(filteredLeads.map((lead) => ({
           ...lead,
           id: lead.id.toString(),
+          contacts: lead.contacts ?? []
         })))
 
         console.log("[v0] Fetching meetings and demos from API...")
@@ -235,36 +238,29 @@ export default function DashboardPage() {
   }, [])
 
   const getTodaysTasks = () => {
-    const today = new Date()
-    const todayString = today.toDateString()
+    const today = new Date();
+    const todayString = today.toDateString();
 
     return events
-      .filter((event) => new Date(event.start_time).toDateString() === todayString)
+      .filter((event) => {
+        // Correct logic: check if the event's date is the same as today's date
+        const eventDate = new Date(event.start_time);
+        return eventDate.toDateString() === todayString;
+      })
       .map((event) => {
-        const lead = leads.find((l) => l.id.toString() === event.lead_id.toString())
-        // Safely get the first contact
-        const primaryContact = lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null
-        const startTime = new Date(event.start_time)
-        const endTime = new Date(event.end_time)
-
-        console.log(
-          "[v0] Matching event lead_id:",
-          event.lead_id,
-          "with leads:",
-          leads.map((l) => l.id),
-          "found:",
-          lead?.company_name,
-        )
-
+        const lead = leads.find((l) => l.id.toString() === event.lead_id.toString());
+        const primaryContact = lead?.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null;
+        
+        const timeLabel = `${formatTime(event.start_time)} - ${formatTime(event.end_time)}`;
+        
         return {
           id: event.id,
           type: event.type,
-          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || `Lead #${event.lead_id}`}`, // Show lead ID instead of "Unknown"
-          time: `${startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-          contact: primaryContact?.contact_name || "Contact Info Pending", // More descriptive fallback
-          phone: primaryContact?.phone || "",
-        }
-      })
+          title: `${event.type === "meeting" ? "Meeting" : "Demo"} - ${lead?.company_name || `Lead #${event.lead_id}`}`,
+          time: timeLabel,
+          contact: primaryContact?.contact_name || "Contact Info Pending",
+        };
+      });
   }
 
   const getUpcomingTasks = () => {
@@ -409,23 +405,30 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1 h-[180px] md:h-[280px] overflow-y-auto">
                   {todaysTasks.length > 0 ? (
-                    todaysTasks.slice(0, 2).map((task) => (
-                      <div key={task.id} className="flex items-center gap-2 rounded border p-1.5">
-                        <TaskTypeIcon type={task.type} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{task.title}</p>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground truncate">{task.contact}</p>
-                            <span className="text-xs text-muted-foreground">{task.time}</span>
+                    <>
+                      {(showAllToday ? todaysTasks : todaysTasks.slice(0, 5)).map((task) => (
+                        <div key={task.id} className="flex items-center gap-2 rounded border p-1.5">
+                          <TaskTypeIcon type={task.type} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{task.title}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-muted-foreground truncate">{task.contact}</p>
+                              <span className="text-xs text-muted-foreground">{task.time}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                      {todaysTasks.length > 5 && (
+                        <button
+                          onClick={() => setShowAllToday(!showAllToday)}
+                          className="w-full text-xs text-blue-600 hover:text-blue-800 text-center py-1 hover:bg-blue-50 rounded transition-colors"
+                        >
+                          {showAllToday ? "Show Less" : `Show More (+${todaysTasks.length - 5} more)`}
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground">No tasks today</p>
-                  )}
-                  {todaysTasks.length > 2 && (
-                    <p className="text-xs text-muted-foreground text-center">+{todaysTasks.length - 2} more</p>
                   )}
                 </div>
               </div>

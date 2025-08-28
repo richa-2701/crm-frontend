@@ -1,3 +1,4 @@
+//frontend/hooks/use-mobile.ts
 "use client"
 
 import * as React from "react"

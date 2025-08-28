@@ -1,3 +1,4 @@
+//frontend/components/leads/reassign-lead-modal.tsx
 "use client"
 
 import { useState } from "react"
@@ -47,6 +48,12 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
     setSelectedUserId("")
     onClose()
   }
+  
+  // --- THIS IS THE IMPROVED LOGIC ---
+  // It's clearer to find the currently assigned user first,
+  // and then filter them out from the list of options.
+  const currentlyAssignedUser = users.find(user => user.name === lead.assign_to);
+  const availableUsers = users.filter(user => user.id !== currentlyAssignedUser?.id);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -64,9 +71,8 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
                 <SelectValue placeholder="Select a team member" />
               </SelectTrigger>
               <SelectContent>
-                {users
-                  .filter((user) => user.id !== lead.assigned_to && user.name !== lead.assigned_to)
-                  .map((user) => (
+                {/* Use the new filtered list */}
+                {availableUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name} ({user.email})
                     </SelectItem>

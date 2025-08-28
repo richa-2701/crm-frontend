@@ -1,3 +1,4 @@
+// frontend/components/chat/chat-assistant.tsx
 "use client"
 
 import type React from "react"

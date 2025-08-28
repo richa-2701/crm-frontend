@@ -4,17 +4,20 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Navbar } from "./navbar"
-import { Sidebar } from "./sidebar"
-import { BottomNav } from "./bottom-nav"
+import { Sidebar, SidebarContent } from "./sidebar" 
 import { CRMChatbot, FloatingChatbotButton } from "@/components/chatbot/crm-chatbot"
 import { ApiUser } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
+import { Menu } from "lucide-react"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null)
   const [isChatbotOpen, setIsChatbotOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const router = useRouter()
   const isMobile = useIsMobile()
 
@@ -36,30 +39,45 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <div className="flex h-screen w-full items-center justify-center">Loading...</div>
   }
+  
+  const MobileSidebar = (
+    <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="md:hidden h-8 w-8">
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Open Menu</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-64 p-0">
+        <div className="pt-16 h-full">
+            <SidebarContent currentUser={user} onItemClick={() => setMobileSidebarOpen(false)} />
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar user={user} />
+      <Navbar user={user}>
+        {isMobile && MobileSidebar}
+      </Navbar>
       <div className="flex">
         <Sidebar
           currentUser={user}
           isCollapsed={isSidebarCollapsed}
           onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
-        {/* --- CORRECTED: This main element is now correctly positioned relative to the sidebar --- */}
         <main
           className={cn(
-            "flex-1 overflow-auto transition-all duration-300 pt-16", // pt-16 to account for navbar height
+            "flex-1 overflow-auto transition-all duration-300 pt-16", 
             isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
           )}
         >
-          <div className="p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
+          <div className="pt-0 pl-2 pb-4 md:px-6 md:pb-6">
             <div className="mx-auto max-w-7xl">{children}</div>
           </div>
         </main>
       </div>
-
-      {isMobile && <BottomNav />}
 
       {!isChatbotOpen && <FloatingChatbotButton onClick={() => setIsChatbotOpen(true)} />}
 

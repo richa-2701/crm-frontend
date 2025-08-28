@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users  } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api, ApiDripSequenceList } from "@/lib/api";
 import { DripsTable } from "@/components/drips/drips-table";
@@ -58,10 +58,16 @@ export default function DripMasterPage() {
                     <h1 className="text-3xl font-bold tracking-tight">Drip Master</h1>
                     <p className="text-muted-foreground">Manage your automated messaging sequences.</p>
                 </div>
-                <Button onClick={() => router.push("/dashboard/drip-sequence/create")}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Drip Sequence
-                </Button>
+                <div className="flex items-center gap-4">
+                    <Button variant="outline" onClick={() => router.push("/dashboard/drip-sequence/assign")}>
+                        <Users className="mr-2 h-4 w-4" />
+                        Assign Drip to Leads
+                    </Button>
+                    <Button onClick={() => router.push("/dashboard/drip-sequence/create")}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Drip Sequence
+                    </Button>
+                </div>
             </div>
             <Card>
                 <CardHeader>

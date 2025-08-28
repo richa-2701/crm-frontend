@@ -1,7 +1,7 @@
+// frontend/components/chatbot/crm-chatbot.tsx
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,7 +36,7 @@ export function CRMChatbot({ currentUser, isOpen, onClose }: CRMChatbotProps) {
       id: "1",
       type: "bot",
       content:
-        "Hi! I'm your CRM assistant. I can help you create leads, schedule meetings, schedule demos, and answer questions about your CRM data. What would you like to do?",
+        "Hi! I'm your CRM assistant. I can help you create leads, schedule meetings, schedule demos and more. What would you like to do?",
       timestamp: new Date(),
     },
   ])
