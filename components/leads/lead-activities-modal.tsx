@@ -6,16 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Activity, Calendar, Phone, Mail, MessageSquare } from "lucide-react"
-// --- CORRECTED: Import the correct types from the central API file ---
-import { leadApi, ApiLead, ApiActivity } from "@/lib/api"
+import { api, type ApiLead, type ApiActivity } from "@/lib/api"
 import { formatDateTime } from "@/lib/date-format";
 
-// --- REMOVED: Redundant local interfaces are no longer needed ---
-// interface Lead { ... }
-// interface ActivityItem { ... }
-
 interface LeadActivitiesModalProps {
-  lead: ApiLead | null // Use the correct, imported type
+  lead: ApiLead | null
   isOpen: boolean
   onClose: () => void
 }
@@ -37,60 +32,51 @@ const activityColors = {
 }
 
 export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesModalProps) {
-  const [activities, setActivities] = useState<ApiActivity[]>([]) // Use the correct, imported type
+  const [activities, setActivities] = useState<ApiActivity[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && lead) {
+      const fetchActivities = async () => {
+        try {
+          setIsLoading(true)
+          setError(null)
+          const data = await api.getActivities(Number(lead.id))
+          setActivities(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        } catch (err) {
+          // Handle cases where a lead might have no activities (which returns a 404)
+          if (err instanceof Error && err.message.includes("404")) {
+            setActivities([]);
+          } else {
+            console.error("Failed to fetch activities:", err)
+            setError("Failed to load activities for this lead.")
+          }
+        } finally {
+          setIsLoading(false)
+        }
+      }
       fetchActivities()
     }
   }, [isOpen, lead])
 
-  const fetchActivities = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      // The lead ID is a number, which is correct
-      const data = await leadApi.getActivities(lead.id)
-      setActivities(data)
-    } catch (err) {
-      console.error("Failed to fetch activities:", err)
-      setError("Failed to load activities")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const getActivityIcon = (phase: string) => {
-    const type = phase.toLowerCase().includes("call")
-      ? "call"
-      : phase.toLowerCase().includes("email")
-        ? "email"
-        : phase.toLowerCase().includes("meeting")
-          ? "meeting"
-          : phase.toLowerCase().includes("demo")
-            ? "meeting"
-            : "default"
+    const type = phase.toLowerCase().includes("call") ? "call"
+      : phase.toLowerCase().includes("email") ? "email"
+      : phase.toLowerCase().includes("meeting") ? "meeting"
+      : phase.toLowerCase().includes("demo") ? "meeting"
+      : "default"
     const IconComponent = activityIcons[type as keyof typeof activityIcons] || activityIcons.default
     return <IconComponent className="h-4 w-4" />
   }
 
   const getActivityColor = (phase: string) => {
-    const type = phase.toLowerCase().includes("call")
-      ? "call"
-      : phase.toLowerCase().includes("email")
-        ? "email"
-        : phase.toLowerCase().includes("meeting")
-          ? "meeting"
-          : phase.toLowerCase().includes("demo")
-            ? "meeting"
-            : "default"
+    const type = phase.toLowerCase().includes("call") ? "call"
+      : phase.toLowerCase().includes("email") ? "email"
+      : phase.toLowerCase().includes("meeting") ? "meeting"
+      : phase.toLowerCase().includes("demo") ? "meeting"
+      : "default"
     return activityColors[type as keyof typeof activityColors] || activityColors.default
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
   }
 
   return (
@@ -99,7 +85,7 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
-            Activities - {lead.company_name}
+            Activities - {lead?.company_name}
           </DialogTitle>
         </DialogHeader>
 
@@ -122,12 +108,12 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
                       <div className="flex items-center gap-2">
                         <Badge className={getActivityColor(activity.phase)}>
                           {getActivityIcon(activity.phase)}
-                          <span className="ml-1">{activity.phase}</span>
+                          <span className="ml-1 capitalize">{activity.phase.replace(/_/g, ' ')}</span>
                         </Badge>
                       </div>
                       <span className="text-sm text-muted-foreground">{formatDateTime(activity.created_at)}</span>
                     </div>
-                    <p className="text-sm">{activity.details}</p>
+                    <p className="whitespace-pre-wrap">{activity.details}</p>
                   </div>
                 ))
               )}

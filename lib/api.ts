@@ -16,10 +16,13 @@ export interface ApiUser {
 export interface ApiLead {
   id: number
   company_name: string
-  contact_name: string
-  phone: string
   email?: string
   address?: string
+  address_2?: string
+  city?: string
+  state?: string
+  pincode?: string
+  country?: string
   source: string
   segment?: string
   team_size?: string
@@ -38,6 +41,25 @@ export interface ApiLead {
   contacts?: Contact[]
 }
 
+export interface ApiUnifiedActivity {
+    id: number;
+    type: 'log' | 'reminder';
+    lead_id: number;
+    company_name: string;
+    activity_type: string;
+    details: string;
+    status: string;
+    created_at: string;
+    scheduled_for?: string;
+}
+
+
+export interface ApiActivityLogCreatePayload {
+    lead_id: number;
+    details: string;
+    phase: string; // e.g., "Completed", "Discussion Done"
+}
+
 interface Contact {
   id: number
   lead_id: number
@@ -46,6 +68,33 @@ interface Contact {
   email: string | null
   designation: string | null
 }
+
+export interface ApiEventReschedulePayload {
+    start_time: string; // ISO format string
+    end_time: string; // ISO format string
+    updated_by: string;
+}
+
+export interface ApiEventReassignPayload {
+    assigned_to_user_id: number;
+    updated_by: string;
+}
+
+export interface ApiEventCancelPayload {
+    reason: string;
+    updated_by: string;
+}
+
+export interface ApiEventNotesUpdatePayload {
+    notes: string;
+    updated_by: string;
+}
+
+export interface ApiActivityUpdatePayload {
+    details: string;
+    activity_type?: string;
+}
+
 
 export interface ApiActivity {
   id: number
@@ -150,6 +199,13 @@ export interface ApiBulkUploadResponse {
   status: string
   successful_imports: number
   errors: string[]
+}
+
+export interface ApiScheduleActivityPayload {
+    lead_id: number;
+    details: string;
+    activity_type: string;
+    created_by_user_id: number;
 }
 
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -405,10 +461,13 @@ export const leadApi = {
 
   async createLead(leadData: {
     company_name: string
-    contact_name: string
-    phone: string
     email?: string
     address?: string
+    address_2?: string
+    city?: string
+    state?: string
+    pincode?: string
+    country?: string
     source: string
     segment?: string
     team_size?: string
@@ -421,6 +480,12 @@ export const leadApi = {
     machine_specification?: string
     challenges?: string
     lead_type?: string
+    contacts?: {
+        contact_name: string;
+        phone: string;
+        email?: string;
+        designation?: string;
+    }[];
   }): Promise<ApiLead> {
     try {
       const response = await fetch(`${API_BASE_URL}/web/leads`, {
@@ -447,6 +512,26 @@ export const leadApi = {
     }
   },
 
+  async exportLeads(leadIds: number[]): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/web/leads/export-excel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify(leadIds), // Send the array of lead IDs
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Failed to export leads.");
+    }
+    
+    // The response is the file itself, so we return it as a binary "Blob"
+    return response.blob();
+  },
+
+
   async getActivities(leadId: number): Promise<ApiActivity[]> {
     try {
       const response = await fetch(`${API_BASE_URL}/activities/${leadId}`, {
@@ -454,20 +539,30 @@ export const leadApi = {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
-      })
+      });
 
+      // If the response is NOT ok, we check if it's a 404
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[v0] API Error Response:", errorText)
-        throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`)
+        // A 404 is an expected outcome (no activities), so we return an empty array.
+        if (response.status === 404) {
+          console.log(`[v0] No activities found for lead ${leadId}, returning empty array.`);
+          return []; 
+        }
+        // For all other errors (like 500), we still throw an error.
+        const errorText = await response.text();
+        console.error("[v0] API Error Response:", errorText);
+        throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
       }
 
-      return response.json()
+      // If the response was ok (200), we return the JSON data.
+      return response.json();
+
     } catch (error) {
-      console.error("[v0] Error fetching activities:", error)
-      throw error
+      console.error("[v0] Error fetching activities:", error);
+      throw error;
     }
   },
+  
 
   async getHistory(leadId: number) {
     try {
@@ -494,28 +589,41 @@ export const leadApi = {
   async updateLead(
     leadId: number,
     leadData: Partial<{
-      company_name: string
-      contact_name: string
-      phone: string
-      email?: string
-      address?: string
-      source: string
-      segment?: string
-      team_size?: string
-      assigned_to: string
-      remark?: string
-      phone_2?: string
-      turnover?: string
-      current_system?: string
-      machine_specification?: string
-      challenges?: string
-      lead_type?: string
+      company_name: string;
+      email: string;
+      address: string;
+      address_2: string;
+      city: string;
+      state: string;
+      pincode: string;
+      country: string;
+      team_size: string | number;
+      source: string;
+      segment: string;
+      remark: string;
+      product: string;
+      phone_2: string;
+      turnover: string;
+      current_system: string;
+      machine_specification: string;
+      challenges: string;
+      lead_type: string;
+      assigned_to: string;
+      status: string;
+      contacts: Array<{
+        id?: number;
+        contact_name: string;
+        phone: string;
+        email?: string;
+        designation?: string;
+      }>;
+      // New activity fields
+      activity_type: string;
+      activity_details: string;
     }>,
   ): Promise<ApiLead> {
     try {
       console.log("[v0] Attempting to update lead:", leadId, "with data:", leadData)
-      console.log("[v0] API URL:", `${API_BASE_URL}/web/leads/${leadId}`)
-
       const response = await fetch(`${API_BASE_URL}/web/leads/${leadId}`, {
         method: "PUT",
         headers: {
@@ -524,17 +632,11 @@ export const leadApi = {
         },
         body: JSON.stringify(leadData),
       })
-
-      console.log("[v0] Response status:", response.status)
-      console.log("[v0] Response ok:", response.ok)
-
       if (!response.ok) {
         const errorText = await response.text()
         console.error("[v0] API Error Response:", errorText)
-        console.error("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
         throw new Error(`Failed to update lead: ${response.status} ${response.statusText} - ${errorText}`)
       }
-
       const data = await response.json()
       console.log("[v0] Lead updated successfully:", data)
       return data
@@ -624,6 +726,19 @@ export const messageMasterApi = {
 };
 // --- END NEW API OBJECT ---
 
+export const activityApi = {
+    async markActivityDone(reminderId: number, notes: string, updatedBy: string): Promise<{ status: string; message: string }> {
+        // This URL matches the new endpoint we just created
+        return fetcher(`/web/activities/scheduled/${reminderId}/complete`, {
+            method: "POST",
+            body: JSON.stringify({
+                notes: notes,
+                updated_by: updatedBy,
+            }),
+        });
+    },
+};
+
 // --- NEW: Drip Sequence API Object ---
 export const dripSequenceApi = {
     getDripSequences(): Promise<ApiDripSequenceList[]> {
@@ -674,24 +789,16 @@ export const taskApi = {
 // Meetings and Demos APIs
 export const meetingsApi = {
   async getScheduledMeetings(): Promise<ApiMeeting[]> {
+    return fetcher("/web/meetings");
+  },
+
+  // --- THIS IS THE CORRECTED FUNCTION ---
+  async getAllMeetings(): Promise<ApiMeeting[]> {
     try {
-      console.log("[v0] Fetching scheduled meetings from API...")
-      const response = await fetch(`${API_BASE_URL}/web/meetings`, {
-        headers: {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
-        },
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[v0] API Error Response:", errorText)
-        throw new Error(`Failed to fetch meetings: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log("[v0] Meetings fetched successfully:", data.length, "meetings")
-
+      console.log("[v0] Fetching ALL meetings from API...");
+      const data: any[] = await fetcher("/web/meetings/all");
+      console.log("[v0] All meetings fetched successfully:", data.length);
+      // The placeholder is replaced with the ACTUAL mapping logic.
       return data.map((meeting: any) => ({
         id: meeting.id,
         lead_id: meeting.lead_id,
@@ -702,12 +809,15 @@ export const meetingsApi = {
         created_by: meeting.created_by,
         remark: meeting.remark,
         created_at: meeting.created_at,
-      }))
+        phase: meeting.phase,
+      }));
     } catch (error) {
-      console.error("[v0] Error fetching meetings:", error)
-      return []
+      console.error("[v0] Error fetching all meetings:", error);
+      return [];
     }
   },
+
+
 
   async getScheduledDemos(): Promise<ApiDemo[]> {
     try {
@@ -745,7 +855,32 @@ export const meetingsApi = {
       return []
     }
   },
-}
+
+  async getAllDemos(): Promise<ApiDemo[]> {
+    try {
+      console.log("[v0] Fetching ALL demos from API...");
+      const data: any[] = await fetcher("/web/demos/all");
+      console.log("[v0] All demos fetched successfully:", data.length);
+      // The placeholder is replaced with the ACTUAL mapping logic.
+      return data.map((demo: any) => ({
+        id: demo.id,
+        lead_id: demo.lead_id,
+        scheduled_by: demo.scheduled_by,
+        assigned_to: demo.assigned_to,
+        start_time: demo.start_time,
+        event_end_time: demo.event_end_time,
+        phase: demo.phase || "Scheduled",
+        remark: demo.remark,
+        created_at: demo.created_at,
+        updated_at: demo.updated_at,
+      }));
+    } catch (error) {
+      console.error("[v0] Error fetching all demos:", error);
+      return [];
+    }
+  },
+};
+
 
 // Unified API export that combines all individual API objects
 export const api = {
@@ -758,7 +893,7 @@ export const api = {
   getUsers: userApi.getUsers,
   updateUser: userApi.updateUser,
   deleteUser: userApi.deleteUser,
-
+  getAllDemos: (): Promise<ApiDemo[]> => fetcher("/web/demos/all"),
   // Lead management methods
   getLeads: leadApi.getAllLeads,
   getAllLeads: leadApi.getAllLeads,
@@ -767,6 +902,7 @@ export const api = {
   createLead: leadApi.createLead,
   updateLead: leadApi.updateLead,
   getActivities: leadApi.getActivities,
+  exportLeads: leadApi.exportLeads,
   addActivityWithAttachment: leadApi.addActivityWithAttachment,
   uploadBulkLeads: leadApi.uploadBulkLeads,
   getHistory: leadApi.getHistory,
@@ -776,21 +912,89 @@ export const api = {
 
   // Task methods
   getUserTasks: taskApi.getUserTasks,
+  markActivityDone: activityApi.markActivityDone,
 
+  logActivity: async (payload: ApiActivityLogCreatePayload): Promise<ApiActivityLogOut> => {
+        return fetcher("/web/activities/log", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    },
+
+  scheduleActivity: async (payload: ApiScheduleActivityPayload): Promise<ApiReminder> => {
+        return fetcher("/web/activities/schedule", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    },
+
+  rescheduleEvent: async (
+    type: 'meeting' | 'demo', 
+    id: number, 
+    payload: ApiEventReschedulePayload
+  ): Promise<ApiMeeting | ApiDemo> => {
+    const endpoint = type === 'meeting' ? `/web/meetings/${id}/reschedule` : `/web/demos/${id}/reschedule`;
+    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  reassignEvent: async (
+    type: 'meeting' | 'demo', 
+    id: number, 
+    payload: ApiEventReassignPayload
+  ): Promise<ApiMeeting | ApiDemo> => {
+    const endpoint = type === 'meeting' ? `/web/meetings/${id}/reassign` : `/web/demos/${id}/reassign`;
+    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  cancelEvent: async (
+    type: 'meeting' | 'demo', 
+    id: number, 
+    payload: ApiEventCancelPayload
+  ): Promise<ApiMeeting | ApiDemo> => {
+    const endpoint = type === 'meeting' ? `/web/meetings/${id}/cancel` : `/web/demos/${id}/cancel`;
+    return fetcher(endpoint, { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  updateEventNotes: async (
+    type: 'meeting' | 'demo', 
+    id: number, 
+    payload: ApiEventNotesUpdatePayload
+  ): Promise<ApiMeeting | ApiDemo> => {
+    const endpoint = type === 'meeting' ? `/web/meetings/${id}/notes` : `/web/demos/${id}/notes`;
+    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  // --- NEW: Methods for managing activities ---
+  updateActivity: async (
+      activityId: number, 
+      payload: ApiActivityUpdatePayload
+  ): Promise<ApiUnifiedActivity> => {
+      return fetcher(`/web/activities/log/${activityId}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
+
+  deleteLoggedActivity: async (activityId: number): Promise<void> => {
+      return fetcher(`/web/activities/log/${activityId}`, { method: 'DELETE' });
+  },
+
+  cancelScheduledActivity: async (reminderId: number): Promise<void> => {
+      return fetcher(`/web/activities/scheduled/${reminderId}`, { method: 'DELETE' });
+  },
+  
   // Meetings and demos methods
   getScheduledMeetings: meetingsApi.getScheduledMeetings,
+  getAllMeetings: meetingsApi.getAllMeetings,
   getScheduledDemos: meetingsApi.getScheduledDemos,
   getMessages: messageMasterApi.getMessages,
   createMessage: messageMasterApi.createMessage,
   updateMessage: messageMasterApi.updateMessage,
   deleteMessage: messageMasterApi.deleteMessage,
-  
+  getAllActivities: (username: string): Promise<ApiUnifiedActivity[]> => fetcher(`/web/activities/all/${username}`),
   getDripSequences: dripSequenceApi.getDripSequences,
   getDripSequenceById: dripSequenceApi.getDripSequenceById,
   createDripSequence: dripSequenceApi.createDripSequence,
   updateDripSequence: dripSequenceApi.updateDripSequence,
   deleteDripSequence: dripSequenceApi.deleteDripSequence,
-  getPendingDiscussions: (): Promise<ApiReminder[]> => fetcher("/web/discussions/pending"),
+  getPendingActivities: (): Promise<ApiReminder[]> => fetcher("/web/activities/pending"),
   assignDripToLead: leadApi.assignDripToLead,
 }
 

@@ -1,3 +1,4 @@
+//frontend/app/dashboard/add-quotation/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -57,7 +58,10 @@ export default function AddQuotationPage() {
 
     setIsLoading(true)
     try {
-      await api.addActivityWithAttachment(Number(selectedLeadId), details, file)
+      const activityDetails = `Quotation Added: ${details.trim()}`;
+      
+      await api.addActivityWithAttachment(Number(selectedLeadId), activityDetails, file);
+
       toast({
         title: "Success!",
         description: "Quotation has been successfully uploaded and logged as an activity.",

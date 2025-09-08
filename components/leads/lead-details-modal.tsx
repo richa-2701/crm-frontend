@@ -1,3 +1,4 @@
+//frontend/components/leads/lead-details-modal.tsx
 "use client"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"

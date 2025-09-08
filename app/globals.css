@@ -11,6 +11,7 @@
   --popover: #ffffff;
   --popover-foreground: #333333;
   --primary: #3b82f6;
+  
   --primary-foreground: #ffffff;
   --secondary: #f3f4f6;
   --secondary-foreground: #4b5563;
@@ -159,4 +160,14 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Add this to your global CSS file, like globals.css */
+.hide-scrollbar {
+  scrollbar-width: none; /* For Firefox */
+  -ms-overflow-style: none; /* For Internet Explorer and Edge */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* For Chrome, Safari, and Opera */
 }

@@ -1,38 +1,27 @@
+//frontend/app/dashboard/post-meeting/page.tsx
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
-import { api } from "@/lib/api"
+import { api, type ApiMeeting, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
-
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-}
-
-interface Meeting {
-  id: string
-  lead_id: string
-  event_type: string
-}
+import { Loader2 } from "lucide-react"
 
 export default function PostMeetingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [allLeads, setAllLeads] = useState<ApiLead[]>([])
+  const [scheduledMeetings, setScheduledMeetings] = useState<ApiMeeting[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [confirmationMessage, setConfirmationMessage] = useState("")
 
   const [formData, setFormData] = useState({
     meeting_id: "",
@@ -41,83 +30,78 @@ export default function PostMeetingPage() {
   })
 
   useEffect(() => {
-    const fetchLeads = async () => {
+    const fetchData = async () => {
+      setIsDataLoading(true);
       try {
-        const leadsData = await api.getAllLeads()
-        console.log("[v0] Fetched leads for post meeting:", leadsData.length)
-        setLeads(
-          leadsData.map((lead: any) => ({
-            id: String(lead.id),
-            company_name: lead.company_name,
-            contact_name: lead.contact_name,
-          }))
-        )
+        const [leadsData, meetingsData] = await Promise.all([
+            api.getAllLeads(),
+            api.getScheduledMeetings()
+        ]);
+        
+        setAllLeads(leadsData);
+        setScheduledMeetings(meetingsData);
 
-        const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
-        const scheduledMeetings = storedMeetings.filter((m: any) => m.type === "meeting")
-        console.log("[v0] Loaded scheduled meetings:", scheduledMeetings.length)
-        setMeetings(scheduledMeetings)
+        const leadIdFromUrl = searchParams.get('leadId');
+        const meetingIdFromUrl = searchParams.get('meetingId');
+
+        if (leadIdFromUrl && meetingIdFromUrl) {
+            setFormData(prev => ({
+                ...prev,
+                lead_id: leadIdFromUrl,
+                meeting_id: meetingIdFromUrl,
+            }));
+        }
+        
       } catch (error) {
-        console.error("[v0] Failed to fetch leads:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load leads. Please refresh the page.",
-          variant: "destructive",
-        })
+        toast({ title: "Error", description: "Failed to load scheduled meetings and leads.", variant: "destructive" });
+      } finally {
+        setIsDataLoading(false);
       }
     }
-
-    fetchLeads()
-  }, [toast])
+    fetchData()
+  }, [toast, searchParams])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-
     if (field === "lead_id") {
-      const meeting = meetings.find((m) => m.lead_id === value)
-      if (meeting) {
-        setFormData((prev) => ({ ...prev, meeting_id: meeting.id }))
+      const meetingsForLead = scheduledMeetings.filter((m) => String(m.lead_id) === value);
+      if (meetingsForLead.length > 0) {
+        const latestMeeting = meetingsForLead.sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime())[0];
+        setFormData((prev) => ({ ...prev, meeting_id: String(latestMeeting.id) }))
+      } else {
+        setFormData((prev) => ({ ...prev, meeting_id: "" }))
+        toast({ title: "Info", description: "This lead has no currently scheduled meetings to complete." });
       }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    if (!formData.meeting_id || !formData.remark) {
+        toast({ title: "Error", description: "Please select a meeting and enter notes.", variant: "destructive" });
+        return;
+    }
+    setIsLoading(true);
 
     try {
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       const meetingData = {
         meeting_id: Number.parseInt(formData.meeting_id),
         notes: formData.remark,
-        updated_by: "richa", // Get from current user context/auth
+        updated_by: currentUser.username || "System",
       }
-
-      console.log("[v0] Completing meeting with data:", meetingData)
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/meetings/complete`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(meetingData),
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to complete meeting: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      console.log("[v0] Meeting completed successfully:", result)
-
-      setConfirmationMessage("Meeting is marked done")
+      if (!response.ok) { throw new Error(`Failed to complete meeting: ${response.statusText}`) }
+      
       setShowConfirmation(true)
     } catch (error) {
-      console.error("[v0] Failed to complete meeting:", error)
-      toast({
-        title: "Error",
-        description: "Failed to save meeting notes. Please try again.",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to save meeting notes.", variant: "destructive" });
     } finally {
       setIsLoading(false)
     }
@@ -127,76 +111,65 @@ export default function PostMeetingPage() {
     setShowConfirmation(false)
     router.push("/dashboard")
   }
+  
+  // --- THIS IS THE CORRECTED LOGIC ---
+  const isPrefilled = !!searchParams.get('leadId');
+  
+  // Determine which leads to show in the dropdown
+  const leadsWithOptions = isPrefilled 
+    ? allLeads.filter(l => l.id.toString() === formData.lead_id) 
+    : allLeads.filter(lead => scheduledMeetings.some(meeting => String(meeting.lead_id) === String(lead.id)));
 
-  const leadsWithMeetings = leads.filter((lead) => meetings.some((meeting) => meeting.lead_id === lead.id))
+  const leadOptions = leadsWithOptions.map((lead) => ({ value: String(lead.id), label: lead.company_name }));
 
-  const leadOptions = leadsWithMeetings.map((lead) => ({
-    value: lead.id,
-    label: `${lead.company_name} (${lead.contact_name})`,
-  }))
+  if (isDataLoading) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
-      <div className="px-1">
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Post Meeting</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Record meeting outcome and notes</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">Post Meeting</h1>
+            <p className="text-muted-foreground">Record meeting outcome and notes</p>
+        </div>
       </div>
-
-      <Card className="border-0 sm:border shadow-none sm:shadow-sm">
-        <CardHeader className="pb-3 sm:pb-6">
-          <CardTitle className="text-lg sm:text-xl">Meeting Outcome</CardTitle>
+      
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Meeting Outcome</CardTitle>
+          <CardDescription>Select the lead and enter the notes from your meeting.</CardDescription>
         </CardHeader>
-        <CardContent className="px-3 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
-            <div className="space-y-1">
-              <Label htmlFor="lead_id" className="text-xs sm:text-sm">
-                Lead Name *
-              </Label>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="lead_id">Lead Name *</Label>
               <Autocomplete
                 options={leadOptions}
                 value={formData.lead_id}
                 onValueChange={(value) => handleInputChange("lead_id", value)}
                 placeholder="Search and select a lead..."
-                searchPlaceholder="Type to search leads..."
-                emptyMessage="No leads found."
-                className="h-8 sm:h-10 text-sm w-full"
+                disabled={isPrefilled}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="remark" className="text-xs sm:text-sm">
-                Meeting Notes *
-              </Label>
-              <Textarea
-                id="remark"
-                placeholder="Enter meeting notes and outcomes..."
-                value={formData.remark}
-                onChange={(e) => handleInputChange("remark", e.target.value)}
-                rows={3}
-                required
-                className="text-sm resize-none"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="remark">Meeting Notes *</Label>
+              <Textarea id="remark" placeholder="Enter meeting notes and outcomes..." value={formData.remark} onChange={(e) => handleInputChange("remark", e.target.value)} rows={5} required />
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={isLoading} className="flex-1 h-9 text-sm">
-                {isLoading ? "Saving..." : "Save Notes"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()} className="h-9 text-sm px-4">
-                Cancel
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+              <Button type="submit" disabled={isLoading || !formData.meeting_id}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Notes
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      <ConfirmationDialog
-        open={showConfirmation}
-        onOpenChange={setShowConfirmation}
-        title="Success"
-        message={confirmationMessage}
-        onConfirm={handleConfirmation}
-      />
+      <ConfirmationDialog open={showConfirmation} onOpenChange={setShowConfirmation} title="Success" message="Meeting has been marked as done." onConfirm={handleConfirmation} />
     </div>
   )
 }

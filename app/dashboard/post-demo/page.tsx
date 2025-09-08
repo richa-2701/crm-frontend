@@ -1,38 +1,29 @@
+//frontend/app/dashboard/post-demo/page.tsx
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
-import { api } from "@/lib/api"
+import { api, type ApiDemo, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
-
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-}
-
-interface Demo {
-  id: string
-  lead_id: string
-  type: string
-}
+import { Loader2 } from "lucide-react"
 
 export default function PostDemoPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [demos, setDemos] = useState<Demo[]>([])
+  const [allLeads, setAllLeads] = useState<ApiLead[]>([])
+  const [scheduledDemos, setScheduledDemos] = useState<ApiDemo[]>([])
+  const [leads, setLeads] = useState<ApiLead[]>([])
+  const [demos, setDemos] = useState<ApiDemo[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [confirmationMessage, setConfirmationMessage] = useState("")
 
   const [formData, setFormData] = useState({
     demo_id: "",
@@ -41,83 +32,78 @@ export default function PostDemoPage() {
   })
 
   useEffect(() => {
-    const fetchLeads = async () => {
+    const fetchData = async () => {
+        setIsDataLoading(true);
       try {
-        const leadsData = await api.getAllLeads()
-        console.log("[v0] Fetched leads for post demo:", leadsData.length)
-        setLeads(
-          leadsData.map((lead: any) => ({
-            id: String(lead.id),
-            company_name: lead.company_name,
-            contact_name: lead.contact_name,
-          }))
-        )
+        const [leadsData, demosData] = await Promise.all([
+            api.getAllLeads(),
+            api.getScheduledDemos()
+        ]);
+        setAllLeads(leadsData);
+        setScheduledDemos(demosData);
 
-        const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
-        const scheduledDemos = storedMeetings.filter((m: any) => m.type === "demo")
-        console.log("[v0] Loaded scheduled demos:", scheduledDemos.length)
-        setDemos(scheduledDemos)
+        const leadIdFromUrl = searchParams.get('leadId');
+        const demoIdFromUrl = searchParams.get('demoId');
+
+        if (leadIdFromUrl && demoIdFromUrl) {
+            setFormData(prev => ({
+                ...prev,
+                lead_id: leadIdFromUrl,
+                demo_id: demoIdFromUrl,
+            }));
+        }
+
       } catch (error) {
-        console.error("[v0] Failed to fetch leads:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load leads. Please refresh the page.",
-          variant: "destructive",
-        })
+        toast({ title: "Error", description: "Failed to load scheduled demos and leads.", variant: "destructive" });
+      } finally {
+          setIsDataLoading(false);
       }
     }
-
-    fetchLeads()
-  }, [toast])
+    fetchData()
+  }, [toast, searchParams])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-
     if (field === "lead_id") {
-      const demo = demos.find((d) => d.lead_id === value)
-      if (demo) {
-        setFormData((prev) => ({ ...prev, demo_id: demo.id }))
+      const demosForLead = scheduledDemos.find((d) => String(d.lead_id) === value);
+      if (demosForLead) {
+        const latestDemo = demosForLead.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())[0];
+        setFormData((prev) => ({ ...prev, demo_id: String(latestDemo.id) }))
+      } else {
+        setFormData((prev) => ({ ...prev, demo_id: "" }))
+        toast({ title: "Info", description: "This lead has no currently scheduled demos to complete." });
       }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    if (!formData.demo_id || !formData.remark) {
+        toast({ title: "Error", description: "Please select a scheduled demo and enter notes.", variant: "destructive" });
+        return;
+    }
+    setIsLoading(true);
 
     try {
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       const demoData = {
         demo_id: Number.parseInt(formData.demo_id),
         notes: formData.remark,
-        updated_by: "richa", // Get from current user context/auth
+        updated_by: currentUser.username || "System",
       }
-
-      console.log("[v0] Completing demo with data:", demoData)
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/demos/complete`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(demoData),
       })
-
       if (!response.ok) {
         throw new Error(`Failed to complete demo: ${response.statusText}`)
       }
-
-      const result = await response.json()
-      console.log("[v0] Demo completed successfully:", result)
-
-      setConfirmationMessage("Demo is marked done")
+      
       setShowConfirmation(true)
     } catch (error) {
-      console.error("[v0] Failed to complete demo:", error)
-      toast({
-        title: "Error",
-        description: "Failed to save demo notes. Please try again.",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to save demo notes.", variant: "destructive" });
     } finally {
       setIsLoading(false)
     }
@@ -127,76 +113,57 @@ export default function PostDemoPage() {
     setShowConfirmation(false)
     router.push("/dashboard")
   }
+  
+  // --- THIS IS THE FIX ---
+  const isPrefilled = !!searchParams.get('leadId');
+  const leadOptions = (isPrefilled ? allLeads.filter(l => l.id.toString() === formData.lead_id) : allLeads)
+    .map((lead) => ({ value: String(lead.id), label: lead.company_name }));
 
-  const leadsWithDemos = leads.filter((lead) => demos.some((demo) => demo.lead_id === lead.id))
-
-  const leadOptions = leadsWithDemos.map((lead) => ({
-    value: lead.id,
-    label: `${lead.company_name} (${lead.contact_name})`,
-  }))
+  if (isDataLoading) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
-      <div className="px-1">
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Post Demo</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Record demo outcome and notes</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">Post Demo</h1>
+            <p className="text-muted-foreground">Record demo outcome and notes</p>
+        </div>
       </div>
 
-      <Card className="border-0 sm:border shadow-none sm:shadow-sm">
-        <CardHeader className="pb-3 sm:pb-6">
-          <CardTitle className="text-lg sm:text-xl">Demo Outcome</CardTitle>
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Demo Outcome</CardTitle>
+          <CardDescription>Select the lead and enter the notes from your demo.</CardDescription>
         </CardHeader>
-        <CardContent className="px-3 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
-            <div className="space-y-1">
-              <Label htmlFor="lead_id" className="text-xs sm:text-sm">
-                Lead Name *
-              </Label>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="lead_id">Lead Name *</Label>
               <Autocomplete
                 options={leadOptions}
                 value={formData.lead_id}
                 onValueChange={(value) => handleInputChange("lead_id", value)}
                 placeholder="Search and select a lead..."
-                searchPlaceholder="Type to search leads..."
-                emptyMessage="No leads found."
-                className="h-8 sm:h-10 text-sm w-full"
+                disabled={isPrefilled}
               />
             </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="remark" className="text-xs sm:text-sm">
-                Demo Notes *
-              </Label>
-              <Textarea
-                id="remark"
-                placeholder="Enter demo notes and client feedback..."
-                value={formData.remark}
-                onChange={(e) => handleInputChange("remark", e.target.value)}
-                rows={3}
-                required
-                className="text-sm resize-none"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="remark">Demo Notes *</Label>
+              <Textarea id="remark" placeholder="Enter demo notes and client feedback..." value={formData.remark} onChange={(e) => handleInputChange("remark", e.target.value)} rows={5} required />
             </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={isLoading} className="flex-1 h-9 text-sm">
-                {isLoading ? "Saving..." : "Save Notes"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()} className="h-9 text-sm px-4">
-                Cancel
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+              <Button type="submit" disabled={isLoading || !formData.demo_id}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Notes
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
-
-      <ConfirmationDialog
-        open={showConfirmation}
-        onOpenChange={setShowConfirmation}
-        title="Success"
-        message={confirmationMessage}
-        onConfirm={handleConfirmation}
-      />
+      <ConfirmationDialog open={showConfirmation} onOpenChange={setShowConfirmation} title="Success" message="Demo has been marked as done." onConfirm={handleConfirmation} />
     </div>
   )
 }

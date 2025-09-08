@@ -56,12 +56,6 @@ export function Navbar({ user, children }: NavbarProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/leads">
-                  <Menu className="mr-2 h-4 w-4" />
-                  <span>Leads</span>
-                </Link>
-              </DropdownMenuItem>
               {user.role === "admin" && (
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/manage-users">

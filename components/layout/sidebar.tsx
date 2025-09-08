@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation"
 // --- CHANGE 1: No longer need useState ---
 // import { useState } from "react"
 import { cn } from "@/lib/utils"
-// --- CHANGE 2: No longer need useIsMobile or Sheet components ---
-// import { useIsMobile } from "@/hooks/use-mobile"
-import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud } from "lucide-react"
+import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud, ListChecks  } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 // import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChevronRight, ChevronLeft } from "lucide-react"
@@ -31,6 +30,11 @@ const navigationItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "Leads",
+    href: "/dashboard/leads",
+    icon: ListChecks,
+  },
+  {
     title: "Create Lead",
     href: "/dashboard/create-lead",
     icon: Menu,
@@ -41,13 +45,13 @@ const navigationItems = [
     icon: Calendar,
   },
   {
-    title: "Post Meeting/Demo",
-    href: "/dashboard/post-event",
+    title: "Events",
+    href: "/dashboard/events",
     icon: FileText,
   },
   {
-    title: "Discussion",
-    href: "/dashboard/discussion",
+    title: "Activity", // TO THIS
+    href: "/dashboard/activity", // TO THIS
     icon: MessageSquare,
   },
   {

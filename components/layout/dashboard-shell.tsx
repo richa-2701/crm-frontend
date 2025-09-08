@@ -9,7 +9,7 @@ import { CRMChatbot, FloatingChatbotButton } from "@/components/chatbot/crm-chat
 import { ApiUser } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
 
@@ -49,9 +49,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-0">
-        <div className="pt-16 h-full">
-            <SidebarContent currentUser={user} onItemClick={() => setMobileSidebarOpen(false)} />
-        </div>
+        <SheetHeader className="p-4 border-b">
+            <SheetTitle>INDUS CRM</SheetTitle>
+            {/* <SheetDescription>
+                Navigate through the CRM application.
+            </SheetDescription> */}
+        </SheetHeader>
+        <SidebarContent currentUser={user} onItemClick={() => setMobileSidebarOpen(false)} />
       </SheetContent>
     </Sheet>
   )

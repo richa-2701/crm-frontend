@@ -1,3 +1,4 @@
+//frontend/app/dashboard/post-event/page.tsx
 "use client"
 
 import type React from "react"

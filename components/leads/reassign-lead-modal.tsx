@@ -49,9 +49,6 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
     onClose()
   }
   
-  // --- THIS IS THE IMPROVED LOGIC ---
-  // It's clearer to find the currently assigned user first,
-  // and then filter them out from the list of options.
   const currentlyAssignedUser = users.find(user => user.name === lead.assign_to);
   const availableUsers = users.filter(user => user.id !== currentlyAssignedUser?.id);
 
