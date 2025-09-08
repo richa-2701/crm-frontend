@@ -7,7 +7,7 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
-import { Calendar, Clock, Users, Phone, FileText, CheckCircle, MessageSquare, User as UserIcon } from "lucide-react"
+import { Calendar, Clock, Users, Phone, FileText, CheckCircle, MessageSquare, User as UserIcon, Monitor } from "lucide-react"
 import { formatDate, formatTime } from "@/lib/date-format"
 import { api, ApiUnifiedActivity, ApiUser } from "@/lib/api"
 import { MarkAsDoneModal } from "@/components/activity/mark-as-done-modal"
@@ -70,8 +70,8 @@ const chartConfig = {
 function TaskTypeIcon({ type }: { type: string }) {
   const lowerType = type.toLowerCase();
   if (lowerType.includes("meeting")) return <Users className="h-4 w-4 text-blue-500" />;
-  if (lowerType.includes("demo")) return <Calendar className="h-4 w-4 text-purple-500" />;
-  if (lowerType.includes("follow-up")) return <Phone className="h-4 w-4 text-green-500" />;
+  if (lowerType.includes("demo")) return <Monitor className="h-4 w-4 text-purple-500" />;
+  if (lowerType.includes("follow-up") || lowerType.includes("call")) return <Phone className="h-4 w-4 text-green-500" />;
   if (lowerType.includes("whatsapp")) return <MessageSquare className="h-4 w-4 text-teal-500" />;
   return <CheckCircle className="h-4 w-4 text-gray-500" />;
 }
@@ -140,7 +140,7 @@ export default function DashboardPage() {
         const lead = leadsMap.get(String(m.lead_id));
         combinedTasks.push({
           id: `meeting-${m.id}`, numericId: m.id, lead_id: String(m.lead_id), type: 'meeting',
-          activity_type_display: "Meeting", title: `Meeting: ${lead?.company_name || 'N/A'}`,
+          activity_type_display: "Meeting", title: `${lead?.company_name || 'N/A'}`,
           companyName: lead?.company_name || 'Unknown Lead', contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: m.assigned_to, startTime: m.event_time, endTime: m.event_end_time,
           details: `Scheduled meeting with ${lead?.contacts?.[0]?.contact_name || 'contact'} at ${lead?.company_name || 'company'}.`
@@ -151,7 +151,7 @@ export default function DashboardPage() {
         const lead = leadsMap.get(String(d.lead_id));
         combinedTasks.push({
           id: `demo-${d.id}`, numericId: d.id, lead_id: String(d.lead_id), type: 'demo',
-          activity_type_display: "Demo", title: `Demo: ${lead?.company_name || 'N/A'}`,
+          activity_type_display: "Demo", title: `${lead?.company_name || 'N/A'}`,
           companyName: lead?.company_name || 'Unknown Lead', contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: d.assigned_to, startTime: d.start_time, endTime: d.event_end_time,
           details: `Scheduled demo with ${lead?.contacts?.[0]?.contact_name || 'contact'} at ${lead?.company_name || 'company'}.`
@@ -229,21 +229,28 @@ export default function DashboardPage() {
     }
   };
 
+  // --- REFINED FILTERING LOGIC ---
   const today = new Date();
   const nextWeek = new Date();
   nextWeek.setDate(today.getDate() + 7);
-  today.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0); // Start of today
 
-  const todaysTasks = allTasks.filter(task => new Date(task.startTime).toDateString() === new Date().toDateString());
+  const now = new Date(); // Use a consistent 'now' for filtering
+
+  const todaysTasks = allTasks.filter(task => new Date(task.startTime).toDateString() === now.toDateString());
   const upcomingTasks = allTasks.filter(task => {
     const taskDate = new Date(task.startTime);
-    return taskDate > new Date() && taskDate <= nextWeek;
+    return taskDate > now && taskDate <= nextWeek;
   });
 
-  const todaysMeetingsAndDemos = todaysTasks.filter(t => t.type === 'meeting' || t.type === 'demo');
+  // Today's tasks broken down by type
+  const todaysMeetings = todaysTasks.filter(t => t.type === 'meeting');
+  const todaysDemos = todaysTasks.filter(t => t.type === 'demo');
   const todaysActivities = todaysTasks.filter(t => t.type === 'reminder');
 
-  const upcomingMeetingsAndDemos = upcomingTasks.filter(t => t.type === 'meeting' || t.type === 'demo');
+  // Upcoming tasks broken down by type
+  const upcomingMeetings = upcomingTasks.filter(t => t.type === 'meeting');
+  const upcomingDemos = upcomingTasks.filter(t => t.type === 'demo');
   const upcomingActivities = upcomingTasks.filter(t => t.type === 'reminder');
 
 
@@ -253,7 +260,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* --- CHANGE 1: Main container with vertical spacing --- */}
       <div className="space-y-6 pb-6 px-2 md:px-0">
         <div className="mb-3">
           <h1 className="text-xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -262,8 +268,123 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* --- CHANGE 2: Top section for summary cards and pie chart --- */}
-        <div className="grid gap-4 grid-cols-1 lg:grid-cols-5">
+        {/* --- NEW LAYOUT: TASKS OVERVIEW IS NOW AT THE TOP --- */}
+        <Card>
+            <CardHeader>
+                <CardTitle>Tasks Overview</CardTitle>
+                <CardDescription>Click on any task to take action.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {/* --- The main grid is now 3 columns on large screens --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* Column 1: Meetings */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                            <Users className="h-5 w-5 text-blue-500" />
+                            <h3 className="text-lg font-semibold">Meetings</h3>
+                        </div>
+                        <div className="space-y-4 rounded-lg border p-2">
+                            <div>
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {todaysMeetings.length > 0 ? (
+                                        todaysMeetings.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No meetings today.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {upcomingMeetings.length > 0 ? (
+                                        upcomingMeetings.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true} />
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No upcoming meetings.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Column 2: Demos */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                            <Monitor className="h-5 w-5 text-purple-500" />
+                            <h3 className="text-lg font-semibold">Demos</h3>
+                        </div>
+                        <div className="space-y-4 rounded-lg border p-2">
+                            <div>
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {todaysDemos.length > 0 ? (
+                                        todaysDemos.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No demos today.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {upcomingDemos.length > 0 ? (
+                                        upcomingDemos.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true}/>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No upcoming demos.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Column 3: Activities */}
+                    <div className="space-y-4">
+                         <div className="flex items-center gap-2 px-1">
+                            <Phone className="h-5 w-5 text-green-500" />
+                            <h3 className="text-lg font-semibold">Activities</h3>
+                        </div>
+                        <div className="space-y-4 rounded-lg border p-2">
+                            <div>
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {todaysActivities.length > 0 ? (
+                                        todaysActivities.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No activities today.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
+                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                    {upcomingActivities.length > 0 ? (
+                                        upcomingActivities.map((task) => (
+                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true}/>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground p-2 h-full flex items-center justify-center">No upcoming activities.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+
+        {/* --- SUMMARY SECTION IS NOW SECOND --- */}
+        <div className="grid gap-4 pt-4 grid-cols-1 lg:grid-cols-5">
             <Card className="lg:col-span-2">
                 <CardHeader className="pb-2">
                 <CardTitle className="text-sm md:text-lg">Lead Status Distribution</CardTitle>
@@ -370,84 +491,6 @@ export default function DashboardPage() {
                 </Card>
             </div>
         </div>
-
-        {/* --- CHANGE 3: Full-width card for Tasks Overview --- */}
-        <Card>
-            <CardHeader>
-                <CardTitle>Tasks Overview</CardTitle>
-                <CardDescription>Click on any task to take action.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Today's Column */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3 px-1">
-                            <Calendar className="h-5 w-5" />
-                            <h3 className="text-lg font-semibold">Today's Agenda</h3>
-                        </div>
-                        <div className="space-y-4 h-[350px] overflow-y-auto pr-2 rounded-lg border p-2">
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground px-2 pb-1">Meetings & Demos</h4>
-                                <div className="space-y-2">
-                                    {todaysMeetingsAndDemos.length > 0 ? (
-                                        todaysMeetingsAndDemos.map((task) => (
-                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
-                                        ))
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground p-2">No meetings or demos scheduled.</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground px-2 pt-2 pb-1">Activities</h4>
-                                <div className="space-y-2">
-                                    {todaysActivities.length > 0 ? (
-                                        todaysActivities.map((task) => (
-                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
-                                        ))
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground p-2">No activities scheduled.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Upcoming Column */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3 px-1">
-                            <Clock className="h-5 w-5" />
-                            <h3 className="text-lg font-semibold">Upcoming (Next 7 Days)</h3>
-                        </div>
-                        <div className="space-y-4 h-[350px] overflow-y-auto pr-2 rounded-lg border p-2">
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground px-2 pb-1">Meetings & Demos</h4>
-                                <div className="space-y-2">
-                                    {upcomingMeetingsAndDemos.length > 0 ? (
-                                        upcomingMeetingsAndDemos.map((task) => (
-                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true} />
-                                        ))
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground p-2">No upcoming meetings or demos.</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <h4 className="text-xs font-semibold text-muted-foreground px-2 pt-2 pb-1">Activities</h4>
-                                <div className="space-y-2">
-                                    {upcomingActivities.length > 0 ? (
-                                        upcomingActivities.map((task) => (
-                                            <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true}/>
-                                        ))
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground p-2">No upcoming activities.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
       </div>
       
       <MarkAsDoneModal
