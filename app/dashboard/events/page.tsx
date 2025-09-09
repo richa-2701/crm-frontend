@@ -1,4 +1,3 @@
-//frontend/app/dashboard/events/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -310,6 +309,7 @@ export default function EventsPage() {
 
   const [selectedEvent, setSelectedEvent] = useState<EnhancedEvent | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   const loadEvents = useCallback(async () => {
     try {
@@ -409,6 +409,12 @@ export default function EventsPage() {
         );
       });
   }, [allEvents, statusFilter, searchTerm]);
+
+  const pageCount = Math.ceil(filteredEvents.length / pagination.pageSize);
+  const paginatedEvents = filteredEvents.slice(
+    pagination.pageIndex * pagination.pageSize,
+    (pagination.pageIndex + 1) * pagination.pageSize
+  );
 
   const handleEventDoubleClick = (event: EnhancedEvent) => {
     setSelectedEvent(event);
@@ -515,11 +521,11 @@ export default function EventsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredEvents.length > 0 ? (
+          {paginatedEvents.length > 0 ? (
             <>
               {viewMode === 'grid' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredEvents.map(event => {
+                  {paginatedEvents.map(event => {
                     const linkHref = event.type === 'meeting'
                       ? `/dashboard/post-meeting?leadId=${event.lead_id}&meetingId=${event.numericId}`
                       : `/dashboard/post-demo?leadId=${event.lead_id}&demoId=${event.numericId}`;
@@ -589,7 +595,7 @@ export default function EventsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredEvents.map(event => {
+                      {paginatedEvents.map(event => {
                         const linkHref = event.type === 'meeting'
                           ? `/dashboard/post-meeting?leadId=${event.lead_id}&meetingId=${event.numericId}`
                           : `/dashboard/post-demo?leadId=${event.lead_id}&demoId=${event.numericId}`;
@@ -636,6 +642,34 @@ export default function EventsPage() {
           )}
         </CardContent>
       </Card>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between pt-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="page-size" className="text-sm text-muted-foreground">Items per page</Label>
+            <Select
+              value={String(pagination.pageSize)}
+              onValueChange={(value) => {
+                setPagination({ pageIndex: 0, pageSize: Number(value) });
+              }}
+            >
+              <SelectTrigger id="page-size" className="w-20 h-9">
+                <SelectValue placeholder={pagination.pageSize} />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 30, 100, 200].map(size => (
+                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-muted-foreground">Page {pagination.pageIndex + 1} of {pageCount}</div>
+            <Button variant="outline" size="sm" onClick={() => setPagination(p => ({ ...p, pageIndex: p.pageIndex - 1 }))} disabled={pagination.pageIndex === 0}>Previous</Button>
+            <Button variant="outline" size="sm" onClick={() => setPagination(p => ({ ...p, pageIndex: p.pageIndex + 1 }))} disabled={pagination.pageIndex >= pageCount - 1}>Next</Button>
+          </div>
+        </div>
+      )}
 
       <EventDetailModal
         isOpen={isDetailModalOpen}

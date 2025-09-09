@@ -1,4 +1,3 @@
-//frontend/app/dashboard/page.tsx
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -12,7 +11,7 @@ import { formatDate, formatTime } from "@/lib/date-format"
 import { api, ApiUnifiedActivity, ApiUser } from "@/lib/api"
 import { MarkAsDoneModal } from "@/components/activity/mark-as-done-modal"
 
-// --- INTERFACES FOR DATA AGGREGATION ---
+
 interface User {
   id: number
   username: string
@@ -77,6 +76,10 @@ function TaskTypeIcon({ type }: { type: string }) {
 }
 
 function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; onClick: () => void; isUpcoming?: boolean }) {
+  const timeString = task.endTime && new Date(task.startTime).getTime() !== new Date(task.endTime).getTime()
+    ? `${formatTime(task.startTime)} - ${formatTime(task.endTime)}`
+    : formatTime(task.startTime);
+
   return (
     <div
       key={task.id}
@@ -98,7 +101,14 @@ function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; on
         </div>
       </div>
       <div className="text-xs font-semibold text-muted-foreground text-right flex-shrink-0">
-        {isUpcoming ? formatDate(task.startTime) : formatTime(task.startTime)}
+        {isUpcoming ? (
+          <div className="flex flex-col items-end">
+            <span>{formatDate(task.startTime)}</span>
+            <span className="font-normal text-gray-500 dark:text-gray-400">{timeString}</span>
+          </div>
+        ) : (
+          <span>{timeString}</span>
+        )}
       </div>
     </div>
   );
@@ -230,17 +240,24 @@ export default function DashboardPage() {
   };
 
   // --- REFINED FILTERING LOGIC ---
-  const today = new Date();
-  const nextWeek = new Date();
-  nextWeek.setDate(today.getDate() + 7);
-  today.setHours(0, 0, 0, 0); // Start of today
+   const today = new Date();
+  
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0); // Set to the beginning of tomorrow.
 
-  const now = new Date(); // Use a consistent 'now' for filtering
+  const endOfNextWeek = new Date(today);
+  endOfNextWeek.setDate(endOfNextWeek.getDate() + 7);
+  endOfNextWeek.setHours(23, 59, 59, 999); // Set to the end of the 7th day.
 
-  const todaysTasks = allTasks.filter(task => new Date(task.startTime).toDateString() === now.toDateString());
+  const todaysTasks = allTasks.filter(task => 
+    new Date(task.startTime).toDateString() === today.toDateString()
+  );
+
   const upcomingTasks = allTasks.filter(task => {
     const taskDate = new Date(task.startTime);
-    return taskDate > now && taskDate <= nextWeek;
+    // Task date is on or after tomorrow and within the next week.
+    return taskDate >= tomorrow && taskDate <= endOfNextWeek;
   });
 
   // Today's tasks broken down by type

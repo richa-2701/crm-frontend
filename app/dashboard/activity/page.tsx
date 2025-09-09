@@ -10,6 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -27,14 +34,12 @@ import { ActivityTable } from "@/components/activity/activity-table";
 import { MarkAsDoneModal } from "@/components/activity/mark-as-done-modal";
 import { LogActivityModal } from "@/components/activity/log-activity-modal";
 import { ScheduleActivityModal } from "@/components/activity/schedule-activity-modal";
-// --- NEW: Import the new date formatting utility ---
 import { formatDateTime } from "@/lib/date-format";
 
 
 type ViewMode = 'card' | 'grid';
-type FilterType = 'all' | 'today' | 'scheduled' | 'completed' | 'overdue';
+type FilterType = 'all' | 'today' | 'scheduled' | 'completed' | 'canceled' | 'overdue';
 
-// --- THIS IS THE MODIFIED ActivityDetailModal ---
 function ActivityDetailModal({
     isOpen,
     onClose,
@@ -75,11 +80,9 @@ function ActivityDetailModal({
                     <p className="col-span-2">{activity.activity_type}</p>
 
                     <Label className="font-semibold text-right pr-4">Scheduled For</Label>
-                    {/* --- FIX: Use the new formatter --- */}
                     <p className="col-span-2">{formatDateTime(activity.scheduled_for)}</p>
 
                     <Label className="font-semibold text-right pr-4">Created On</Label>
-                    {/* --- FIX: Use the new formatter --- */}
                     <p className="col-span-2">{formatDateTime(activity.created_at)}</p>
 
                     <Label className="font-semibold text-right pr-4 self-start">Details</Label>
@@ -237,7 +240,7 @@ export default function ActivityPage() {
     const [viewMode, setViewMode] = useState<ViewMode>('card');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [searchTerm, setSearchTerm] = useState("");
-    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 });
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
     const router = useRouter();
     const { toast } = useToast();
     const [isPastActivitiesModalOpen, setPastActivitiesModalOpen] = useState(false);
@@ -287,6 +290,7 @@ export default function ActivityPage() {
                     case 'today': return scheduledDate && scheduledDate.toDateString() === today.toDateString() && act.status === 'pending';
                     case 'scheduled': return act.type === 'reminder' && act.status === 'pending';
                     case 'completed': return act.status !== 'pending';
+                    case 'canceled': return act.status === 'canceled';
                     case 'overdue': return scheduledDate && scheduledDate < now && act.status === 'pending';
                     default: return true;
                 }
@@ -388,6 +392,7 @@ export default function ActivityPage() {
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="today" id="today-desktop" /><Label htmlFor="today-desktop">Today</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="scheduled" id="scheduled-desktop" /><Label htmlFor="scheduled-desktop">Scheduled</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="completed" id="completed-desktop" /><Label htmlFor="completed-desktop">Completed</Label></div>
+                                    <div className="flex items-center space-x-2"><RadioGroupItem value="canceled" id="canceled-desktop" /><Label htmlFor="canceled-desktop">Canceled</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="overdue" id="overdue-desktop" /><Label htmlFor="overdue-desktop">Overdue</Label></div>
                                 </RadioGroup>
                                 <div className="flex items-center gap-2">
@@ -410,6 +415,7 @@ export default function ActivityPage() {
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="today" id="today-mobile" /><Label htmlFor="today-mobile">Today</Label></div>
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="scheduled" id="scheduled-mobile" /><Label htmlFor="scheduled-mobile">Scheduled</Label></div>
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="completed" id="completed-mobile" /><Label htmlFor="completed-mobile">Completed</Label></div>
+                                                    <div className="flex items-center space-x-2"><RadioGroupItem value="canceled" id="canceled-mobile" /><Label htmlFor="canceled-mobile">Canceled</Label></div>
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="overdue" id="overdue-mobile" /><Label htmlFor="overdue-mobile">Overdue</Label></div>
                                                 </RadioGroup>
                                             </div>
@@ -441,7 +447,7 @@ export default function ActivityPage() {
                                 onCancel={handleCancelClick}
                             />
                         ) : (
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {paginatedActivities.map(activity => (
                                     <ActivityCard
                                         key={`${activity.type}-${activity.id}`}
@@ -455,10 +461,28 @@ export default function ActivityPage() {
                                 ))}
                             </div>
                         )}
-                        {pageCount > 1 && viewMode !== 'card' && (
-                            <div className="flex items-center justify-between pt-4">
-                                <div className="text-sm text-muted-foreground">Page {pagination.pageIndex + 1} of {pageCount}</div>
+                        {pageCount > 1 && (
+                            <div className="flex items-center justify-between pt-6">
                                 <div className="flex items-center gap-2">
+                                    <Label htmlFor="page-size" className="text-sm text-muted-foreground">Items per page</Label>
+                                    <Select
+                                        value={String(pagination.pageSize)}
+                                        onValueChange={(value) => {
+                                            setPagination({ pageIndex: 0, pageSize: Number(value) });
+                                        }}
+                                    >
+                                        <SelectTrigger id="page-size" className="w-20 h-9">
+                                            <SelectValue placeholder={pagination.pageSize} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[10, 30, 100, 200].map(size => (
+                                                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="text-sm text-muted-foreground">Page {pagination.pageIndex + 1} of {pageCount}</div>
                                     <Button variant="outline" size="sm" onClick={() => setPagination(p => ({ ...p, pageIndex: p.pageIndex - 1 }))} disabled={pagination.pageIndex === 0}>Previous</Button>
                                     <Button variant="outline" size="sm" onClick={() => setPagination(p => ({ ...p, pageIndex: p.pageIndex + 1 }))} disabled={pagination.pageIndex >= pageCount - 1}>Next</Button>
                                 </div>

@@ -1,4 +1,3 @@
-// frontend/components/activity/activity-card.tsx
 "use client"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +39,7 @@ const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive"
     new: "default",
     qualified: "secondary",
     unqualified: "destructive",
+    Canceled: "destructive",
     not_our_segment: "destructive",
     "Meeting Done": "outline",
     "Demo Done": "outline",
