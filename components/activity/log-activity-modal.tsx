@@ -19,15 +19,18 @@ interface ModalProps {
   onSuccess: () => void;
 }
 
-const activityTypes = ["Call", "Message", "WhatsApp", "Email", "Other"];
+// --- REMOVED: const activityTypes = ["Call", "Message", "WhatsApp", "Email", "Other"]; ---
 
 export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: ModalProps) {
     const { toast } = useToast();
     const [leads, setLeads] = useState<ApiLead[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "Call" });
+    const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "" });
     const [otherActivityType, setOtherActivityType] = useState("");
     const [textBeforeListening, setTextBeforeListening] = useState("");
+    
+    // --- CHANGE: State for dynamic activity types ---
+    const [activityTypeOptions, setActivityTypeOptions] = useState<string[]>([]);
 
     const {
         transcript,
@@ -38,21 +41,29 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
 
     useEffect(() => {
         if (isOpen) {
-            setFormData({ leadId: "", details: "", activityType: "Call" });
+            setFormData({ leadId: "", details: "", activityType: "" });
             setOtherActivityType("");
             resetTranscript();
-            api.getAllLeads()
-               .then(setLeads)
-               .catch(() => toast({ title: "Error", description: "Failed to fetch leads." }));
+            // --- CHANGE: Fetch leads and master data in parallel ---
+            Promise.all([
+                api.getAllLeads(),
+                api.getByCategory("activity_type")
+            ]).then(([leadsData, activityTypesData]) => {
+                setLeads(leadsData);
+                const types = activityTypesData.map(item => item.value);
+                setActivityTypeOptions([...types, "Other"]); // Ensure 'Other' is always an option
+                if (types.length > 0) {
+                    setFormData(prev => ({ ...prev, activityType: types[0] }));
+                }
+            }).catch(() => toast({ title: "Error", description: "Failed to fetch initial data for modal." }));
         }
     }, [isOpen, toast, resetTranscript]);
 
-    // This effect now combines previous text with the live transcript
     useEffect(() => {
         if (listening) {
             const combinedText = [textBeforeListening, transcript]
-                .filter(Boolean) // Removes any empty strings
-                .join(' ');     // Joins with a space
+                .filter(Boolean)
+                .join(' ');
             setFormData(prev => ({ ...prev, details: combinedText }));
         }
     }, [transcript, listening, textBeforeListening]);
@@ -103,7 +114,6 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
         if (listening) {
             SpeechRecognition.stopListening();
         } else {
-            // Before starting, save the current text and clear the old transcript
             setTextBeforeListening(formData.details);
             resetTranscript();
             SpeechRecognition.startListening({ continuous: true });
@@ -128,10 +138,11 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                         </div>
                         <div className="space-y-2">
                             <Label>Activity Type *</Label>
+                            {/* --- CHANGE: Use dynamic options --- */}
                             <Select value={formData.activityType} onValueChange={(value) => setFormData({ ...formData, activityType: value })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {activityTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                    {activityTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>

@@ -1,3 +1,4 @@
+// frontend/app/dashboard/page.tsx
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -6,9 +7,9 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
-import { Calendar, Clock, Users, Phone, FileText, CheckCircle, MessageSquare, User as UserIcon, Monitor } from "lucide-react"
+import { Calendar, Clock, Users, Phone, FileText, CheckCircle, MessageSquare, User as UserIcon, Monitor, Building } from "lucide-react"
 import { formatDate, formatTime } from "@/lib/date-format"
-import { api, ApiUnifiedActivity, ApiUser } from "@/lib/api"
+import { api, ApiUnifiedActivity, ApiUser, ApiMeeting } from "@/lib/api"
 import { MarkAsDoneModal } from "@/components/activity/mark-as-done-modal"
 
 
@@ -44,7 +45,7 @@ interface UnifiedTask {
   lead_id: string;
   type: 'meeting' | 'demo' | 'reminder';
   activity_type_display: string;
-  title: string;
+  title: string; // This will now be used for the activity type (e.g., "Meeting", "Demo")
   companyName: string;
   contactName: string;
   assignedTo: string;
@@ -61,18 +62,18 @@ const chartConfig = {
   "Meeting Done": { label: "Meeting Done", color: "hsl(142, 85%, 45%)" },
   "Demo Done": { label: "Demo Done", color: "hsl(262, 90%, 65%)" },
   Qualified: { label: "Qualified", color: "hsl(25, 95%, 53%)" },
-  Won: { label: "Won/Closed", color: "hsl(120, 85%, 40%)" },
+  "Won/Deal Done": { label: "Won/Closed", color: "hsl(120, 85%, 40%)" }, // Updated chart config for new status
   Lost: { label: "Lost", color: "hsl(0, 90%, 65%)" },
   not_our_segment: { label: "Not Our Segment", color: "hsl(0, 0%, 60%)" },
 }
 
 function TaskTypeIcon({ type }: { type: string }) {
   const lowerType = type.toLowerCase();
-  if (lowerType.includes("meeting")) return <Users className="h-4 w-4 text-blue-500" />;
-  if (lowerType.includes("demo")) return <Monitor className="h-4 w-4 text-purple-500" />;
-  if (lowerType.includes("follow-up") || lowerType.includes("call")) return <Phone className="h-4 w-4 text-green-500" />;
-  if (lowerType.includes("whatsapp")) return <MessageSquare className="h-4 w-4 text-teal-500" />;
-  return <CheckCircle className="h-4 w-4 text-gray-500" />;
+  if (lowerType.includes("meeting")) return <Users className="h-4 w-4 text-blue-500 mt-1" />;
+  if (lowerType.includes("demo")) return <Monitor className="h-4 w-4 text-purple-500 mt-1" />;
+  if (lowerType.includes("follow-up") || lowerType.includes("call")) return <Phone className="h-4 w-4 text-green-500 mt-1" />;
+  if (lowerType.includes("whatsapp")) return <MessageSquare className="h-4 w-4 text-teal-500 mt-1" />;
+  return <CheckCircle className="h-4 w-4 text-gray-500 mt-1" />;
 }
 
 function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; onClick: () => void; isUpcoming?: boolean }) {
@@ -83,20 +84,22 @@ function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; on
   return (
     <div
       key={task.id}
-      className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors text-sm"
+      className="flex items-start gap-3 rounded-lg border p-2 cursor-pointer hover:bg-muted/50 transition-colors text-sm"
       onClick={onClick}
     >
-      <TaskTypeIcon type={task.activity_type_display} />
-      <div className="flex-1 min-w-0 space-y-1">
-        <p className="font-semibold truncate" title={task.title}>{task.title}</p>
-        <div className="text-xs text-muted-foreground space-y-1">
+      <TaskTypeIcon type={task.title} />
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold truncate text-sm" title={task.companyName}>{task.companyName}</p>
+        <p className="text-xs text-primary font-medium truncate" title={task.activity_type_display}>{task.activity_type_display}</p>
+
+        <div className="text-xs text-muted-foreground mt-1.5 space-y-1">
           <div className="flex items-center gap-1.5">
             <UserIcon className="h-3 w-3" />
-            <span className="truncate" title={task.contactName}>Contact: {task.contactName || 'N/A'}</span>
+            <span className="truncate" title={task.contactName}> {task.contactName || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Users className="h-3 w-3" />
-            <span className="truncate" title={task.assignedTo}>Assignee: {task.assignedTo}</span>
+            <span className="truncate" title={task.assignedTo}>{task.assignedTo}</span>
           </div>
         </div>
       </div>
@@ -150,8 +153,10 @@ export default function DashboardPage() {
         const lead = leadsMap.get(String(m.lead_id));
         combinedTasks.push({
           id: `meeting-${m.id}`, numericId: m.id, lead_id: String(m.lead_id), type: 'meeting',
-          activity_type_display: "Meeting", title: `${lead?.company_name || 'N/A'}`,
-          companyName: lead?.company_name || 'Unknown Lead', contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
+          title: "Meeting",
+          activity_type_display: m.meeting_type || "General Meeting",
+          companyName: lead?.company_name || 'Unknown Lead',
+          contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: m.assigned_to, startTime: m.event_time, endTime: m.event_end_time,
           details: `Scheduled meeting with ${lead?.contacts?.[0]?.contact_name || 'contact'} at ${lead?.company_name || 'company'}.`
         });
@@ -161,8 +166,10 @@ export default function DashboardPage() {
         const lead = leadsMap.get(String(d.lead_id));
         combinedTasks.push({
           id: `demo-${d.id}`, numericId: d.id, lead_id: String(d.lead_id), type: 'demo',
-          activity_type_display: "Demo", title: `${lead?.company_name || 'N/A'}`,
-          companyName: lead?.company_name || 'Unknown Lead', contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
+          title: "Demo",
+          activity_type_display: "Product Demo",
+          companyName: lead?.company_name || 'Unknown Lead',
+          contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: d.assigned_to, startTime: d.start_time, endTime: d.event_end_time,
           details: `Scheduled demo with ${lead?.contacts?.[0]?.contact_name || 'contact'} at ${lead?.company_name || 'company'}.`
         });
@@ -172,8 +179,10 @@ export default function DashboardPage() {
         const lead = leadsMap.get(String(a.lead_id));
         combinedTasks.push({
           id: `reminder-${a.id}`, numericId: a.id, lead_id: String(a.lead_id), type: 'reminder',
-          activity_type_display: a.activity_type, title: `${a.activity_type}: ${lead?.company_name || 'N/A'}`,
-          companyName: lead?.company_name || 'Unknown Lead', contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
+          title: a.activity_type,
+          activity_type_display: a.details,
+          companyName: lead?.company_name || 'Unknown Lead',
+          contactName: lead?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: a.details.split('assigned to ')[1] || currentUser.username,
           startTime: a.scheduled_for || new Date().toISOString(), endTime: a.scheduled_for || new Date().toISOString(),
           details: a.details
@@ -182,7 +191,7 @@ export default function DashboardPage() {
 
       combinedTasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setAllTasks(combinedTasks);
-      
+
       setTotalMeetings(allMeetings.length);
       setTotalDemos(allDemos.length);
 
@@ -217,7 +226,7 @@ export default function DashboardPage() {
     setUser(parsedUser);
     loadDashboardData(parsedUser);
   }, [loadDashboardData, router]);
-  
+
   const handleSuccess = () => {
     setDoneModalOpen(false);
     if(user) loadDashboardData(user);
@@ -239,9 +248,8 @@ export default function DashboardPage() {
     }
   };
 
-  // --- REFINED FILTERING LOGIC ---
    const today = new Date();
-  
+
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0); // Set to the beginning of tomorrow.
@@ -250,7 +258,7 @@ export default function DashboardPage() {
   endOfNextWeek.setDate(endOfNextWeek.getDate() + 7);
   endOfNextWeek.setHours(23, 59, 59, 999); // Set to the end of the 7th day.
 
-  const todaysTasks = allTasks.filter(task => 
+  const todaysTasks = allTasks.filter(task =>
     new Date(task.startTime).toDateString() === today.toDateString()
   );
 
@@ -285,16 +293,15 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* --- NEW LAYOUT: TASKS OVERVIEW IS NOW AT THE TOP --- */}
+        {/* --- TASKS OVERVIEW SECTION --- */}
         <Card>
             <CardHeader>
                 <CardTitle>Tasks Overview</CardTitle>
                 <CardDescription>Click on any task to take action.</CardDescription>
             </CardHeader>
             <CardContent>
-                {/* --- The main grid is now 3 columns on large screens --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
+
                     {/* Column 1: Meetings */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 px-1">
@@ -304,7 +311,7 @@ export default function DashboardPage() {
                         <div className="space-y-4 rounded-lg border p-2">
                             <div>
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {todaysMeetings.length > 0 ? (
                                         todaysMeetings.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
@@ -316,7 +323,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="pt-2">
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {upcomingMeetings.length > 0 ? (
                                         upcomingMeetings.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true} />
@@ -328,7 +335,7 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </div>
-                    
+
                     {/* Column 2: Demos */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 px-1">
@@ -338,7 +345,7 @@ export default function DashboardPage() {
                         <div className="space-y-4 rounded-lg border p-2">
                             <div>
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {todaysDemos.length > 0 ? (
                                         todaysDemos.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
@@ -350,7 +357,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="pt-2">
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {upcomingDemos.length > 0 ? (
                                         upcomingDemos.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true}/>
@@ -372,7 +379,7 @@ export default function DashboardPage() {
                         <div className="space-y-4 rounded-lg border p-2">
                             <div>
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Today</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {todaysActivities.length > 0 ? (
                                         todaysActivities.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} />
@@ -384,7 +391,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="pt-2">
                                 <h4 className="text-sm font-semibold text-muted-foreground px-2 pb-2">Upcoming</h4>
-                                <div className="space-y-2 h-40 overflow-y-auto pr-2">
+                                <div className="space-y-2 h-48 overflow-y-auto pr-2">
                                     {upcomingActivities.length > 0 ? (
                                         upcomingActivities.map((task) => (
                                             <TaskCard key={task.id} task={task} onClick={() => handleTaskClick(task)} isUpcoming={true}/>
@@ -400,7 +407,7 @@ export default function DashboardPage() {
             </CardContent>
         </Card>
 
-        {/* --- SUMMARY SECTION IS NOW SECOND --- */}
+        {/* --- SUMMARY SECTION --- */}
         <div className="grid gap-4 pt-4 grid-cols-1 lg:grid-cols-5">
             <Card className="lg:col-span-2">
                 <CardHeader className="pb-2">
@@ -501,7 +508,8 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="pb-2">
                     <div className="text-2xl font-bold">
-                        {leads.length > 0 ? Math.round((leads.filter((l) => l.status === "Won").length / leads.length) * 100) : 0}%
+                        {/* CORRECTED: Display conversion rate with one decimal place */}
+                        {leads.length > 0 ? `${((leads.filter((l) => l.status === "Won/Deal Done").length / leads.length) * 100).toFixed(1)}%` : "0%"}
                     </div>
                     <p className="text-xs text-muted-foreground">Based on your leads</p>
                     </CardContent>
@@ -509,7 +517,7 @@ export default function DashboardPage() {
             </div>
         </div>
       </div>
-      
+
       <MarkAsDoneModal
         activity={activityToComplete}
         currentUser={user}

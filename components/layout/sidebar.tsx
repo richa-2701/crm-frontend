@@ -1,15 +1,11 @@
-//frontend/components/layout/sidebar.tsx
+// frontend/components/layout/sidebar.tsx
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-// --- CHANGE 1: No longer need useState ---
-// import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud, ListChecks  } from "lucide-react"
+import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud, ListChecks, Database, Calendar as CalendarIcon, Briefcase  } from "lucide-react" // --- CHANGE: IMPORTED DATABASE ICON, BRIEFCASE ICON ---
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
-// import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChevronRight, ChevronLeft } from "lucide-react"
 import { ApiUser } from "@/lib/api"
@@ -18,52 +14,21 @@ interface SidebarProps {
   currentUser: ApiUser
   isCollapsed?: boolean
   onToggle?: () => void
-  // --- CHANGE 3: Add onItemClick prop to pass down ---
   onItemClick?: () => void
 }
 
 const navigationItems = [
-  // ... (items remain the same)
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Leads",
-    href: "/dashboard/leads",
-    icon: ListChecks,
-  },
-  {
-    title: "Create Lead",
-    href: "/dashboard/create-lead",
-    icon: Menu,
-  },
-  {
-    title: "Schedule Meeting/Demo",
-    href: "/dashboard/schedule",
-    icon: Calendar,
-  },
-  {
-    title: "Events",
-    href: "/dashboard/events",
-    icon: FileText,
-  },
-  {
-    title: "Activity", // TO THIS
-    href: "/dashboard/activity", // TO THIS
-    icon: MessageSquare,
-  },
-  {
-    title: "Add Quotation",
-    href: "/dashboard/add-quotation",
-    icon: Upload,
-  },
-  {
-    title: "Bulk Upload Leads",
-    href: "/dashboard/bulk-upload",
-    icon: UploadCloud,
-  },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
+  { title: "Leads", href: "/dashboard/leads", icon: ListChecks, adminOnly: false },
+  { title: "Clients", href: "/dashboard/clients", icon: Briefcase, adminOnly: false }, // New Clients Link
+  { title: "Create Lead", href: "/dashboard/create-lead", icon: Menu, adminOnly: false },
+  { title: "Schedule Meeting/Demo", href: "/dashboard/schedule", icon: Calendar, adminOnly: false },
+  { title: "Events", href: "/dashboard/events", icon: FileText, adminOnly: false },
+  { title: "Activity", href: "/dashboard/activity", icon: MessageSquare, adminOnly: false },
+  { title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
+  { title: "Add Quotation", href: "/dashboard/add-quotation", icon: Upload, adminOnly: false },
+  { title: "Bulk Upload Leads", href: "/dashboard/bulk-upload", icon: UploadCloud, adminOnly: false },
+  { title: "Masters", href: "/dashboard/masters", icon: Database, adminOnly: true },
 ]
 
 function DripSequenceMenu({ isCollapsed, onItemClick }: { isCollapsed?: boolean, onItemClick?: () => void }) {
@@ -87,14 +52,19 @@ function DripSequenceMenu({ isCollapsed, onItemClick }: { isCollapsed?: boolean,
     );
 }
 
-// --- CHANGE 4: The name is now more specific ---
 export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: SidebarProps) {
   const pathname = usePathname()
+
+  // --- CHANGE: FILTER NAVIGATION ITEMS BASED ON USER ROLE ---
+  const accessibleNavItems = navigationItems.filter(item =>
+      !item.adminOnly || (item.adminOnly && currentUser.role === 'admin')
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-auto py-4">
         <nav className="space-y-1 px-3">
-          {navigationItems.map((item) => {
+          {accessibleNavItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
             const linkContent = (
@@ -120,7 +90,6 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }
   )
 }
 
-// --- CHANGE 5: The main export is simplified to only handle the desktop view ---
 export function Sidebar({ currentUser, isCollapsed = false, onToggle }: SidebarProps) {
   return (
     <aside className={cn("hidden md:fixed md:inset-y-0 md:flex md:flex-col md:z-30 transition-all duration-300", isCollapsed ? "md:w-16" : "md:w-64")}>

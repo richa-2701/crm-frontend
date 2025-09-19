@@ -1,4 +1,4 @@
-//frontend/app/dashboard/create-lead/page.tsx
+// frontend/app/dashboard/create-lead/page.tsx
 "use client"
 
 import type React from "react"
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { leadApi, userApi, type ApiUser } from "@/lib/api"
+import { leadApi, userApi, type ApiUser, api } from "@/lib/api"
 import { Loader2, PlusCircle, Trash2 } from "lucide-react"
 import { Country, State, City } from "country-state-city"
 import { Combobox } from "@/components/ui/combobox"
@@ -38,10 +38,19 @@ interface Contact {
   phone: string
   email: string
   designation: string
+  linkedIn: string // New field
+  pan: string // New field
 }
 
-const leadTypes = ["Hot Lead", "Cold Lead", "Warm Lead", "Not Our Segment"]
-const namePrefixes = ["Mr.", "Mrs.", "Ms."]
+const namePrefixes = ["Mr.", "Mrs.", "Ms."];
+
+interface MasterDataOptions {
+    source: string[];
+    segment: string[];
+    verticles: string[];
+    lead_type: string[];
+    current_system: string[];
+}
 
 export default function CreateLeadPage() {
   const router = useRouter()
@@ -50,12 +59,19 @@ export default function CreateLeadPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [companyUsers, setCompanyUsers] = useState<User[]>([])
   const [contacts, setContacts] = useState<Contact[]>([
-    { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "" },
+    { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" },
   ])
+
+  const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
+      source: [], segment: [], verticles: [], lead_type: [], current_system: []
+  });
+
   const [formData, setFormData] = useState({
     company_name: "",
+    website: "", // New field
+    linkedIn: "", // New field
     phone_2: "",
-    email: "", // Main company email
+    email: "",
     address: "",
     address_2: "",
     country: "",
@@ -66,12 +82,15 @@ export default function CreateLeadPage() {
     turnover: "",
     source: "",
     segment: "",
+    verticles: "",
     assigned_to: "",
     current_system: "",
     machine_specification: "",
     challenges: "",
     remark: "",
     lead_type: "",
+    opportunity_business: "",
+    target_closing_date: "",
   })
 
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
@@ -85,27 +104,37 @@ export default function CreateLeadPage() {
           const parsedUser = JSON.parse(userData)
           setUser(parsedUser)
 
-          let transformedUsers: User[] = []
+          const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData] = await Promise.all([
+              userApi.getUsers(),
+              api.getByCategory("source"),
+              api.getByCategory("segment"),
+              api.getByCategory("verticles"),
+              api.getByCategory("lead_type"),
+              api.getByCategory("current_system")
+          ]);
 
-          try {
-            const usersData = await userApi.getUsers()
-            transformedUsers = usersData.map((user: ApiUser) => ({
-              id: user.id.toString(),
-              username: user.username,
-              email: user.email || `${user.username}@company.com`,
-              role: user.role || "Company User",
-            }))
-          } catch (apiError) {
-            console.error("[v0] Failed to load users from API:", apiError)
-            toast({
-              title: "Error",
-              description: "Failed to load users from backend. Please check your connection.",
-              variant: "destructive",
-            })
-          }
+          const sources = sourceData.map(item => item.value);
+          const segments = segmentData.map(item => item.value);
+          const verticles = verticlesData.map(item => item.value);
+          const lead_types = leadTypeData.map(item => item.value);
+          const current_systems = currentSystemData.map(item => item.value);
+
+          setMasterOptions({
+              source: sources,
+              segment: segments,
+              verticles: verticles,
+              lead_type: lead_types,
+              current_system: current_systems,
+          });
+
+          const transformedUsers = usersData.map((user: ApiUser) => ({
+            id: user.id.toString(),
+            username: user.username,
+            email: user.email || `${user.username}@company.com`,
+            role: user.role || "Company User",
+          }))
 
           const currentUserExists = transformedUsers.some(u => u.username === parsedUser.username)
-
           if (!currentUserExists) {
             transformedUsers.push({
               id: parsedUser.id?.toString() || "current",
@@ -116,7 +145,16 @@ export default function CreateLeadPage() {
           }
 
           setCompanyUsers(transformedUsers)
-          setFormData(prev => ({ ...prev, assigned_to: parsedUser.username }))
+
+          setFormData(prev => ({
+              ...prev,
+              assigned_to: parsedUser.username,
+              source: "",
+              segment: "",
+              verticles: "",
+              lead_type: "",
+              current_system: "",
+          }));
         }
       } catch (error) {
         console.error("[v0] Failed to initialize form:", error)
@@ -139,7 +177,7 @@ export default function CreateLeadPage() {
     if (field === "phone_2") {
         const formattedPhone = value.startsWith('+') ? value : `+${value}`;
         setFormData(prev => ({ ...prev, [field]: formattedPhone }));
-        return; // Important: exit after handling the special case
+        return;
     }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
@@ -158,7 +196,7 @@ export default function CreateLeadPage() {
   }
 
   const addContact = () => {
-    setContacts([...contacts, { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "" }])
+    setContacts([...contacts, { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" }])
   }
 
   const removeContact = (index: number) => {
@@ -197,14 +235,6 @@ export default function CreateLeadPage() {
         })
         return
       }
-      // if (contact.phone.startsWith("+91") && contact.phone.length !== 13) {
-      //   toast({
-      //     title: `Invalid Phone Number for Contact ${index + 1}`,
-      //     description: "Indian phone numbers must have 10 digits after the country code.",
-      //     variant: "destructive",
-      //   })
-      //   return
-      // }
     }
 
     setIsLoading(true)
@@ -219,10 +249,13 @@ export default function CreateLeadPage() {
         phone: contact.phone,
         email: contact.email,
         designation: contact.designation,
+        linkedIn: contact.linkedIn, // New field
+        pan: contact.pan, // New field
       }))
 
       const leadData = {
         ...formData,
+        target_closing_date: formData.target_closing_date || null,
         assigned_to: assignedUser?.username || formData.assigned_to,
         country: countryName || formData.country,
         state: stateName || formData.state,
@@ -237,8 +270,7 @@ export default function CreateLeadPage() {
         title: "Lead Created",
         description: "The lead has been successfully created. Redirecting...",
       })
-      
-      // --- THE FIX: Use window.location.href for a guaranteed redirect and page refresh ---
+
       window.location.href = "/dashboard/leads"
 
     } catch (error) {
@@ -248,7 +280,6 @@ export default function CreateLeadPage() {
         description: error instanceof Error ? error.message : "Failed to create lead. Please check your connection.",
         variant: "destructive",
       })
-      // Stop the loading indicator if an error occurs
       setIsLoading(false)
     }
   }
@@ -295,6 +326,30 @@ export default function CreateLeadPage() {
               </div>
             </div>
 
+            {/* New fields: Website and LinkedIn for Company */}
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  type="url"
+                  value={formData.website}
+                  onChange={e => handleInputChange("website", e.target.value)}
+                  placeholder="e.g., https://www.example.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="linkedIn">Company LinkedIn</Label>
+                <Input
+                  id="linkedIn"
+                  type="url"
+                  value={formData.linkedIn}
+                  onChange={e => handleInputChange("linkedIn", e.target.value)}
+                  placeholder="e.g., https://linkedin.com/company/example"
+                />
+              </div>
+            </div>
+
             <div className="space-y-4 rounded-md border p-4">
               <h3 className="text-md font-semibold">Contact Persons</h3>
               {contacts.map((contact, index) => (
@@ -329,23 +384,25 @@ export default function CreateLeadPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`first_name_${index}`}>First Name *</Label>
-                      <Input
-                        id={`first_name_${index}`}
-                        value={contact.first_name}
-                        onChange={e => handleContactChange(index, "first_name", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`last_name_${index}`}>Last Name *</Label>
-                      <Input
-                        id={`last_name_${index}`}
-                        value={contact.last_name}
-                        onChange={e => handleContactChange(index, "last_name", e.target.value)}
-                        required
-                      />
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`first_name_${index}`}>First Name *</Label>
+                        <Input
+                          id={`first_name_${index}`}
+                          value={contact.first_name}
+                          onChange={e => handleContactChange(index, "first_name", e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`last_name_${index}`}>Last Name *</Label>
+                        <Input
+                          id={`last_name_${index}`}
+                          value={contact.last_name}
+                          onChange={e => handleContactChange(index, "last_name", e.target.value)}
+                          required
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
@@ -361,26 +418,50 @@ export default function CreateLeadPage() {
                           required: true,
                         }}
                         containerClass="w-full"
-                        inputClass="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor={`designation_${index}`}>Designation</Label>
+                        <Input
+                          id={`designation_${index}`}
+                          value={contact.designation}
+                          onChange={e => handleContactChange(index, "designation", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`contact_email_${index}`}>Email</Label>
+                        <Input
+                          id={`contact_email_${index}`}
+                          type="email"
+                          value={contact.email}
+                          onChange={e => handleContactChange(index, "email", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* New fields: LinkedIn and PAN for Contact */}
+                  <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label>
+                      <Input
+                        id={`contact_linkedin_${index}`}
+                        type="url"
+                        value={contact.linkedIn}
+                        onChange={e => handleContactChange(index, "linkedIn", e.target.value)}
+                        placeholder="e.g., https://linkedin.com/in/john-doe"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor={`designation_${index}`}>Designation</Label>
+                      <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
                       <Input
-                        id={`designation_${index}`}
-                        value={contact.designation}
-                        onChange={e => handleContactChange(index, "designation", e.target.value)}
+                        id={`contact_pan_${index}`}
+                        value={contact.pan}
+                        onChange={e => handleContactChange(index, "pan", e.target.value)}
+                        placeholder="e.g., ABCDE1234F"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={`contact_email_${index}`}>Email</Label>
-                    <Input
-                      id={`contact_email_${index}`}
-                      type="email"
-                      value={contact.email}
-                      onChange={e => handleContactChange(index, "email", e.target.value)}
-                    />
                   </div>
                 </div>
               ))}
@@ -402,7 +483,7 @@ export default function CreateLeadPage() {
                   <Input id="address_2" value={formData.address_2} onChange={e => handleInputChange("address_2", e.target.value)} />
                 </div>
               </div>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <Label htmlFor="country">Country</Label>
                   <Combobox
@@ -453,134 +534,119 @@ export default function CreateLeadPage() {
                   enableSearch={true}
                   inputProps={{ id: "phone_2" }}
                   containerClass="w-full"
-                  inputClass="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="team_size">Team Size</Label>
-                <Input
-                  id="team_size"
-                  type="number"
-                  value={formData.team_size}
-                  onChange={e => handleInputChange("team_size", e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="turnover">Turnover</Label>
-                <Input
-                  id="turnover"
-                  placeholder="e.g., 1 Cr"
-                  value={formData.turnover}
-                  onChange={e => handleInputChange("turnover", e.target.value)}
-                />
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
+                <div className="space-y-1">
+                  <Label htmlFor="team_size">Team Size</Label>
+                  <Input
+                    id="team_size"
+                    type="number"
+                    value={formData.team_size}
+                    onChange={e => handleInputChange("team_size", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="turnover">Turnover</Label>
+                  <Input
+                    id="turnover"
+                    placeholder="e.g., 1 Cr"
+                    value={formData.turnover}
+                    onChange={e => handleInputChange("turnover", e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-4 rounded-md border p-4">
+                <h3 className="text-md font-semibold">Opportunity Details</h3>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                    <div className="space-y-1">
+                        <Label htmlFor="opportunity_business">Opportunity Business</Label>
+                        <Input
+                            id="opportunity_business"
+                            placeholder="e.g., 5 Lakhs, $10,000"
+                            value={formData.opportunity_business}
+                            onChange={e => handleInputChange("opportunity_business", e.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="target_closing_date">Target Closing Date</Label>
+                        <Input
+                            id="target_closing_date"
+                            type="date"
+                            value={formData.target_closing_date}
+                            onChange={e => handleInputChange("target_closing_date", e.target.value)}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               <div className="space-y-1">
                 <Label htmlFor="source">Source</Label>
-                <Input
-                  id="source"
-                  placeholder="e.g., Website"
-                  value={formData.source}
-                  onChange={e => handleInputChange("source", e.target.value)}
-                />
+                <Select value={formData.source} onValueChange={value => handleInputChange("source", value)}>
+                  <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                  <SelectContent>{masterOptions.source.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="segment">Segment</Label>
-                <Input
-                  id="segment"
-                  placeholder="e.g., IT"
-                  value={formData.segment}
-                  onChange={e => handleInputChange("segment", e.target.value)}
-                />
+                <Select value={formData.segment} onValueChange={value => handleInputChange("segment", value)}>
+                  <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
+                  <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="verticles">Verticals</Label>
+                <Select value={formData.verticles} onValueChange={value => handleInputChange("verticles", value)}>
+                  <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
+                  <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="lead_type">Lead Type</Label>
                 <Select value={formData.lead_type} onValueChange={value => handleInputChange("lead_type", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leadTypes.map(type => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>{masterOptions.lead_type.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="assigned_to">Assigned To *</Label>
                 <Select value={formData.assigned_to} onValueChange={value => handleInputChange("assigned_to", value)} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {companyUsers.map(user => (
-                      <SelectItem key={user.id} value={user.username}>
-                        {user.username}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                  <SelectContent>{companyUsers.map(user => <SelectItem key={user.id} value={user.username}>{user.username}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-1">
+              <div className="space-y-1">
               <Label htmlFor="current_system">Current System</Label>
-              <Input
-                id="current_system"
-                placeholder="e.g., Excel"
-                value={formData.current_system}
-                onChange={e => handleInputChange("current_system", e.target.value)}
-              />
+              <Select value={formData.current_system} onValueChange={value => handleInputChange("current_system", value)}>
+                  <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
+                  <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             </div>
 
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="machine_specification">Machine Specification</Label>
-                <Textarea
-                  id="machine_specification"
-                  value={formData.machine_specification}
-                  onChange={e => handleInputChange("machine_specification", e.target.value)}
-                  rows={3}
-                  className="resize-none"
-                />
+                <Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={3} className="resize-none" />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="challenges">Challenges</Label>
-                <Textarea
-                  id="challenges"
-                  value={formData.challenges}
-                  onChange={e => handleInputChange("challenges", e.target.value)}
-                  rows={3}
-                  className="resize-none"
-                />
+                <Textarea id="challenges" value={formData.challenges} onChange={e => handleInputChange("challenges", e.target.value)} rows={3} className="resize-none" />
               </div>
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="remark">Remark</Label>
-              <Textarea
-                id="remark"
-                value={formData.remark}
-                onChange={e => handleInputChange("remark", e.target.value)}
-                rows={3}
-                className="resize-none"
-              />
+              <Textarea id="remark" value={formData.remark} onChange={e => handleInputChange("remark", e.target.value)} rows={3} className="resize-none" />
             </div>
 
             <div className="flex gap-4 pt-2">
               <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Lead"
-                )}
+                {isLoading ? ( <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving... </> ) : ( "Save Lead" )}
               </Button>
               <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
                 Cancel

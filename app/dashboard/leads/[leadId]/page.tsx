@@ -17,11 +17,9 @@ import { EditLeadModal } from "@/components/leads/edit-lead-modal"
 import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { useToast } from "@/hooks/use-toast"
 
-// --- THIS IS THE FIX ---
-// Add MessageSquare to the import list
 import { 
     Loader2, ArrowLeft, Edit, Activity, Mail, Phone, User, Building, Globe, MapPin, 
-    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare
+    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare, CalendarCheck, DollarSign
 } from "lucide-react"
 
 // A reusable component for displaying fields with icons.
@@ -58,14 +56,11 @@ export default function LeadDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // --- STATE FOR MODALS ---
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivitiesModal, setShowActivitiesModal] = useState(false)
-  // Add more modal states here if needed (e.g., history)
 
   useEffect(() => {
     if (leadId) {
-      // Fetch both lead details and the list of users for the edit modal
       Promise.all([
         api.getLeadById(Number(leadId)),
         userApi.getUsers()
@@ -81,14 +76,11 @@ export default function LeadDetailPage() {
     }
   }, [leadId])
 
-  // --- CALLBACK FUNCTION TO UPDATE LEAD DATA AFTER EDITING ---
   const handleEditComplete = (updatedLeadId: string, updatedData: Partial<ApiLead>) => {
     if (lead && lead.id.toString() === updatedLeadId) {
       setLead({ ...lead, ...updatedData });
     }
-    // Optionally, you could re-fetch the lead data here for guaranteed consistency
-    // api.getLeadById(Number(leadId)).then(setLead);
-    setShowEditModal(false); // Close the modal
+    setShowEditModal(false);
   };
 
   if (isLoading) {
@@ -115,7 +107,6 @@ export default function LeadDetailPage() {
   return (
     <>
       <div className="space-y-6">
-          {/* ======================= HEADER SECTION ======================= */}
           <header className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                   <Button variant="outline" size="icon" onClick={() => router.back()} aria-label="Go back">
@@ -131,7 +122,6 @@ export default function LeadDetailPage() {
                   </div>
               </div>
               <div className="flex items-center gap-2">
-                  {/* --- FUNCTIONAL BUTTONS --- */}
                   <Button variant="outline" onClick={() => setShowActivitiesModal(true)}>
                       <Activity className="mr-2 h-4 w-4" />View Activities
                   </Button>
@@ -141,14 +131,9 @@ export default function LeadDetailPage() {
               </div>
           </header>
 
-          {/* ======================= TABBED INTERFACE ======================= */}
           <Tabs defaultValue="overview" className="w-full">
-              
-              
-              {/* --- OVERVIEW TAB CONTENT --- */}
               <TabsContent value="overview" className="mt-6">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                      {/* Left Column */}
                       <div className="lg:col-span-2 space-y-6">
                           <Card>
                               <CardHeader><CardTitle>Contact Information</CardTitle></CardHeader>
@@ -180,7 +165,6 @@ export default function LeadDetailPage() {
                           </Card>
                       </div>
 
-                      {/* Right Column */}
                       <div className="space-y-6">
                           <Card>
                               <CardHeader><CardTitle>Lead Classification</CardTitle></CardHeader>
@@ -190,6 +174,9 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Lead Type" value={lead.lead_type} icon={Tag} />
                                   <IconInfoField label="Team Size" value={lead.team_size} icon={Users} />
                                   <IconInfoField label="Turnover" value={lead.turnover} icon={TrendingUp} />
+                                  {/* --- CHANGE: DISPLAYING NEW FIELDS --- */}
+                                  <IconInfoField label="Opportunity Business" value={lead.opportunity_business} icon={DollarSign} />
+                                  <IconInfoField label="Target Closing Date" value={lead.target_closing_date} icon={CalendarCheck} />
                               </CardContent>
                           </Card>
                            <Card>
@@ -202,21 +189,11 @@ export default function LeadDetailPage() {
                       </div>
                   </div>
               </TabsContent>
-              {/* --- ACTIVITIES TAB CONTENT (Placeholder) --- */}
-              <TabsContent value="activities">
-                  <Card><CardHeader><CardTitle>Coming Soon</CardTitle></CardHeader><CardContent><p>This is where the list of activities will be displayed.</p></CardContent></Card>
-              </TabsContent>
-              {/* --- HISTORY TAB CONTENT (Placeholder) --- */}
-              <TabsContent value="history">
-                   <Card><CardHeader><CardTitle>Coming Soon</CardTitle></CardHeader><CardContent><p>This is where the lead's history timeline will be displayed.</p></CardContent></Card>
-              </TabsContent>
           </Tabs>
       </div>
 
-      {/* ======================= MODALS ======================= */}
-      {/* These modals are now controlled by the state on this page */}
       <EditLeadModal
-        lead={lead as any} // Cast as any to match prop type, since we know it's not null here
+        lead={lead as any}
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         onSave={handleEditComplete}

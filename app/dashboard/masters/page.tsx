@@ -1,0 +1,173 @@
+// frontend/app/dashboard/masters/page.tsx
+"use client"
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Loader2, Plus, Trash2, Search } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { api, type ApiMasterData } from "@/lib/api"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+// --- CHANGE: Updated the master categories list ---
+const MASTER_CATEGORIES = [
+    { key: "source", label: "Source" },
+    { key: "segment", label: "Segment" },
+    { key: "verticles", label: "Verticals" },
+    { key: "lead_type", label: "Lead Type" },
+    { key: "status", label: "Lead Status" },
+    { key: "current_system", label: "Current System" },
+    { key: "meeting_type", label: "Meeting Type" },
+    { key: "activity_type", label: "Activity Type" },
+    { key: "version", label: "Version" }, // NEW: Added Version category
+];
+
+export default function MastersPage() {
+    const { toast } = useToast();
+    const [activeCategory, setActiveCategory] = useState(MASTER_CATEGORIES[0].key);
+    const [items, setItems] = useState<ApiMasterData[]>([]);
+    const [newItemValue, setNewItemValue] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const fetchItems = useCallback(async (category: string) => {
+        setIsLoading(true);
+        try {
+            // Corrected API call: directly call getByCategory on the api object
+            const data = await api.getByCategory(category);
+            setItems(data);
+        } catch (error) {
+            console.error(`Failed to fetch ${category}:`, error);
+            toast({
+                title: "Error",
+                description: `Could not load data for ${category}.`,
+                variant: "destructive",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        fetchItems(activeCategory);
+    }, [activeCategory, fetchItems]);
+
+    const handleAddItem = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newItemValue.trim()) return;
+        setIsSubmitting(true);
+        try {
+            // Corrected API call: directly call create on the api object
+            const newItem = await api.create({ category: activeCategory, value: newItemValue });
+            setItems(prev => [...prev, newItem].sort((a, b) => a.value.localeCompare(b.value)));
+            setNewItemValue("");
+            toast({ title: "Success", description: "New item added successfully." });
+        } catch (error) {
+            console.error("Failed to add item:", error);
+            toast({ title: "Error", description: "Could not add the new item.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteItem = async (itemId: number) => {
+        if (!confirm("Are you sure you want to delete this item? This action cannot be undone.")) return;
+        try {
+            // Corrected API call: directly call delete on the api object
+            await api.delete(itemId);
+            setItems(prev => prev.filter(item => item.id !== itemId));
+            toast({ title: "Success", description: "Item deleted successfully." });
+        } catch (error) {
+            console.error("Failed to delete item:", error);
+            toast({ title: "Error", description: "Could not delete the item.", variant: "destructive" });
+        }
+    };
+
+    const filteredItems = useMemo(() =>
+        items.filter(item => item.value.toLowerCase().includes(searchTerm.toLowerCase())),
+    [items, searchTerm]);
+
+    const activeCategoryLabel = MASTER_CATEGORIES.find(c => c.key === activeCategory)?.label || "Items";
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Masters Configuration</h1>
+                <p className="text-muted-foreground">Manage dropdown options used across the CRM.</p>
+            </div>
+
+            <Tabs value={activeCategory} onValueChange={setActiveCategory}>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-9">
+                    {MASTER_CATEGORIES.map(cat => (
+                        <TabsTrigger key={cat.key} value={cat.key}>{cat.label}</TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Manage {activeCategoryLabel}</CardTitle>
+                    <CardDescription>Add, view, and delete options for the {activeCategoryLabel} field.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        <form onSubmit={handleAddItem} className="flex items-center gap-2">
+                            <Input
+                                placeholder={`New ${activeCategoryLabel} Name...`}
+                                value={newItemValue}
+                                onChange={e => setNewItemValue(e.target.value)}
+                                disabled={isSubmitting}
+                            />
+                            <Button type="submit" disabled={isSubmitting || !newItemValue.trim()}>
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                                Add
+                            </Button>
+                        </form>
+
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search items..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-8"
+                            />
+                        </div>
+
+                        <div className="rounded-md border max-h-96 overflow-auto">
+                            <Table>
+                                <TableHeader className="sticky top-0 bg-secondary">
+                                    <TableRow>
+                                        <TableHead>{activeCategoryLabel} Name</TableHead>
+                                        <TableHead className="text-right w-[100px]">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow><TableCell colSpan={2} className="text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                    ) : filteredItems.length > 0 ? (
+                                        filteredItems.map(item => (
+                                            <TableRow key={item.id}>
+                                                <TableCell className="font-medium">{item.value}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No items found.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    )
+}

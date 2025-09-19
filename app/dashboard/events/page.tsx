@@ -42,6 +42,8 @@ interface EnhancedEvent {
   id: string;
   numericId: number;
   type: 'meeting' | 'demo';
+  // --- CHANGE: ADDED meeting_type TO INTERFACE ---
+  meeting_type?: string;
   lead_id: string;
   company_name: string;
   contact_name: string;
@@ -335,6 +337,8 @@ export default function EventsPage() {
             id: `meeting-${meeting.id}`,
             numericId: meeting.id,
             type: 'meeting' as const,
+            // --- CHANGE: PASSING meeting_type TO ENHANCED EVENT ---
+            meeting_type: meeting.meeting_type,
             lead_id: String(meeting.lead_id),
             company_name: leadsMap.get(String(meeting.lead_id))?.company_name || 'Unknown Lead',
             contact_name: leadsMap.get(String(meeting.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
@@ -539,7 +543,10 @@ export default function EventsPage() {
                               <div className="flex items-center gap-3">
                                 {event.type === 'meeting' ? <Users className="h-5 w-5 text-primary" /> : <Calendar className="h-5 w-5 text-primary" />}
                                 <div>
-                                  <CardTitle className="text-lg capitalize leading-tight">{event.type}</CardTitle>
+                                  {/* --- CHANGE: DISPLAYING meeting_type IN CARD TITLE --- */}
+                                  <CardTitle className="text-lg capitalize leading-tight">
+                                      {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
+                                  </CardTitle>
                                   <Badge variant={getStatusBadgeVariant(event.status)} className="mt-1">{event.status}</Badge>
                                 </div>
                               </div>
@@ -603,8 +610,11 @@ export default function EventsPage() {
                         return (
                           <TableRow key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="cursor-pointer hover:bg-muted/50">
                             <TableCell>
+                              {/* --- CHANGE: DISPLAYING meeting_type IN LIST VIEW --- */}
                               <div className="font-medium capitalize">{event.type}</div>
-                              <div className="text-sm text-muted-foreground">{event.company_name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                  {event.type === 'meeting' ? `${event.meeting_type || ''} with ` : ''}{event.company_name}
+                              </div>
                             </TableCell>
                             <TableCell>{event.assigned_to}</TableCell>
                             <TableCell>{event.start_time ? format(new Date(event.start_time), 'PPp') : 'N/A'}</TableCell>
@@ -737,6 +747,15 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
               <Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge>
             </div>
           </div>
+          {/* --- CHANGE: ADDED MEETING TYPE TO DETAILS MODAL --- */}
+          {event.type === 'meeting' && event.meeting_type && (
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="meeting-type" className="text-right font-semibold flex items-center justify-end gap-2">
+                Meeting Type
+              </Label>
+              <p id="meeting-type" className="col-span-2">{event.meeting_type}</p>
+            </div>
+          )}
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="scheduled-by" className="text-right font-semibold flex items-center justify-end gap-2">
               <User className="h-4 w-4" /> Scheduled By

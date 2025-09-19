@@ -12,6 +12,7 @@ import { Autocomplete } from "@/components/ui/autocomplete"
 import { api, type ApiMeeting, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { Loader2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 export default function PostMeetingPage() {
   const router = useRouter()
@@ -22,6 +23,9 @@ export default function PostMeetingPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
+
+  // --- CHANGE: ADDED STATE FOR MEETING TYPE ---
+  const [meetingType, setMeetingType] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     meeting_id: "",
@@ -35,7 +39,7 @@ export default function PostMeetingPage() {
       try {
         const [leadsData, meetingsData] = await Promise.all([
             api.getAllLeads(),
-            api.getScheduledMeetings()
+            api.getAllMeetings() // Fetch all meetings to ensure we find the one from the URL
         ]);
         
         setAllLeads(leadsData);
@@ -50,6 +54,12 @@ export default function PostMeetingPage() {
                 lead_id: leadIdFromUrl,
                 meeting_id: meetingIdFromUrl,
             }));
+
+            // --- CHANGE: FIND AND SET THE MEETING TYPE ---
+            const currentMeeting = meetingsData.find(m => m.id.toString() === meetingIdFromUrl);
+            if (currentMeeting && currentMeeting.meeting_type) {
+                setMeetingType(currentMeeting.meeting_type);
+            }
         }
         
       } catch (error) {
@@ -64,14 +74,18 @@ export default function PostMeetingPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (field === "lead_id") {
-      const meetingsForLead = scheduledMeetings.filter((m) => String(m.lead_id) === value);
-      if (meetingsForLead.length > 0) {
-        const latestMeeting = meetingsForLead.sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime())[0];
-        setFormData((prev) => ({ ...prev, meeting_id: String(latestMeeting.id) }))
-      } else {
-        setFormData((prev) => ({ ...prev, meeting_id: "" }))
-        toast({ title: "Info", description: "This lead has no currently scheduled meetings to complete." });
-      }
+        setMeetingType(null); // Reset meeting type when lead changes
+        const meetingsForLead = scheduledMeetings.filter((m) => String(m.lead_id) === value);
+        if (meetingsForLead.length > 0) {
+            const latestMeeting = meetingsForLead.sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime())[0];
+            setFormData((prev) => ({ ...prev, meeting_id: String(latestMeeting.id) }))
+            if (latestMeeting.meeting_type) {
+                setMeetingType(latestMeeting.meeting_type);
+            }
+        } else {
+            setFormData((prev) => ({ ...prev, meeting_id: "" }))
+            toast({ title: "Info", description: "This lead has no currently scheduled meetings to complete." });
+        }
     }
   }
 
@@ -137,8 +151,16 @@ export default function PostMeetingPage() {
       
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Meeting Outcome</CardTitle>
-          <CardDescription>Select the lead and enter the notes from your meeting.</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Meeting Outcome</CardTitle>
+              <CardDescription>Select the lead and enter the notes from your meeting.</CardDescription>
+            </div>
+            {/* --- CHANGE: DISPLAYING THE MEETING TYPE BADGE --- */}
+            {meetingType && (
+              <Badge variant="outline">{meetingType}</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">

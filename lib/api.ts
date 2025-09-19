@@ -1,6 +1,13 @@
 // frontend/lib/api.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://4adc3d24dcb8.ngrok-free.app"
 
+export interface ApiMasterData {
+  id: number;
+  category: string;
+  value: string;
+  is_active: boolean;
+}
+
 // API Response Types
 export interface ApiUser {
   id: number
@@ -12,11 +19,36 @@ export interface ApiUser {
   role?: string
 }
 
+// Updated Contact Interface
+export interface Contact {
+  id?: number // Optional for creation, present for existing
+  lead_id?: number // Optional for creation, present for existing
+  contact_name: string
+  phone: string
+  email: string | null
+  designation: string | null
+  linkedIn?: string | null // New field
+  pan?: string | null // New field
+}
+
+// Updated ClientContact Interface (for Client-specific contacts)
+export interface ClientContact {
+  id?: number;
+  client_id?: number;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  designation?: string | null;
+  linkedIn?: string | null;
+  pan?: string | null;
+}
 
 export interface ApiLead {
   id: number
   company_name: string
   email?: string
+  website?: string // New field
+  linkedIn?: string // New field
   address?: string
   address_2?: string
   city?: string
@@ -38,8 +70,70 @@ export interface ApiLead {
   machine_specification?: string
   challenges?: string
   lead_type?: string
+  opportunity_business?: string;
+  target_closing_date?: string; // Will be a string in YYYY-MM-DD format
   contacts?: Contact[]
 }
+
+// New Client Interface
+export interface ApiClient {
+  id: number;
+  company_name: string;
+  website?: string | null;
+  linkedIn?: string | null;
+  company_email?: string | null;
+  company_phone_2?: string | null;
+  address?: string | null;
+  address_2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  country?: string | null;
+  segment?: string | null;
+  verticles?: string | null;
+  team_size?: string | null;
+  turnover?: string | null;
+  current_system?: string | null;
+  machine_specification?: string | null;
+  challenges?: string | null;
+  version?: string | null;
+  database_type?: string | null; // Renamed from 'Database'
+  amc?: string | null;
+  gst?: string | null;
+  converted_date: string; // ISO date string
+  created_at: string;
+  updated_at?: string | null;
+  contacts?: ClientContact[];
+}
+
+// NEW: Client Update Payload
+export interface ApiClientUpdatePayload {
+  company_name?: string;
+  website?: string | null;
+  linkedIn?: string | null;
+  company_email?: string | null;
+  company_phone_2?: string | null;
+  address?: string | null;
+  address_2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  country?: string | null;
+  segment?: string | null;
+  verticles?: string | null;
+  team_size?: string | number | null;
+  turnover?: string | null;
+  current_system?: string | null;
+  machine_specification?: string | null;
+  challenges?: string | null;
+  version?: string | null;
+  database_type?: string | null;
+  amc?: string | null;
+  gst?: string | null;
+  converted_date?: string; // ISO date string
+  contacts?: ClientContact[]; // Using ClientContact for updates as well
+}
+
 
 export interface ApiUnifiedActivity {
     id: number;
@@ -60,14 +154,6 @@ export interface ApiActivityLogCreatePayload {
     phase: string; // e.g., "Completed", "Discussion Done"
 }
 
-interface Contact {
-  id: number
-  lead_id: number
-  contact_name: string
-  phone: string
-  email: string | null
-  designation: string | null
-}
 
 export interface ApiEventReschedulePayload {
     start_time: string; // ISO format string
@@ -110,6 +196,7 @@ export interface ApiMeeting {
   lead_id: number
   assigned_to: string
   event_type: string
+  meeting_type?: string;
   event_time: string
   event_end_time: string
   created_by: string
@@ -193,6 +280,7 @@ export interface ApiReminder {
     assigned_to: string;
     status: string;
     created_at: string;
+    is_hidden_from_activity_log: boolean; // <--- NEW FIELD
 }
 
 export interface ApiBulkUploadResponse {
@@ -207,6 +295,35 @@ export interface ApiScheduleActivityPayload {
     activity_type: string;
     created_by_user_id: number;
 }
+
+// New Conversion Payload
+export interface ConvertLeadToClientPayload {
+  company_name?: string;
+  website?: string | null;
+  linkedIn?: string | null;
+  company_email?: string | null;
+  company_phone_2?: string | null;
+  address?: string | null;
+  address_2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  country?: string | null;
+  segment?: string | null;
+  verticles?: string | null;
+  team_size?: string | number | null;
+  turnover?: string | null;
+  current_system?: string | null;
+  machine_specification?: string | null;
+  challenges?: string | null;
+  version?: string | null;
+  database_type?: string | null;
+  amc?: string | null;
+  gst?: string | null;
+  converted_date?: string; // ISO date string
+  contacts?: ClientContact[];
+}
+
 
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
   if (!API_BASE_URL) {
@@ -246,6 +363,21 @@ async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
+
+export const masterDataApi = {
+    async getByCategory(category: string): Promise<ApiMasterData[]> {
+        return fetcher(`/web/master-data/${category}`);
+    },
+    async create(item: { category: string; value: string }): Promise<ApiMasterData> {
+        return fetcher("/web/master-data", {
+            method: "POST",
+            body: JSON.stringify(item),
+        });
+    },
+    async delete(itemId: number): Promise<void> {
+        return fetcher(`/web/master-data/${itemId}`, { method: "DELETE" });
+    },
+};
 
 
 // Authentication APIs
@@ -299,7 +431,7 @@ export const userApi = {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true", // Skip ngrok browser warning
+          "ngrok-skip-browser-warning": "true",
         },
       })
 
@@ -436,7 +568,6 @@ export const leadApi = {
 
   async getLeadById(leadId: number): Promise<ApiLead> {
     try {
-      // The URL now correctly includes the `/web` prefix to match the backend router.
       const response = await fetch(`${API_BASE_URL}/web/leads/${leadId}`, {
         headers: {
           "Content-Type": "application/json",
@@ -459,34 +590,7 @@ export const leadApi = {
     }
   },
 
-  async createLead(leadData: {
-    company_name: string
-    email?: string
-    address?: string
-    address_2?: string
-    city?: string
-    state?: string
-    pincode?: string
-    country?: string
-    source: string
-    segment?: string
-    team_size?: string
-    assigned_to: string
-    created_by: string
-    remark?: string
-    phone_2?: string
-    turnover?: string
-    current_system?: string
-    machine_specification?: string
-    challenges?: string
-    lead_type?: string
-    contacts?: {
-        contact_name: string;
-        phone: string;
-        email?: string;
-        designation?: string;
-    }[];
-  }): Promise<ApiLead> {
+  async createLead(leadData: Partial<ApiLead>): Promise<ApiLead> {
     try {
       const response = await fetch(`${API_BASE_URL}/web/leads`, {
         method: "POST",
@@ -519,15 +623,14 @@ export const leadApi = {
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true",
       },
-      body: JSON.stringify(leadIds), // Send the array of lead IDs
+      body: JSON.stringify(leadIds),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.detail || "Failed to export leads.");
     }
-    
-    // The response is the file itself, so we return it as a binary "Blob"
+
     return response.blob();
   },
 
@@ -541,20 +644,16 @@ export const leadApi = {
         },
       });
 
-      // If the response is NOT ok, we check if it's a 404
       if (!response.ok) {
-        // A 404 is an expected outcome (no activities), so we return an empty array.
         if (response.status === 404) {
           console.log(`[v0] No activities found for lead ${leadId}, returning empty array.`);
-          return []; 
+          return [];
         }
-        // For all other errors (like 500), we still throw an error.
         const errorText = await response.text();
         console.error("[v0] API Error Response:", errorText);
         throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
       }
 
-      // If the response was ok (200), we return the JSON data.
       return response.json();
 
     } catch (error) {
@@ -562,7 +661,7 @@ export const leadApi = {
       throw error;
     }
   },
-  
+
 
   async getHistory(leadId: number) {
     try {
@@ -588,39 +687,10 @@ export const leadApi = {
 
   async updateLead(
     leadId: number,
-    leadData: Partial<{
-      company_name: string;
-      email: string;
-      address: string;
-      address_2: string;
-      city: string;
-      state: string;
-      pincode: string;
-      country: string;
-      team_size: string | number;
-      source: string;
-      segment: string;
-      remark: string;
-      product: string;
-      phone_2: string;
-      turnover: string;
-      current_system: string;
-      machine_specification: string;
-      challenges: string;
-      lead_type: string;
-      assigned_to: string;
-      status: string;
-      contacts: Array<{
-        id?: number;
-        contact_name: string;
-        phone: string;
-        email?: string;
-        designation?: string;
-      }>;
-      // New activity fields
-      activity_type: string;
-      activity_details: string;
-    }>,
+    leadData: Partial<ApiLead> & {
+      activity_type?: string;
+      activity_details?: string;
+    },
   ): Promise<ApiLead> {
     try {
       console.log("[v0] Attempting to update lead:", leadId, "with data:", leadData)
@@ -672,7 +742,7 @@ export const leadApi = {
     return response.json()
   },
 
-  
+
   async uploadBulkLeads(file: File): Promise<ApiBulkUploadResponse> {
     const formData = new FormData()
     formData.append("file", file)
@@ -706,8 +776,32 @@ export const leadApi = {
     return response.json();
   },
 
-// ...
+  // New conversion API call
+  async convertToClient(leadId: number, payload: ConvertLeadToClientPayload): Promise<ApiClient> {
+    return fetcher(`/web/leads/${leadId}/convert-to-client`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 }
+
+
+// New Client APIs
+export const clientApi = {
+  async getAllClients(): Promise<ApiClient[]> {
+    return fetcher("/web/clients");
+  },
+  async getClientById(clientId: number): Promise<ApiClient> {
+    return fetcher(`/web/clients/${clientId}`);
+  },
+  // NEW: Update Client API function
+  async updateClient(clientId: number, clientData: ApiClientUpdatePayload): Promise<ApiClient> {
+    return fetcher(`/web/clients/${clientId}`, {
+      method: "PUT",
+      body: JSON.stringify(clientData),
+    });
+  },
+};
 
 
 export const messageMasterApi = {
@@ -724,11 +818,9 @@ export const messageMasterApi = {
         return fetcher(`/web/messages/${id}`, { method: "DELETE" });
     },
 };
-// --- END NEW API OBJECT ---
 
 export const activityApi = {
     async markActivityDone(reminderId: number, notes: string, updatedBy: string): Promise<{ status: string; message: string }> {
-        // This URL matches the new endpoint we just created
         return fetcher(`/web/activities/scheduled/${reminderId}/complete`, {
             method: "POST",
             body: JSON.stringify({
@@ -739,7 +831,6 @@ export const activityApi = {
     },
 };
 
-// --- NEW: Drip Sequence API Object ---
 export const dripSequenceApi = {
     getDripSequences(): Promise<ApiDripSequenceList[]> {
         return fetcher("/web/drip-sequences");
@@ -757,11 +848,7 @@ export const dripSequenceApi = {
         return fetcher(`/web/drip-sequences/${id}`, { method: "DELETE" });
     },
 };
-// --- END NEW API OBJECT ---
 
-
-
-// Chat Assistant API
 export const chatApi = {
   async sendMessage(message: string, userPhone: string): Promise<{ status: string; reply: string }> {
     const response = await fetch(`${API_BASE_URL}/app`, {
@@ -777,7 +864,6 @@ export const chatApi = {
   },
 }
 
-// Task API
 export const taskApi = {
   async getUserTasks(username: string) {
     const response = await fetch(`${API_BASE_URL}/tasks/${username}`)
@@ -786,24 +872,22 @@ export const taskApi = {
   },
 }
 
-// Meetings and Demos APIs
 export const meetingsApi = {
   async getScheduledMeetings(): Promise<ApiMeeting[]> {
     return fetcher("/web/meetings");
   },
 
-  // --- THIS IS THE CORRECTED FUNCTION ---
   async getAllMeetings(): Promise<ApiMeeting[]> {
     try {
       console.log("[v0] Fetching ALL meetings from API...");
       const data: any[] = await fetcher("/web/meetings/all");
       console.log("[v0] All meetings fetched successfully:", data.length);
-      // The placeholder is replaced with the ACTUAL mapping logic.
       return data.map((meeting: any) => ({
         id: meeting.id,
         lead_id: meeting.lead_id,
         assigned_to: meeting.assigned_to,
         event_type: meeting.event_type || "Meeting",
+        meeting_type: meeting.meeting_type,
         event_time: meeting.event_time,
         event_end_time: meeting.event_end_time,
         created_by: meeting.created_by,
@@ -852,7 +936,7 @@ export const meetingsApi = {
       }))
     } catch (error) {
       console.error("[v0] Error fetching demos:", error)
-      return []
+      return [];
     }
   },
 
@@ -861,7 +945,6 @@ export const meetingsApi = {
       console.log("[v0] Fetching ALL demos from API...");
       const data: any[] = await fetcher("/web/demos/all");
       console.log("[v0] All demos fetched successfully:", data.length);
-      // The placeholder is replaced with the ACTUAL mapping logic.
       return data.map((demo: any) => ({
         id: demo.id,
         lead_id: demo.lead_id,
@@ -884,118 +967,28 @@ export const meetingsApi = {
 
 // Unified API export that combines all individual API objects
 export const api = {
-  // Authentication methods
-  login: authApi.login,
-  register: authApi.register,
-  changePassword: authApi.changePassword,
-
-  // User management methods
-  getUsers: userApi.getUsers,
-  updateUser: userApi.updateUser,
-  deleteUser: userApi.deleteUser,
+  ...authApi,
+  ...userApi,
+  ...leadApi,
+  ...clientApi, // New client APIs
+  ...chatApi,
+  ...taskApi,
+  ...meetingsApi,
+  ...messageMasterApi,
+  ...dripSequenceApi,
+  ...activityApi,
+  ...masterDataApi,
   getAllDemos: (): Promise<ApiDemo[]> => fetcher("/web/demos/all"),
-  // Lead management methods
-  getLeads: leadApi.getAllLeads,
-  getAllLeads: leadApi.getAllLeads,
-  getLeadsByUser: leadApi.getLeadsByUser,
-  getLeadById: leadApi.getLeadById,
-  createLead: leadApi.createLead,
-  updateLead: leadApi.updateLead,
-  getActivities: leadApi.getActivities,
-  exportLeads: leadApi.exportLeads,
-  addActivityWithAttachment: leadApi.addActivityWithAttachment,
-  uploadBulkLeads: leadApi.uploadBulkLeads,
-  getHistory: leadApi.getHistory,
-
-  // Chat methods
-  sendMessage: chatApi.sendMessage,
-
-  // Task methods
-  getUserTasks: taskApi.getUserTasks,
-  markActivityDone: activityApi.markActivityDone,
-
-  logActivity: async (payload: ApiActivityLogCreatePayload): Promise<ApiActivityLogOut> => {
-        return fetcher("/web/activities/log", {
-            method: "POST",
-            body: JSON.stringify(payload),
-        });
-    },
-
-  scheduleActivity: async (payload: ApiScheduleActivityPayload): Promise<ApiReminder> => {
-        return fetcher("/web/activities/schedule", {
-            method: "POST",
-            body: JSON.stringify(payload),
-        });
-    },
-
-  rescheduleEvent: async (
-    type: 'meeting' | 'demo', 
-    id: number, 
-    payload: ApiEventReschedulePayload
-  ): Promise<ApiMeeting | ApiDemo> => {
-    const endpoint = type === 'meeting' ? `/web/meetings/${id}/reschedule` : `/web/demos/${id}/reschedule`;
-    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
-  },
-
-  reassignEvent: async (
-    type: 'meeting' | 'demo', 
-    id: number, 
-    payload: ApiEventReassignPayload
-  ): Promise<ApiMeeting | ApiDemo> => {
-    const endpoint = type === 'meeting' ? `/web/meetings/${id}/reassign` : `/web/demos/${id}/reassign`;
-    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
-  },
-
-  cancelEvent: async (
-    type: 'meeting' | 'demo', 
-    id: number, 
-    payload: ApiEventCancelPayload
-  ): Promise<ApiMeeting | ApiDemo> => {
-    const endpoint = type === 'meeting' ? `/web/meetings/${id}/cancel` : `/web/demos/${id}/cancel`;
-    return fetcher(endpoint, { method: "POST", body: JSON.stringify(payload) });
-  },
-
-  updateEventNotes: async (
-    type: 'meeting' | 'demo', 
-    id: number, 
-    payload: ApiEventNotesUpdatePayload
-  ): Promise<ApiMeeting | ApiDemo> => {
-    const endpoint = type === 'meeting' ? `/web/meetings/${id}/notes` : `/web/demos/${id}/notes`;
-    return fetcher(endpoint, { method: "PUT", body: JSON.stringify(payload) });
-  },
-
-  // --- NEW: Methods for managing activities ---
-  updateActivity: async (
-      activityId: number, 
-      payload: ApiActivityUpdatePayload
-  ): Promise<ApiUnifiedActivity> => {
-      return fetcher(`/web/activities/log/${activityId}`, { method: 'PUT', body: JSON.stringify(payload) });
-  },
-
-  deleteLoggedActivity: async (activityId: number): Promise<void> => {
-      return fetcher(`/web/activities/log/${activityId}`, { method: 'DELETE' });
-  },
-
-  cancelScheduledActivity: async (reminderId: number): Promise<void> => {
-      return fetcher(`/web/activities/scheduled/${reminderId}`, { method: 'DELETE' });
-  },
-  
-  // Meetings and demos methods
-  getScheduledMeetings: meetingsApi.getScheduledMeetings,
-  getAllMeetings: meetingsApi.getAllMeetings,
-  getScheduledDemos: meetingsApi.getScheduledDemos,
-  getMessages: messageMasterApi.getMessages,
-  createMessage: messageMasterApi.createMessage,
-  updateMessage: messageMasterApi.updateMessage,
-  deleteMessage: messageMasterApi.deleteMessage,
+  getAllCalendarEvents: (): Promise<any[]> => fetcher("/web/calendar/events/all"),
   getAllActivities: (username: string): Promise<ApiUnifiedActivity[]> => fetcher(`/web/activities/all/${username}`),
-  getDripSequences: dripSequenceApi.getDripSequences,
-  getDripSequenceById: dripSequenceApi.getDripSequenceById,
-  createDripSequence: dripSequenceApi.createDripSequence,
-  updateDripSequence: dripSequenceApi.updateDripSequence,
-  deleteDripSequence: dripSequenceApi.deleteDripSequence,
   getPendingActivities: (): Promise<ApiReminder[]> => fetcher("/web/activities/pending"),
-  assignDripToLead: leadApi.assignDripToLead,
-}
-
-
+  logActivity: async (payload: ApiActivityLogCreatePayload) => fetcher("/web/activities/log", { method: "POST", body: JSON.stringify(payload) }),
+  scheduleActivity: async (payload: ApiScheduleActivityPayload) => fetcher("/web/activities/schedule", { method: "POST", body: JSON.stringify(payload) }),
+  rescheduleEvent: async (type: 'meeting' | 'demo', id: number, payload: ApiEventReschedulePayload) => fetcher(type === 'meeting' ? `/web/meetings/${id}/reschedule` : `/web/demos/${id}/reschedule`, { method: "PUT", body: JSON.stringify(payload) }),
+  reassignEvent: async (type: 'meeting' | 'demo', id: number, payload: ApiEventReassignPayload) => fetcher(type === 'meeting' ? `/web/meetings/${id}/reassign` : `/web/demos/${id}/reassign`, { method: "PUT", body: JSON.stringify(payload) }),
+  cancelEvent: async (type: 'meeting' | 'demo', id: number, payload: ApiEventCancelPayload) => fetcher(type === 'meeting' ? `/web/meetings/${id}/cancel` : `/web/demos/${id}/cancel`, { method: "POST", body: JSON.stringify(payload) }),
+  updateEventNotes: async (type: 'meeting' | 'demo', id: number, payload: ApiEventNotesUpdatePayload) => fetcher(type === 'meeting' ? `/web/meetings/${id}/notes` : `/web/demos/${id}/notes`, { method: "PUT", body: JSON.stringify(payload) }),
+  updateActivity: async (activityId: number) => fetcher(`/web/activities/log/${activityId}`, { method: 'PUT', body: JSON.stringify({}) }), // Placeholder for now, no payload needed.
+  deleteLoggedActivity: async (activityId: number) => fetcher(`/web/activities/log/${activityId}`, { method: 'DELETE' }),
+  cancelScheduledActivity: async (reminderId: number) => fetcher(`/web/activities/scheduled/${reminderId}`, { method: 'DELETE' }),
+};

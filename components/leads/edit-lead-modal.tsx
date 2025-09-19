@@ -16,15 +16,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { leadApi } from "@/lib/api"
+import { leadApi, api } from "@/lib/api"
 import { Loader2, PlusCircle, Trash2 } from "lucide-react"
 
 import PhoneInput from "react-phone-input-2"
 import "react-phone-input-2/lib/style.css"
 import { Country, State, City } from "country-state-city"
 import { Combobox } from "@/components/ui/combobox"
-
-// --- (Interfaces for Contact, Lead, User, etc. remain the same) ---
 
 interface Contact {
   id?: number
@@ -58,6 +56,7 @@ interface Lead {
   turnover?: string
   source?: string
   segment?: string
+  verticles?: string;
   assigned_to: string
   current_system?: string
   machine_specification?: string
@@ -65,6 +64,8 @@ interface Lead {
   remark?: string
   lead_type?: string
   status: string
+  opportunity_business?: string
+  target_closing_date?: string
 }
 
 interface User {
@@ -78,10 +79,8 @@ interface EditLeadModalProps {
   onClose: () => void
   onSave: (leadId: string, updatedData: Partial<Lead>) => void
   users: User[]
-  statusOptions: string[]
 }
 
-const leadTypes = ["Hot Lead", "Cold Lead","Warm Lead", "Not Our Segment"]
 const namePrefixes = ["Mr.", "Mrs.", "Ms."]
 
 const splitFullName = (fullName: string) => {
@@ -102,22 +101,60 @@ const splitFullName = (fullName: string) => {
   return { prefix: prefix || "Mr.", first_name: firstName, last_name: lastName }
 }
 
+interface MasterDataOptions {
+    source: string[];
+    segment: string[];
+    verticles: string[];
+    lead_type: string[];
+    status: string[];
+    current_system: string[];
+}
 
-export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOptions }: EditLeadModalProps) {
+export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLeadModalProps) {
   const { toast } = useToast()
   const [formData, setFormData] = useState({
     company_name: "", email: "", address: "", address_2: "", country: "", state: "", city: "",
-    pincode: "", phone_2: "", team_size: "", turnover: "", source: "", segment: "", assigned_to: "",
+    pincode: "", phone_2: "", team_size: "", turnover: "", source: "", segment: "", verticles: "", assigned_to: "",
     current_system: "", machine_specification: "", challenges: "", remark: "", lead_type: "", status: "",
+    opportunity_business: "", target_closing_date: "",
   })
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
   const [selectedState, setSelectedState] = useState<string | undefined>()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  
+  const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
+      source: [], segment: [], verticles: [], lead_type: [], status: [], current_system: []
+  });
 
   const countryOptions = useMemo(() => Country.getAllCountries().map(c => ({ value: c.isoCode, label: c.name })), [])
   const stateOptions = useMemo(() => selectedCountry ? State.getStatesOfCountry(selectedCountry).map(s => ({ value: s.isoCode, label: s.name })) : [], [selectedCountry])
   const cityOptions = useMemo(() => (selectedCountry && selectedState) ? City.getCitiesOfState(selectedCountry, selectedState).map(c => ({ value: c.name, label: c.name })) : [], [selectedCountry, selectedState])
+
+  useEffect(() => {
+    if (isOpen) {
+        Promise.all([
+            api.getByCategory("source"),
+            api.getByCategory("segment"),
+            api.getByCategory("verticles"),
+            api.getByCategory("lead_type"),
+            api.getByCategory("status"),
+            api.getByCategory("current_system")
+        ]).then(([sourceData, segmentData, verticlesData, leadTypeData, statusData, currentSystemData]) => {
+            setMasterOptions({
+                source: sourceData.map(item => item.value),
+                segment: segmentData.map(item => item.value),
+                verticles: verticlesData.map(item => item.value),
+                lead_type: leadTypeData.map(item => item.value),
+                status: statusData.map(item => item.value),
+                current_system: currentSystemData.map(item => item.value),
+            });
+        }).catch(err => {
+            console.error("Failed to fetch master data for modal", err);
+            toast({ title: "Error", description: "Could not load dropdown options.", variant: "destructive" });
+        });
+    }
+  }, [isOpen, toast]);
 
   useEffect(() => {
     if (lead) {
@@ -130,9 +167,12 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
         address_2: lead.address_2 || "", country: countryObj?.value || "", state: stateObj?.isoCode || "",
         city: lead.city || "", pincode: lead.pincode || "", phone_2: lead.phone_2 || "",
         team_size: lead.team_size || "", turnover: lead.turnover || "", source: lead.source || "",
-        segment: lead.segment || "", assigned_to: lead.assigned_to || "", current_system: lead.current_system || "",
-        machine_specification: lead.machine_specification || "", challenges: lead.challenges || "", remark: lead.remark || "",
-        lead_type: lead.lead_type || "", status: lead.status || "",
+        segment: lead.segment || "", verticles: lead.verticles || "", assigned_to: lead.assigned_to || "",
+        current_system: lead.current_system || "", machine_specification: lead.machine_specification || "", 
+        challenges: lead.challenges || "", remark: lead.remark || "", lead_type: lead.lead_type || "", 
+        status: lead.status || "",
+        opportunity_business: lead.opportunity_business || "",
+        target_closing_date: lead.target_closing_date ? lead.target_closing_date.split('T')[0] : "",
       })
       if (lead.contacts && lead.contacts.length > 0) {
         setContacts(lead.contacts.map(c => ({ ...c, ...splitFullName(c.contact_name) })))
@@ -140,7 +180,7 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
         setContacts([{ prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "" }])
       }
     }
-  }, [lead, countryOptions])
+  }, [lead, countryOptions, isOpen])
 
   const handleInputChange = (field: keyof typeof formData, value: string) => setFormData(prev => ({ ...prev, [field]: value }))
   const handleContactChange = (index: number, field: keyof Omit<Contact, "phone">, value: string) => { const nc = [...contacts]; nc[index] = { ...nc[index], [field]: value }; setContacts(nc); }
@@ -154,17 +194,17 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
     const pc = contacts.map(c => ({ id: c.id, contact_name: `${c.prefix} ${c.first_name} ${c.last_name}`.trim(), phone: c.phone, email: c.email, designation: c.designation }))
     const countryName = Country.getCountryByCode(formData.country)?.name
     const stateName = State.getStateByCodeAndCountry(formData.state, formData.country)?.name
-    const payload = { ...formData, country: countryName || formData.country, state: stateName || formData.state, contacts: pc.map(({ id, ...rest }) => rest) }
+    const payload = { ...formData, target_closing_date: formData.target_closing_date || null, country: countryName || formData.country, state: stateName || formData.state, contacts: pc }
     try {
       await leadApi.updateLead(parseInt(lead.id, 10), payload)
       toast({ title: "Lead Updated", description: `${lead.company_name} has been updated.` })
       onSave(lead.id, { ...lead, ...payload, contacts: pc })
       onClose()
-      window.location.reload()
     } catch (error) {
       console.error("Failed to update lead:", error)
       toast({ title: "Error", description: error instanceof Error ? error.message : "Update failed.", variant: "destructive" })
-      setIsLoading(false)
+    } finally {
+        setIsLoading(false)
     }
   }
 
@@ -175,10 +215,8 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Edit Lead - {lead.company_name}</DialogTitle><DialogDescription>Update lead details and save your changes.</DialogDescription></DialogHeader>
         
-        {/* --- REDESIGN: Main container with consistent vertical spacing --- */}
         <div className="space-y-6 py-4">
 
-          {/* === Section: Company Information === */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Company Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -187,18 +225,17 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
             </div>
           </div>
 
-          {/* === Section: Contact Persons === */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Contact Persons</h3>
             {contacts.map((contact, index) => (
-              <div key={contact.id || index} className="space-y-4 rounded-lg border bg-gray-50 p-4 relative">
+              <div key={contact.id || index} className="space-y-4 rounded-lg border bg-muted/50 p-4 relative">
                 {contacts.length > 1 && (<Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7" onClick={() => removeContact(index)}><Trash2 className="h-4 w-4 text-red-500" /></Button>)}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                     <div className="space-y-2"><Label htmlFor={`prefix_${index}`}>Prefix *</Label><Select value={contact.prefix} onValueChange={v => handleContactChange(index, "prefix", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{namePrefixes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label htmlFor={`first_name_${index}`}>First Name *</Label><Input id={`first_name_${index}`} value={contact.first_name} onChange={e => handleContactChange(index, "first_name", e.target.value)} required /></div>
                     <div className="space-y-2"><Label htmlFor={`last_name_${index}`}>Last Name *</Label><Input id={`last_name_${index}`} value={contact.last_name} onChange={e => handleContactChange(index, "last_name", e.target.value)} required /></div>
                 </div>
-                    <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="w-full !py-2 !h-10" /></div>
+                    <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
                     <div className="space-y-2"><Label htmlFor={`designation_${index}`}>Designation</Label><Input id={`designation_${index}`} value={contact.designation || ""} onChange={e => handleContactChange(index, "designation", e.target.value)} /></div>
                 
                 <div className="space-y-2"><Label htmlFor={`contact_email_${index}`}>Contact Email</Label><Input id={`contact_email_${index}`} type="email" value={contact.email || ""} onChange={e => handleContactChange(index, "email", e.target.value)} /></div>
@@ -207,7 +244,6 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
             <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add Another Contact</Button>
           </div>
 
-          {/* === Section: Address Details === */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Address Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -220,26 +256,27 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users, statusOpti
             </div>
           </div>
           
-          {/* === Section: Lead Classification === */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Lead Classification</h3>
-            <div className="space-y-2"><Label htmlFor="phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.phone_2} onChange={v => handleInputChange("phone_2", v)} inputProps={{ id: 'phone_2' }} containerClass="w-full" inputClass="w-full !py-2 !h-10" /></div>
+            <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Lead Classification & Details</h3>
+            <div className="space-y-2"><Label htmlFor="phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.phone_2} onChange={v => handleInputChange("phone_2", v)} inputProps={{ id: 'phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-2"><Label htmlFor="team_size">Team Size</Label><Input id="team_size" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} /></div>
               <div className="space-y-2"><Label htmlFor="turnover">Turnover</Label><Input id="turnover" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="source">Source</Label><Input id="source" value={formData.source} onChange={e => handleInputChange("source", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="segment">Segment</Label><Input id="segment" value={formData.segment} onChange={e => handleInputChange("segment", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={formData.lead_type} onValueChange={v => handleInputChange("lead_type", v)}><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger><SelectContent>{leadTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="opportunity_business">Opportunity Business</Label><Input id="opportunity_business" value={formData.opportunity_business} onChange={e => handleInputChange("opportunity_business", e.target.value)} placeholder="e.g., 5 Lakhs"/></div>
+              <div className="space-y-2"><Label htmlFor="target_closing_date">Target Closing Date</Label><Input id="target_closing_date" type="date" value={formData.target_closing_date} onChange={e => handleInputChange("target_closing_date", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="source">Source</Label><Select value={formData.source} onValueChange={v => handleInputChange("source", v)}><SelectTrigger><SelectValue placeholder="Select a source" /></SelectTrigger><SelectContent>{masterOptions.source.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="segment">Segment</Label><Select value={formData.segment} onValueChange={v => handleInputChange("segment", v)}><SelectTrigger><SelectValue placeholder="Select a segment" /></SelectTrigger><SelectContent>{masterOptions.segment.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="verticles">Verticals</Label><Select value={formData.verticles} onValueChange={v => handleInputChange("verticles", v)}><SelectTrigger><SelectValue placeholder="Select a vertical" /></SelectTrigger><SelectContent>{masterOptions.verticles.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={formData.lead_type} onValueChange={v => handleInputChange("lead_type", v)}><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger><SelectContent>{masterOptions.lead_type.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-2"><Label htmlFor="assigned_to">Assigned To *</Label><Select value={formData.assigned_to} onValueChange={v => handleInputChange("assigned_to", v)}><SelectTrigger><SelectValue placeholder="Select a user" /></SelectTrigger><SelectContent>{users.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-2"><Label htmlFor="status">Lead Status</Label><Select value={formData.status} onValueChange={v => handleInputChange("status", v)}><SelectTrigger id="status"><SelectValue placeholder="Select a status" /></SelectTrigger><SelectContent>{statusOptions.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="status">Lead Status</Label><Select value={formData.status} onValueChange={v => handleInputChange("status", v)}><SelectTrigger id="status"><SelectValue placeholder="Select a status" /></SelectTrigger><SelectContent>{masterOptions.status.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select></div>
             </div>
           </div>
 
-          {/* === Section: System & Remarks === */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">System & Remarks</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                <div className="md:col-span-2 space-y-2"><Label htmlFor="current_system">Current System</Label><Input id="current_system" value={formData.current_system} onChange={e => handleInputChange("current_system", e.target.value)} /></div>
+                <div className="md:col-span-2 space-y-2"><Label htmlFor="current_system">Current System</Label><Select value={formData.current_system} onValueChange={v => handleInputChange("current_system", v)}><SelectTrigger><SelectValue placeholder="Select a system" /></SelectTrigger><SelectContent>{masterOptions.current_system.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label htmlFor="machine_specification">Machine Specification</Label><Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={3} /></div>
                 <div className="space-y-2"><Label htmlFor="challenges">Challenges Faced</Label><Textarea id="challenges" value={formData.challenges} onChange={e => handleInputChange("challenges", e.target.value)} rows={3} /></div>
                 <div className="md:col-span-2 space-y-2"><Label htmlFor="remark">Remark</Label><Textarea id="remark" value={formData.remark} onChange={e => handleInputChange("remark", e.target.value)} rows={3} /></div>

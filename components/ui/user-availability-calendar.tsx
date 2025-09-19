@@ -1,28 +1,12 @@
+//frontend/components/ui/user-availability-calendar.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, Users, Monitor } from "lucide-react"
-import { api } from "@/lib/api"
-
-interface Meeting {
-  id: string
-  lead_id: string
-  assigned_to: string
-  event_time: string
-  event_end_time?: string
-  type: "meeting"
-}
-
-interface Demo {
-  id: string
-  lead_id: string
-  assigned_to: string
-  start_time: string
-  event_end_time?: string
-  type: "demo"
-}
+import { Calendar, Clock, Users, Monitor, Loader2 } from "lucide-react"
+import { api, ApiLead, ApiUser, ApiMeeting, ApiDemo } from "@/lib/api"
+import { format } from "date-fns"
 
 interface UserEvent {
   id: string
@@ -31,19 +15,14 @@ interface UserEvent {
   start_time: string
   end_time: string
   assigned_to: string
-}
-
-interface Lead {
-  id: number
-  company_name: string
-  contact_name: string
+  assigned_to_usernumber?: string // Demos can be assigned by usernumber
 }
 
 interface UserAvailabilityCalendarProps {
   className?: string
   showAllUsers?: boolean
   selectedDate?: Date
-  selectedUser?: string
+  selectedUser?: string // This is the username
 }
 
 export function UserAvailabilityCalendar({
@@ -54,48 +33,52 @@ export function UserAvailabilityCalendar({
 }: UserAvailabilityCalendarProps) {
   const [events, setEvents] = useState<UserEvent[]>([])
   const [loading, setLoading] = useState(true)
-  const [users, setUsers] = useState<any[]>([])
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [users, setUsers] = useState<ApiUser[]>([])
+  const [leads, setLeads] = useState<ApiLead[]>([])
 
   useEffect(() => {
     const fetchUserAvailability = async () => {
       try {
         setLoading(true)
 
+        // --- THE FIX: Changed api.getLeads() to api.getAllLeads() ---
         const [meetingsData, demosData, usersData, leadsData] = await Promise.all([
           api.getScheduledMeetings(),
           api.getScheduledDemos(),
           api.getUsers(),
-          api.getLeads(),
-        ])
+          api.getAllLeads(), 
+        ]);
 
-        setUsers(usersData)
-        setLeads(leadsData)
+        setUsers(usersData);
+        setLeads(leadsData);
 
-        const getLeadName = (leadId: string) => {
-          const lead = leadsData.find((l: Lead) => l.id.toString() === leadId.toString())
-          return lead ? lead.company_name : `Lead #${leadId}`
-        }
+        const getLeadName = (leadId: number): string => {
+          const lead = leadsData.find((l: ApiLead) => l.id === leadId);
+          return lead ? lead.company_name : `Lead #${leadId}`;
+        };
 
-        // Convert to unified format
         const allEvents: UserEvent[] = [
-          ...meetingsData.map((meeting: Meeting) => ({
-            id: meeting.id,
+          ...meetingsData.map((meeting: ApiMeeting) => ({
+            id: String(meeting.id),
             type: "meeting" as const,
             title: `Meeting - ${getLeadName(meeting.lead_id)}`,
             start_time: meeting.event_time,
             end_time: meeting.event_end_time || meeting.event_time,
             assigned_to: meeting.assigned_to,
           })),
-          ...demosData.map((demo: Demo) => ({
-            id: demo.id,
-            type: "demo" as const,
-            title: `Demo - ${getLeadName(demo.lead_id)}`,
-            start_time: demo.start_time,
-            end_time: demo.event_end_time || demo.start_time,
-            assigned_to: demo.assigned_to,
-          })),
-        ]
+          ...demosData.map((demo: ApiDemo) => {
+            const assignedUser = usersData.find(u => u.usernumber === demo.assigned_to);
+            return {
+                id: String(demo.id),
+                type: "demo" as const,
+                title: `Demo - ${getLeadName(demo.lead_id)}`,
+                start_time: demo.start_time,
+                end_time: demo.event_end_time || demo.start_time,
+                assigned_to: assignedUser ? assignedUser.username : demo.assigned_to, // Map usernumber to username
+                assigned_to_usernumber: demo.assigned_to,
+            }
+          }),
+        ];
 
         setEvents(allEvents)
       } catch (error) {
@@ -106,41 +89,48 @@ export function UserAvailabilityCalendar({
     }
 
     fetchUserAvailability()
-  }, [])
+  }, []) // Fetch once on component mount
 
   const getEventsForDate = (date: Date) => {
-    const dateString = date.toDateString()
-    let filteredEvents = events.filter((event) => new Date(event.start_time).toDateString() === dateString)
+    const dateString = date.toDateString();
+    
+    // Find the full user object for the selected user to get both username and usernumber
+    const targetUser = users.find(u => u.username === selectedUser);
 
-    if (selectedUser) {
-      filteredEvents = filteredEvents.filter((event) => event.assigned_to === selectedUser)
+    let filteredEvents = events.filter((event) => new Date(event.start_time).toDateString() === dateString);
+
+    if (targetUser) {
+        // Filter events where the assigned_to matches username (for meetings)
+        // OR the assigned_to_usernumber matches the user's number (for demos)
+        filteredEvents = filteredEvents.filter((event) => 
+            event.assigned_to === targetUser.username || 
+            event.assigned_to_usernumber === targetUser.usernumber
+        );
     }
 
-    return filteredEvents
+    return filteredEvents;
   }
 
-  const getBusyUsers = (date: Date) => {
-    const dayEvents = getEventsForDate(date)
-    const busyUserMap = new Map<string, UserEvent[]>()
+  const busyUsersMap = useMemo(() => {
+    const eventsForDay = getEventsForDate(selectedDate);
+    const map = new Map<string, UserEvent[]>();
 
-    dayEvents.forEach((event) => {
-      if (!busyUserMap.has(event.assigned_to)) {
-        busyUserMap.set(event.assigned_to, [])
+    eventsForDay.forEach((event) => {
+      if (!map.has(event.assigned_to)) {
+        map.set(event.assigned_to, []);
       }
-      busyUserMap.get(event.assigned_to)!.push(event)
-    })
-
-    return busyUserMap
-  }
+      map.get(event.assigned_to)!.push(event);
+    });
+    return map;
+  }, [events, selectedDate, users, selectedUser]); // Recompute when these change
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    if (!dateString) return "N/A";
+    return format(new Date(dateString), "p");
   }
+  
+  const busyUsers = showAllUsers ? busyUsersMap : (selectedUser && busyUsersMap.has(selectedUser)) ? new Map([[selectedUser, busyUsersMap.get(selectedUser)!]]) : new Map();
 
-  const busyUsers = getBusyUsers(selectedDate)
 
   if (loading) {
     return (
@@ -148,8 +138,9 @@ export function UserAvailabilityCalendar({
         <CardHeader>
           <CardTitle className="text-sm">User Availability</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Loading...</p>
+        <CardContent className="flex items-center justify-center p-6">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="ml-2 text-sm text-muted-foreground">Loading Schedule...</p>
         </CardContent>
       </Card>
     )
@@ -168,14 +159,14 @@ export function UserAvailabilityCalendar({
       <CardContent className="space-y-3">
         {busyUsers.size === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {selectedUser ? `${selectedUser} is available` : "All users are available"}
+            {selectedUser ? `${selectedUser} is free today.` : "All users are free today."}
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-96 overflow-y-auto">
             {Array.from(busyUsers.entries()).map(([username, userEvents]) => (
               <div key={username} className="border rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs font-medium">
+                  <div className="h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs font-medium">
                     {username.charAt(0).toUpperCase()}
                   </div>
                   <span className="font-medium text-sm">{username}</span>
@@ -195,8 +186,8 @@ export function UserAvailabilityCalendar({
                       ) : (
                         <Monitor className="h-3 w-3 text-green-600" />
                       )}
-                      <span className="flex-1 font-medium">{event.title}</span>
-                      <div className="flex items-center gap-1 text-muted-foreground">
+                      <span className="flex-1 font-medium truncate" title={event.title}>{event.title}</span>
+                      <div className="flex items-center gap-1 text-muted-foreground whitespace-nowrap">
                         <Clock className="h-3 w-3" />
                         <span className="font-medium">
                           {formatTime(event.start_time)} - {formatTime(event.end_time)}
