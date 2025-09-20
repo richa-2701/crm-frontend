@@ -1,10 +1,12 @@
+// activity-card.tsx
 "use client"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ApiUnifiedActivity } from "@/lib/api";
-import { formatDate, formatDateTime } from "@/lib/date-format";
-// --- MODIFIED: Import new icons and dropdown components ---
+// --- THIS IS THE CRITICAL IMPORT ---
+// We must use formatDateTime for both scheduled and logged activities to ensure correct timezone conversion.
+import { formatDateTime } from "@/lib/date-format"; 
 import { Clock, CheckCircle, Phone, Mail, MessageSquare, Eye, LucideIcon, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -13,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// --- MODIFIED: The props interface is updated to accept new handlers ---
 interface ActivityCardProps {
     activity: ApiUnifiedActivity;
     onMarkAsDone: (activity: ApiUnifiedActivity) => void;
@@ -23,7 +24,6 @@ interface ActivityCardProps {
     onCancel: (activity: ApiUnifiedActivity) => void;
 }
 
-// These utility maps are kept as they are efficient and correct
 const activityTypeIcons: { [key: string]: LucideIcon } = {
     Call: Phone,
     Email: Mail,
@@ -34,8 +34,8 @@ const activityTypeIcons: { [key: string]: LucideIcon } = {
 
 const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive" | "outline" } = {
     pending: "secondary",
+    sent: "secondary",
     completed: "default",
-    sent: "default",
     new: "default",
     qualified: "secondary",
     unqualified: "destructive",
@@ -46,23 +46,18 @@ const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive"
     "Discussion Done": "outline",
 };
 
-// --- MODIFIED: The entire component is updated with the new structure ---
 export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPastActivities, onEdit, onCancel }: ActivityCardProps) {
-    const isPendingReminder = activity.type === 'reminder' && activity.status === 'pending';
+    const isActionableReminder = activity.type === 'reminder' && activity.status !== 'completed';
     const Icon = activityTypeIcons[activity.activity_type as keyof typeof activityTypeIcons] || activityTypeIcons.default;
 
     return (
         <Card className="flex flex-col justify-between min-h-[220px] shadow-sm hover:shadow-lg transition-shadow duration-200 border rounded-lg overflow-hidden">
-            {/* Main content section */}
             <div className="flex-grow">
                 <CardHeader className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                        {/* Left side: Prominent Icon */}
                         <div className="flex-shrink-0 bg-primary/10 text-primary p-2.5 rounded-full">
                             <Icon className="h-5 w-5" />
                         </div>
-
-                        {/* Middle: Title and Description */}
                         <div className="flex-grow min-w-0">
                             <CardTitle
                                 className="text-base font-semibold truncate cursor-pointer hover:underline"
@@ -75,8 +70,6 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
                                 {activity.activity_type}
                             </CardDescription>
                         </div>
-
-                        {/* Right side: Status Badge */}
                         <div className="flex-shrink-0">
                              <Badge variant={statusVariantMap[activity.status] || "default"} className="capitalize text-xs font-medium">
                                 {activity.status.replace(/_/g, ' ')}
@@ -95,26 +88,28 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
                 </CardContent>
             </div>
 
-            {/* Footer with consistent layout for actions and metadata */}
             <CardFooter className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 py-2.5 px-4 border-t">
-                {/* Left side: Date/Time Info */}
+                {/* --- THIS IS THE DEFINITIVE FIX --- */}
+                {/* This logic now correctly chooses which date to display and then formats it */}
+                {/* using the function that handles UTC-to-local conversion. */}
                 <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    {activity.type === 'reminder' && activity.scheduled_for ? (
-                        <>
-                            <Clock className="h-3.5 w-3.5" />
-                            <span>{formatDateTime(activity.scheduled_for)}</span>
-                        </>
-                    ) : (
-                        <>
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            <span>{formatDate(activity.created_at)}</span>
-                        </>
-                    )}
-                </div>
+                    {(() => {
+                        const isReminder = activity.type === 'reminder' && activity.scheduled_for;
+                        const dateToFormat = isReminder ? activity.scheduled_for : activity.created_at;
+                        const IconToUse = isReminder ? Clock : CheckCircle;
 
-                {/* Right side: Action Buttons */}
+                        return (
+                            <>
+                                <IconToUse className="h-3.5 w-3.5" />
+                                <span>{formatDateTime(dateToFormat)}</span>
+                            </>
+                        );
+                    })()}
+                </div>
+                {/* --- END FIX --- */}
+
                 <div className="flex items-center gap-1">
-                    {isPendingReminder ? (
+                    {isActionableReminder ? (
                         <Button size="sm" onClick={() => onMarkAsDone(activity)} className="h-8 text-xs px-3">
                             <CheckCircle className="mr-2 h-4 w-4" />
                             Mark as Done

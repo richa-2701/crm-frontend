@@ -48,6 +48,9 @@ export function Navbar({ user, children }: NavbarProps) {
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-4">
+          <button className="h-8">
+            Proposal Management
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 px-3 group">

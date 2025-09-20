@@ -19,8 +19,6 @@ interface ModalProps {
     onSuccess: () => void;
 }
 
-// --- REMOVED: const activityTypes = ["Call", "Message", "WhatsApp", "Email", "Other"]; ---
-
 export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess }: ModalProps) {
     const { toast } = useToast();
     const [leads, setLeads] = useState<ApiLead[]>([]);
@@ -28,8 +26,6 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
     const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "" });
     const [otherActivityType, setOtherActivityType] = useState("");
     const [textBeforeListening, setTextBeforeListening] = useState("");
-
-    // --- CHANGE: State for dynamic activity types ---
     const [activityTypeOptions, setActivityTypeOptions] = useState<string[]>([]);
 
     const {
@@ -44,14 +40,13 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
             setFormData({ leadId: "", details: "", activityType: "" });
             setOtherActivityType("");
             resetTranscript();
-            // --- CHANGE: Fetch leads and master data in parallel ---
             Promise.all([
                 api.getAllLeads(),
                 api.getByCategory("activity_type")
             ]).then(([leadsData, activityTypesData]) => {
                 setLeads(leadsData);
                 const types = activityTypesData.map(item => item.value);
-                setActivityTypeOptions([...types, "Other"]); // Ensure 'Other' is always an option
+                setActivityTypeOptions([...types, "Other"]);
                 if (types.length > 0) {
                     setFormData(prev => ({ ...prev, activityType: types[0] }));
                 }
@@ -133,7 +128,6 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                         </div>
                         <div className="space-y-2">
                             <Label>Activity Type *</Label>
-                            {/* --- CHANGE: Use dynamic options --- */}
                             <Select value={formData.activityType} onValueChange={(value) => setFormData({ ...formData, activityType: value })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>{activityTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
