@@ -20,6 +20,7 @@ interface User {
   phone?: string
   department?: string
   createdAt?: string
+  company_name: string; 
 }
 
 interface EditUserModalProps {

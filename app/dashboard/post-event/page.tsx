@@ -1,4 +1,4 @@
-//frontend/app/dashboard/post-event/page.tsx
+// frontend/app/dashboard/post-event/page.tsx
 "use client"
 
 import type React from "react"
@@ -10,26 +10,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
-import { api } from "@/lib/api"
+import { api, ApiLead, ApiMeeting, ApiDemo } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { FileText, ClipboardList } from "lucide-react"
 
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
-}
-
-interface Event {
-  id: string
-  lead_id: string
-  type: "meeting" | "demo"
+// Combine types for simplicity
+interface Event extends ApiMeeting, ApiDemo {
+  type: "meeting" | "demo";
 }
 
 export default function PostEventPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [leads, setLeads] = useState<ApiLead[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -44,36 +37,43 @@ export default function PostEventPage() {
   })
 
   useEffect(() => {
-    const fetchLeads = async () => {
+    const fetchData = async () => {
       try {
-        const leadsData = await api.getAllLeads()
-        console.log(`[v0] Fetched leads for post ${eventType}:`, leadsData.length)
-        setLeads(leadsData)
+        const [leadsData, meetingsData, demosData] = await Promise.all([
+            api.getAllLeads(),
+            api.getScheduledMeetings(),
+            api.getScheduledDemos(),
+        ]);
+        
+        setLeads(leadsData);
 
-        const storedMeetings = JSON.parse(localStorage.getItem("meetings") || "[]")
-        const filteredEvents = storedMeetings.filter((m: any) => m.type === eventType)
-        console.log(`[v0] Loaded scheduled ${eventType}s:`, filteredEvents.length)
-        setEvents(filteredEvents)
+        const allEvents = [
+            ...meetingsData.map(m => ({ ...m, type: 'meeting' as const })),
+            ...demosData.map(d => ({ ...d, type: 'demo' as const })),
+        ];
+        setEvents(allEvents);
+
       } catch (error) {
-        console.error("[v0] Failed to fetch leads:", error)
+        console.error("[v0] Failed to fetch data:", error)
         toast({
           title: "Error",
-          description: "Failed to load leads. Please refresh the page.",
+          description: "Failed to load page data. Please refresh.",
           variant: "destructive",
         })
       }
     }
 
-    fetchLeads()
-  }, [toast, eventType])
+    fetchData()
+  }, [toast])
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({ ...prev, [field]: value, event_id: "" })) // Reset event_id when lead changes
 
     if (field === "lead_id") {
-      const event = events.find((e) => e.lead_id === value)
-      if (event) {
-        setFormData((prev) => ({ ...prev, event_id: event.id }))
+      const eventsForLead = events.filter(e => e.lead_id.toString() === value && e.type === eventType);
+      if (eventsForLead.length > 0) {
+        const latestEvent = eventsForLead.sort((a,b) => new Date(b.event_time || b.start_time).getTime() - new Date(a.event_time || a.start_time).getTime())[0];
+        setFormData((prev) => ({ ...prev, event_id: latestEvent.id.toString() }))
       }
     }
   }
@@ -83,37 +83,33 @@ export default function PostEventPage() {
     setIsLoading(true)
 
     try {
-      const eventData = {
-        [`${eventType}_id`]: Number.parseInt(formData.event_id),
-        notes: formData.remark,
-        updated_by: "richa",
-      }
+        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+        if (!formData.event_id) {
+            throw new Error(`No scheduled ${eventType} found for this lead.`);
+        }
 
-      console.log(`[v0] Completing ${eventType} with data:`, eventData)
+        if (eventType === "meeting") {
+            await api.completeMeeting({
+                meeting_id: Number.parseInt(formData.event_id),
+                notes: formData.remark,
+                updated_by: currentUser.username || "System",
+            });
+        } else {
+            await api.completeDemo({
+                demo_id: Number.parseInt(formData.event_id),
+                notes: formData.remark,
+                updated_by: currentUser.username || "System",
+            });
+        }
 
-      const endpoint = eventType === "meeting" ? "/web/meetings/complete" : "/web/demos/complete"
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(eventData),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to complete ${eventType}: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      console.log(`[v0] ${eventType} completed successfully:`, result)
-
-      setConfirmationMessage(`${eventType === "meeting" ? "Meeting" : "Demo"} is marked done`)
+      setConfirmationMessage(`${eventType === "meeting" ? "Meeting" : "Demo"} has been marked as done.`)
       setShowConfirmation(true)
     } catch (error) {
       console.error(`[v0] Failed to complete ${eventType}:`, error)
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
       toast({
         title: "Error",
-        description: `Failed to save ${eventType} notes. Please try again.`,
+        description: `Failed to save notes: ${errorMessage}`,
         variant: "destructive",
       })
     } finally {
@@ -126,12 +122,11 @@ export default function PostEventPage() {
     router.push("/dashboard")
   }
 
-  const leadsWithEvents = leads.filter((lead) => events.some((event) => event.lead_id === lead.id))
-
+  const leadsWithEvents = leads.filter((lead) => events.some((event) => event.lead_id.toString() === lead.id.toString() && event.type === eventType));
   const leadOptions = leadsWithEvents.map((lead) => ({
-    value: lead.id,
-    label: `${lead.company_name} (${lead.contact_name})`,
-  }))
+    value: lead.id.toString(),
+    label: `${lead.company_name} ${lead.contacts && lead.contacts[0] ? `(${lead.contacts[0].contact_name})` : ''}`,
+  }));
 
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -182,9 +177,9 @@ export default function PostEventPage() {
                 options={leadOptions}
                 value={formData.lead_id}
                 onValueChange={(value) => handleInputChange("lead_id", value)}
-                placeholder="Search and select a lead..."
+                placeholder="Search for a lead with a scheduled event..."
                 searchPlaceholder="Type to search leads..."
-                emptyMessage="No leads found."
+                emptyMessage={`No leads with scheduled ${eventType}s found.`}
                 className="h-8 sm:h-10 text-sm w-full"
               />
             </div>

@@ -1,4 +1,4 @@
-// frontend/app/dashboard/page.tsx
+//frontend/app/dashboard/page.tsx
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -54,18 +54,33 @@ interface UnifiedTask {
   details: string;
 }
 
-const chartConfig = {
+// --- CHANGE 1: UPDATED AND EXPANDED THE PRE-DEFINED COLORS ---
+const BASE_CHART_CONFIG = {
   new: { label: "New Leads", color: "hsl(220, 85%, 55%)" },
-  "In Progress": { label: "In Progress", color: "hsl(45, 95%, 50%)" },
   "Meeting Scheduled": { label: "Meeting Scheduled", color: "hsl(180, 85%, 45%)" },
   "Demo Scheduled": { label: "Demo Scheduled", color: "hsl(195, 90%, 50%)" },
   "Meeting Done": { label: "Meeting Done", color: "hsl(142, 85%, 45%)" },
-  "Demo Done": { label: "Demo Done", color: "hsl(262, 90%, 65%)" },
-  Qualified: { label: "Qualified", color: "hsl(25, 95%, 53%)" },
-  "Won/Deal Done": { label: "Won/Closed", color: "hsl(120, 85%, 40%)" }, // Updated chart config for new status
+  "Demo Done": { label: "Demo Done", color: "hsl(280, 80%, 60%)" },
+  "Won/Deal Done": { label: "Won/Closed", color: "hsl(120, 85%, 40%)" },
   Lost: { label: "Lost", color: "hsl(0, 90%, 65%)" },
   not_our_segment: { label: "Not Our Segment", color: "hsl(0, 0%, 60%)" },
+  "Sales Proposal Send": { label: "Sales Proposal Send", color: "hsl(330, 85%, 60%)" },
+  "4 Phase Meeting Done": { label: "4 Phase Meeting Done", color: "hsl(170, 75%, 40%)" },
+  "4 Phase Meeting Pending": { label: "4 Phase Meeting Pending", color: "hsl(170, 60%, 65%)" },
+  "Conversation Selling Discussion Done": { label: "Conv. Selling Done", color: "hsl(30, 90%, 55%)" },
+  "Conversation Selling Discussion Pending": { label: "Conv. Selling Pending", color: "hsl(30, 80%, 70%)" },
+  "Demo Pending": { label: "Demo Pending", color: "hsl(262, 70%, 75%)" },
 }
+
+// --- CHANGE 2: HELPER FUNCTION TO GENERATE A UNIQUE, CONSISTENT COLOR FROM ANY STRING ---
+const generateColorFromString = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash % 360);
+  return `hsl(${hue}, 70%, 55%)`;
+};
 
 function TaskTypeIcon({ type }: { type: string }) {
   const lowerType = type.toLowerCase();
@@ -126,6 +141,7 @@ export default function DashboardPage() {
   const [totalDemos, setTotalDemos] = useState(0);
   const [leadStatusData, setLeadStatusData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [dynamicChartConfig, setDynamicChartConfig] = useState(BASE_CHART_CONFIG);
 
   const [activityToComplete, setActivityToComplete] = useState<ApiUnifiedActivity | null>(null);
   const [isDoneModalOpen, setDoneModalOpen] = useState(false);
@@ -201,13 +217,30 @@ export default function DashboardPage() {
           return acc;
       }, {} as Record<string, number>);
 
-      const chartData = Object.entries(statusCounts).map(([status, count]) => ({
-          name: status, value: count,
-          fill: chartConfig[status as keyof typeof chartConfig]?.color || "hsl(var(--muted))",
-          label: chartConfig[status as keyof typeof chartConfig]?.label || status,
-      }));
+      // --- CHANGE 3: CREATE A COMPLETE CHART CONFIGURATION OBJECT DYNAMICALLY ---
+      const finalChartConfig = { ...BASE_CHART_CONFIG };
+      const chartData = Object.entries(statusCounts).map(([status, count]) => {
+        let configEntry = finalChartConfig[status as keyof typeof finalChartConfig];
 
-      setLeadStatusData(chartData)
+        // If a status is not in our pre-defined list, create a config for it on-the-fly
+        if (!configEntry) {
+          const newColor = generateColorFromString(status);
+          configEntry = { label: status, color: newColor };
+          // Add it to our final config object so the ChartContainer component is aware of it
+          finalChartConfig[status as keyof typeof finalChartConfig] = configEntry;
+        }
+
+        return {
+          name: status,
+          value: count,
+          fill: configEntry.color,
+          label: configEntry.label,
+        };
+      });
+
+      setLeadStatusData(chartData);
+      setDynamicChartConfig(finalChartConfig); // Set the complete config for the ChartContainer
+
     } catch (error) {
       console.error("[v0] Error loading dashboard data:", error)
     } finally {
@@ -418,7 +451,8 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="pb-2">
                 <div className="flex flex-col md:block">
-                    <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[150px] md:max-h-[250px]">
+                    {/* --- CHANGE 4: PASS THE COMPLETE, DYNAMIC CONFIG OBJECT TO THE CHART CONTAINER --- */}
+                    <ChartContainer config={dynamicChartConfig} className="mx-auto aspect-square max-h-[150px] md:max-h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                         <ChartTooltip

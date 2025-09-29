@@ -1,4 +1,4 @@
-//frontend/app/dashboard/schedule/page.tsx
+// frontend/app/dashboard/schedule/page.tsx
 "use client"
 
 import type React from "react"
@@ -15,31 +15,16 @@ import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle, Calendar, Monitor } from "lucide-react"
 import { Autocomplete } from "@/components/ui/autocomplete"
-import { api } from "@/lib/api"
+import { api, ApiLead, ApiUser, ApiMeeting, ApiDemo } from "@/lib/api" // Import types as well
 import { format } from 'date-fns';
 
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string
+// Use the imported types instead of redefining them
+interface Lead extends ApiLead {}
+interface User extends ApiUser {}
+interface Meeting extends Omit<ApiMeeting, 'type'> {
+    type: "meeting" | "demo";
 }
 
-interface User {
-  id: string
-  username: string;
-  usernumber: string;
-  email: string
-  role: string
-}
-
-interface Meeting {
-  id: string
-  lead_id: string
-  assigned_to: string
-  start_time: string
-  end_time: string
-  type: "meeting" | "demo"
-}
 
 export default function SchedulePage() {
   const router = useRouter()
@@ -57,12 +42,11 @@ export default function SchedulePage() {
 
   const [scheduleType, setScheduleType] = useState<"meeting" | "demo">("meeting")
   
-  // --- CHANGE: State for master data options ---
   const [meetingTypeOptions, setMeetingTypeOptions] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     lead_id: "",
-    assigned_to: "",
+    assigned_to: "", // This will store the username for display/check
     start_time: "",
     duration: "60",
     meeting_type: "Discussion",
@@ -97,7 +81,6 @@ export default function SchedulePage() {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        // --- CHANGE: Fetch all data including master data in parallel ---
         const [leadsData, usersData, meetingsData, demosData, meetingTypesData] = await Promise.all([
             api.getAllLeads(), 
             api.getUsers(),
@@ -111,7 +94,6 @@ export default function SchedulePage() {
         
         const meetingTypes = meetingTypesData.map(item => item.value);
         setMeetingTypeOptions(meetingTypes);
-        // Set a default if the current value isn't in the new list
         if (meetingTypes.length > 0 && !meetingTypes.includes(formData.meeting_type)) {
             setFormData(prev => ({ ...prev, meeting_type: meetingTypes[0] }));
         }
@@ -163,15 +145,15 @@ export default function SchedulePage() {
     const conflicts = meetings.filter((meeting) => {
       const isAssigned = meeting.assigned_to === assignedUser.username || meeting.assigned_to === assignedUser.usernumber;
       if (!isAssigned) return false;
-
-      const meetingStart = new Date(meeting.start_time);
-      const meetingEnd = new Date(meeting.end_time);
+      
+      const meetingStart = new Date(meeting.event_time || meeting.start_time);
+      const meetingEnd = new Date(meeting.event_end_time || meeting.end_time);
 
       return start < meetingEnd && end > meetingStart;
     });
 
     if (conflicts.length > 0) {
-      setBusySlots(conflicts.map(m => ({ start: m.start_time, end: m.end_time })));
+      setBusySlots(conflicts.map(m => ({ start: m.event_time || m.start_time, end: m.event_end_time || m.end_time })));
       return false;
     }
 
@@ -188,6 +170,13 @@ export default function SchedulePage() {
     setIsLoading(true);
     setAvailabilityError(null);
 
+    const assignedUser = users.find((u) => u.username === formData.assigned_to);
+    if (!assignedUser || !currentUser || !formData.lead_id) {
+      toast({ title: "Error", description: "Missing required form data.", variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
+
     try {
       if (!checkAvailability(formData.assigned_to, formData.start_time, calculatedEndTime)) {
         setAvailabilityError(`${formData.assigned_to} is unavailable at the selected time.`);
@@ -196,50 +185,38 @@ export default function SchedulePage() {
         return;
       }
       
-      const assignedUser = users.find((u) => u.username === formData.assigned_to);
-
-      if (!assignedUser || !currentUser) {
-          throw new Error("Assigned user or current user not found.");
-      }
-
-      const eventData = {
+      const payload = {
         lead_id: Number.parseInt(formData.lead_id),
         assigned_to_user_id: Number.parseInt(assignedUser.id),
-        start_time: formData.start_time,
-        end_time: calculatedEndTime,
-        created_by_user_id: Number.parseInt(currentUser.id),
-        meeting_type: formData.meeting_type,
+        start_time: new Date(formData.start_time).toISOString(),
+        end_time: new Date(calculatedEndTime).toISOString(),
+        created_by_user_id: currentUser.id,
       };
 
-      const endpoint = scheduleType === "meeting" ? "/web/meetings/schedule" : "/web/demos/schedule";
-      
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`;
-      console.log("Attempting to fetch:", apiUrl);
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-        body: JSON.stringify(eventData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to schedule ${scheduleType}. Status: ${response.status}`);
+      // --- START OF FIX: Use the unified api object for scheduling ---
+      if (scheduleType === "meeting") {
+        await api.scheduleMeeting({ ...payload, meeting_type: formData.meeting_type });
+      } else {
+        await api.scheduleDemo(payload);
       }
+      // --- END OF FIX ---
       
-      const result = await response.json();
-      setConfirmationMessage(`${scheduleType === "meeting" ? "Meeting" : "Demo"} has been scheduled successfully.`);
+      const selectedLead = leads.find(l => l.id === formData.lead_id);
+      setConfirmationMessage(`${scheduleType === "meeting" ? "Meeting" : "Demo"} has been scheduled successfully for ${selectedLead?.company_name}.`);
       setShowConfirmation(true);
 
     } catch (error) {
       console.error(`Failed to schedule ${scheduleType}:`, error);
+      const errorMessage = error instanceof Error ? error.message : `An unknown error occurred.`;
       
-      setAvailabilityError(error.message);
-      setShowCalendar(true); 
+      setAvailabilityError(errorMessage);
+      if (errorMessage.includes("unavailable") || errorMessage.includes("booked")) {
+          setShowCalendar(true); 
+      }
       
       toast({
-        title: "Scheduling Conflict",
-        description: error.message,
+        title: "Scheduling Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -249,12 +226,12 @@ export default function SchedulePage() {
 
   const handleConfirmation = () => {
     setShowConfirmation(false)
-    window.location.assign("/dashboard");
+    router.push("/dashboard/events");
   }
   
   const leadOptions = leads.map((lead) => ({
     value: lead.id,
-    label: `${lead.company_name} ${lead.contact_name ? `(${lead.contact_name})` : ''}`,
+    label: `${lead.company_name} ${lead.contacts && lead.contacts.length > 0 ? `(${lead.contacts[0].contact_name})` : ''}`,
   }))
 
   return (

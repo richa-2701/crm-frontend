@@ -1,3 +1,4 @@
+// frontend/app/events/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -42,7 +43,6 @@ interface EnhancedEvent {
   id: string;
   numericId: number;
   type: 'meeting' | 'demo';
-  // --- CHANGE: ADDED meeting_type TO INTERFACE ---
   meeting_type?: string;
   lead_id: string;
   company_name: string;
@@ -81,9 +81,7 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
 
     useEffect(() => {
         if (event?.start_time) {
-            // Format for datetime-local input. This part is correct.
             const date = new Date(event.start_time);
-            // Adjust for local timezone to correctly pre-fill the input
             date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
             setStartTime(date.toISOString().slice(0, 16));
         }
@@ -98,20 +96,23 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
         }
         setIsLoading(true);
         
-        // --- THIS IS THE FIX ---
-        // Create Date objects from the local time string.
+        // --- START: THIS IS THE FIX ---
+        // 1. Create a Date object from the local time string from the input.
         const start = new Date(startTime);
+        
+        // 2. Calculate the end time based on the duration.
         const end = new Date(start.getTime() + parseInt(duration, 10) * 60000);
 
         try {
-            // Instead of using .toISOString() which converts to UTC,
-            // we now use the format function to create a timezone-naive string
-            // that matches exactly what the user selected.
+            // 3. Convert the local Date objects to full ISO 8601 strings in UTC.
+            //    The 'Z' at the end is crucial. It tells the backend "this is UTC time".
+            //    Example: "2025-10-08T09:30:00.000Z"
             await api.rescheduleEvent(event.type, event.numericId, {
-                start_time: format(start, "yyyy-MM-dd'T'HH:mm"),
-                end_time: format(end, "yyyy-MM-dd'T'HH:mm"),
+                start_time: start.toISOString(),
+                end_time: end.toISOString(),
                 updated_by: currentUser.username,
             });
+            // --- END: THIS IS THE FIX ---
 
             toast({ title: "Success", description: "Event has been rescheduled." });
             onSuccess();
@@ -147,6 +148,7 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
     );
 }
 
+// ... (The rest of your file remains exactly the same)
 
 function ReassignModal({ isOpen, onClose, event, onSuccess, currentUser, users }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onSuccess: () => void, currentUser: ApiUser | null, users: ApiUser[] }) {
   const { toast } = useToast();
@@ -295,7 +297,6 @@ function EditNotesModal({ isOpen, onClose, event, onSuccess, currentUser }: { is
   );
 }
 
-// --- MAIN PAGE COMPONENT ---
 export default function EventsPage() {
   const [allEvents, setAllEvents] = useState<EnhancedEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -337,7 +338,6 @@ export default function EventsPage() {
             id: `meeting-${meeting.id}`,
             numericId: meeting.id,
             type: 'meeting' as const,
-            // --- CHANGE: PASSING meeting_type TO ENHANCED EVENT ---
             meeting_type: meeting.meeting_type,
             lead_id: String(meeting.lead_id),
             company_name: leadsMap.get(String(meeting.lead_id))?.company_name || 'Unknown Lead',
@@ -424,36 +424,7 @@ export default function EventsPage() {
     setSelectedEvent(event);
     setIsDetailModalOpen(true);
   };
-
-  const getStatusBadgeVariant = (status: EnhancedEvent['status']) => {
-    switch (status) {
-      case 'Completed': return 'default';
-      case 'Pending': return 'secondary';
-      case 'Overdue': return 'destructive';
-      case 'Canceled': return 'outline';
-      case 'Rescheduled': return 'outline';
-      default: return 'outline';
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">Loading events...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    )
-  }
-
+  
   const renderActionMenu = (event: EnhancedEvent) => {
     return (
       <DropdownMenu>
@@ -477,6 +448,24 @@ export default function EventsPage() {
       </DropdownMenu>
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-3 text-muted-foreground">Loading events...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -543,7 +532,6 @@ export default function EventsPage() {
                               <div className="flex items-center gap-3">
                                 {event.type === 'meeting' ? <Users className="h-5 w-5 text-primary" /> : <Calendar className="h-5 w-5 text-primary" />}
                                 <div>
-                                  {/* --- CHANGE: DISPLAYING meeting_type IN CARD TITLE --- */}
                                   <CardTitle className="text-lg capitalize leading-tight">
                                       {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
                                   </CardTitle>
@@ -610,7 +598,6 @@ export default function EventsPage() {
                         return (
                           <TableRow key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="cursor-pointer hover:bg-muted/50">
                             <TableCell>
-                              {/* --- CHANGE: DISPLAYING meeting_type IN LIST VIEW --- */}
                               <div className="font-medium capitalize">{event.type}</div>
                               <div className="text-sm text-muted-foreground">
                                   {event.type === 'meeting' ? `${event.meeting_type || ''} with ` : ''}{event.company_name}
@@ -687,7 +674,6 @@ export default function EventsPage() {
         event={selectedEvent}
       />
 
-      {/* --- MODIFIED: Render the actual action modals --- */}
       <RescheduleModal
         isOpen={modalType === 'reschedule'}
         onClose={() => setModalType(null)}
@@ -721,7 +707,6 @@ export default function EventsPage() {
   )
 }
 
-// --- MODIFIED: EventDetailModal now shows cancellation reason ---
 interface EventDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -747,7 +732,6 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
               <Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge>
             </div>
           </div>
-          {/* --- CHANGE: ADDED MEETING TYPE TO DETAILS MODAL --- */}
           {event.type === 'meeting' && event.meeting_type && (
             <div className="grid grid-cols-3 items-center gap-4">
               <Label htmlFor="meeting-type" className="text-right font-semibold flex items-center justify-end gap-2">
@@ -783,7 +767,6 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             <p id="event-time" className="col-span-2">{event.start_time ? format(new Date(event.start_time), 'PPP p') : 'Not Set'}</p>
           </div>
 
-          {/* --- NEW: Conditionally render notes or cancellation reason --- */}
           {event.status === 'Completed' && event.remark && (
             <div className="grid grid-cols-3 items-start gap-4 pt-4 border-t">
               <Label htmlFor="notes" className="text-right font-semibold flex items-start justify-end gap-2 pt-1">
@@ -806,3 +789,4 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
     </Dialog>
   )
 }
+

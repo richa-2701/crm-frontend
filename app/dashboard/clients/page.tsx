@@ -28,7 +28,8 @@ import {
   XIcon,
   Filter,
   Columns,
-  Edit // Import Edit icon
+  Edit,
+  Upload as ExportIcon // Import the Export icon
 } from "lucide-react"
 import Link from "next/link"
 import { api, type ApiClient, type ClientContact } from "@/lib/api"
@@ -52,7 +53,9 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import React from "react"
 import { format } from "date-fns"
-import { EditClientModal } from "@/components/clients/edit-client-modal" // Import new modal
+import { EditClientModal } from "@/components/clients/edit-client-modal"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Client {
   id: string;
@@ -149,16 +152,128 @@ interface ClientsPageFilters {
     converted_date_end: string;
 }
 
+// New Export Options Modal for Clients
+interface ExportOptionsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (filters: ClientsPageFilters, columnKeys: string[]) => void;
+  allColumns: ColumnConfig[];
+  currentTableFilters: ClientsPageFilters;
+  isExporting: boolean;
+}
+
+function ExportOptionsModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  allColumns,
+  currentTableFilters,
+  isExporting,
+}: ExportOptionsModalProps) {
+  const [exportFilters, setExportFilters] = useState<ClientsPageFilters>(currentTableFilters);
+  const [exportSelectedColumns, setExportSelectedColumns] = useState<Record<string, boolean>>(() =>
+    allColumns.filter(col => col.key !== 'actions').reduce((acc, col) => ({ ...acc, [col.key]: true }), {})
+  );
+
+  useEffect(() => {
+      if (isOpen) {
+          setExportFilters(currentTableFilters);
+          setExportSelectedColumns(allColumns.filter(col => col.key !== 'actions').reduce((acc, col) => ({ ...acc, [col.key]: true }), {}));
+      }
+  }, [isOpen, allColumns, currentTableFilters]);
+
+  const handleFilterChange = (key: keyof ClientsPageFilters, value: string) => {
+    setExportFilters(prev => ({
+        ...prev,
+        [key]: value
+    }));
+  };
+
+  const handleColumnToggle = (columnKey: string, checked: boolean) => {
+    setExportSelectedColumns(prev => ({ ...prev, [columnKey]: checked }));
+  };
+
+  const handleSubmit = () => {
+    const selectedKeys = Object.entries(exportSelectedColumns)
+      .filter(([, checked]) => checked)
+      .map(([key]) => key);
+    onConfirm(exportFilters, selectedKeys);
+  };
+
+  const hasSelectedColumns = Object.values(exportSelectedColumns).some(Boolean);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Export Clients to Excel</DialogTitle>
+          <DialogDescription>Select columns and apply filters for the export.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label>Select Columns to Export</Label>
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-2">
+              {allColumns.filter(col => col.key !== 'actions').map((column) => (
+                <div key={column.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`export-col-${column.id}`}
+                    checked={!!exportSelectedColumns[column.key]}
+                    onCheckedChange={(checked) => handleColumnToggle(column.key, !!checked)}
+                  />
+                  <label htmlFor={`export-col-${column.id}`} className="text-sm font-medium">{column.label}</label>
+                </div>
+              ))}
+            </div>
+            {!hasSelectedColumns && <p className="text-destructive text-sm mt-1">Please select at least one column.</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label>Apply Export Filters</Label>
+            <div className="space-y-2">
+              <Label htmlFor="export-company-name">Company Name</Label>
+              <Input id="export-company-name" placeholder="Filter by company name..." value={exportFilters.company_name} onChange={(e) => handleFilterChange("company_name", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="export-city">City</Label>
+              <Input id="export-city" placeholder="Filter by city..." value={exportFilters.city} onChange={(e) => handleFilterChange("city", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="export-segment">Segment</Label>
+              <Input id="export-segment" placeholder="Filter by segment..." value={exportFilters.segment} onChange={(e) => handleFilterChange("segment", e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                    <Label htmlFor="export-converted-start">Converted After</Label>
+                    <Input id="export-converted-start" type="date" value={exportFilters.converted_date_start} onChange={(e) => handleFilterChange("converted_date_start", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="export-converted-end">Converted Before</Label>
+                    <Input id="export-converted-end" type="date" value={exportFilters.converted_date_end} onChange={(e) => handleFilterChange("converted_date_end", e.target.value)} />
+                </div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isExporting || !hasSelectedColumns}>
+            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExportIcon className="mr-2 h-4 w-4" />}
+            Confirm Export
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TableRowComponent({
   client,
   columns,
   handleViewDetails,
-  handleEditClient, // New prop
+  handleEditClient,
 }: {
   client: Client
   columns: ColumnConfig[]
   handleViewDetails: (client: Client) => void
-  handleEditClient: (client: Client) => void // New prop
+  handleEditClient: (client: Client) => void
 }) {
 
   const renderCell = (column: ColumnConfig) => {
@@ -202,7 +317,7 @@ function TableRowComponent({
                   <Eye className="mr-2 h-4 w-4" />
                   View Full Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleEditClient(client)}> {/* New Edit option */}
+                <DropdownMenuItem onClick={() => handleEditClient(client)}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Client
                 </DropdownMenuItem>
@@ -234,8 +349,10 @@ export default function ClientsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null); // New state for selected client
-  const [showEditModal, setShowEditModal] = useState(false); // New state for edit modal
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportOptionsModal, setShowExportOptionsModal] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState<ColumnConfig[]>([
     { id: "company_name", label: "Company Name", key: "company_name" },
@@ -275,7 +392,7 @@ export default function ClientsPage() {
         const parsedUser = JSON.parse(userData)
         setUser(parsedUser)
 
-        const clientsData = await api.getAllClients(); // Corrected: Directly call getAllClients on api object
+        const clientsData = await api.getAllClients();
         const transformedClients: Client[] = clientsData.map((client: ApiClient) => ({
           id: client.id.toString(),
           company_name: client.company_name,
@@ -329,14 +446,13 @@ export default function ClientsPage() {
     if (filters.city) { clientsToProcess = clientsToProcess.filter(client => client.city?.toLowerCase().includes(filters.city.toLowerCase())); }
     if (filters.segment) { clientsToProcess = clientsToProcess.filter(client => client.segment?.toLowerCase().includes(filters.segment.toLowerCase())); }
 
-    // Date filters for converted_date
     if (filters.converted_date_start) {
       const startDate = new Date(filters.converted_date_start);
       clientsToProcess = clientsToProcess.filter(client => new Date(client.converted_date) >= startDate);
     }
     if (filters.converted_date_end) {
       const endDate = new Date(filters.converted_date_end);
-      endDate.setHours(23, 59, 59, 999); // End of day
+      endDate.setHours(23, 59, 59, 999);
       clientsToProcess = clientsToProcess.filter(client => new Date(client.converted_date) <= endDate);
     }
 
@@ -349,20 +465,20 @@ export default function ClientsPage() {
           (client.website && client.website.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (client.linkedIn && client.linkedIn.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (client.city && client.city.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (client.state && client.state.toLowerCase().includes(lowerCaseSearchTerm)) || // Search state
-          (client.country && client.country.toLowerCase().includes(lowerCaseSearchTerm)) || // Search country
-          (client.pincode && client.pincode.toLowerCase().includes(lowerCaseSearchTerm)) || // Search pincode
+          (client.state && client.state.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.country && client.country.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.pincode && client.pincode.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (client.segment && client.segment.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (client.verticles && client.verticles.toLowerCase().includes(lowerCaseSearchTerm)) || // Search verticals
-          (client.team_size && client.team_size.toLowerCase().includes(lowerCaseSearchTerm)) || // Search team size
-          (client.turnover && client.turnover.toLowerCase().includes(lowerCaseSearchTerm)) || // Search turnover
-          (client.current_system && client.current_system.toLowerCase().includes(lowerCaseSearchTerm)) || // Search current system
-          (client.machine_specification && client.machine_specification.toLowerCase().includes(lowerCaseSearchTerm)) || // Search machine spec
-          (client.challenges && client.challenges.toLowerCase().includes(lowerCaseSearchTerm)) || // Search challenges
-          (client.version && client.version.toLowerCase().includes(lowerCaseSearchTerm)) || // Search version
-          (client.database_type && client.database_type.toLowerCase().includes(lowerCaseSearchTerm)) || // Search database type
-          (client.amc && client.amc.toLowerCase().includes(lowerCaseSearchTerm)) || // Search AMC
-          (client.gst && client.gst.toLowerCase().includes(lowerCaseSearchTerm)) || // Search GST
+          (client.verticles && client.verticles.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.team_size && client.team_size.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.turnover && client.turnover.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.current_system && client.current_system.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.machine_specification && client.machine_specification.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.challenges && client.challenges.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.version && client.version.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.database_type && client.database_type.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.amc && client.amc.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (client.gst && client.gst.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (client.contacts && client.contacts.some(c => c && c.contact_name && c.contact_name.toLowerCase().includes(lowerCaseSearchTerm))) ||
           (client.contacts && client.contacts.some(c => c && c.phone && c.phone.toLowerCase().includes(lowerCaseSearchTerm))) ||
           (client.contacts && client.contacts.some(c => c && c.email && c.email.toLowerCase().includes(lowerCaseSearchTerm)))
@@ -374,7 +490,7 @@ export default function ClientsPage() {
         const filterValue = value.toLowerCase();
         clientsToProcess = clientsToProcess.filter(client => {
           if (key.startsWith('contact_')) {
-            const contactKey = key.replace('contact_', ''); // e.g., 'name', 'phone'
+            const contactKey = key.replace('contact_', '');
             return client.contacts?.some((c: any) => c[contactKey]?.toString().toLowerCase().includes(filterValue));
           }
           const clientValue = (client as any)[key];
@@ -392,20 +508,109 @@ export default function ClientsPage() {
       return filteredClients.slice(startIndex, endIndex);
   }, [filteredClients, currentPage, rowsPerPage]);
 
+  const escapeCsvValue = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    let stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const handleConfirmExport = async (exportFilters: ClientsPageFilters, selectedColumnKeys: string[]) => {
+    if (selectedColumnKeys.length === 0) {
+      toast({ title: "No columns selected", description: "Please select at least one column to export.", variant: "destructive" });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      let clientsToExport = allClients;
+
+      if (exportFilters.company_name) { clientsToExport = clientsToExport.filter(client => client.company_name?.toLowerCase().includes(exportFilters.company_name.toLowerCase())); }
+      if (exportFilters.city) { clientsToExport = clientsToExport.filter(client => client.city?.toLowerCase().includes(exportFilters.city.toLowerCase())); }
+      if (exportFilters.segment) { clientsToExport = clientsToExport.filter(client => client.segment?.toLowerCase().includes(exportFilters.segment.toLowerCase())); }
+      if (exportFilters.converted_date_start) {
+          const startDate = new Date(exportFilters.converted_date_start);
+          clientsToExport = clientsToExport.filter(client => new Date(client.converted_date) >= startDate);
+      }
+      if (exportFilters.converted_date_end) {
+          const endDate = new Date(exportFilters.converted_date_end);
+          endDate.setHours(23, 59, 59, 999);
+          clientsToExport = clientsToExport.filter(client => new Date(client.converted_date) <= endDate);
+      }
+
+      if (clientsToExport.length === 0) {
+        toast({ title: "No clients to export", description: "The applied filters result in zero clients." });
+        return;
+      }
+
+      const headers = selectedColumnKeys.map(key => {
+        const column = ALL_CLIENT_COLUMNS.find(c => c.key === key);
+        return escapeCsvValue(column ? column.label : capitalize(key.replace(/_/g, ' ')));
+      }).join(',');
+
+      const rows = clientsToExport.map(client => {
+        return selectedColumnKeys.map(key => {
+          const primaryContact = client.contacts && client.contacts.length > 0 ? client.contacts[0] : null;
+          let value: string | number | null | undefined;
+
+          switch (key) {
+            case 'contact_name': value = primaryContact?.contact_name; break;
+            case 'contact_phone':
+              const contactPhone = primaryContact?.phone;
+              value = contactPhone ? `="${contactPhone}"` : "";
+              break;
+            case 'company_phone_2':
+              const companyPhone = client.company_phone_2;
+              value = companyPhone ? `="${companyPhone}"` : "";
+              break;
+            case 'contact_email': value = primaryContact?.email; break;
+            case 'contact_designation': value = primaryContact?.designation; break;
+            case 'contact_linkedin': value = primaryContact?.linkedIn; break;
+            case 'contact_pan': value = primaryContact?.pan; break;
+            default:
+              value = (client as any)[key as keyof Client];
+              break;
+          }
+          return escapeCsvValue(value);
+        }).join(',');
+      }).join('\n');
+
+      const csvContent = `${headers}\n${rows}`;
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "clients_export.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Export Started", description: `${clientsToExport.length} clients are being downloaded.` });
+
+    } catch (error) {
+      console.error("Failed to export clients:", error);
+      toast({ title: "Export Failed", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+      setShowExportOptionsModal(false);
+    }
+  };
 
   const handleViewDetails = (client: Client) => { router.push(`/dashboard/clients/${client.id}`) }
 
-  const handleEditClient = (client: Client) => { // New handler
+  const handleEditClient = (client: Client) => {
     setSelectedClient(client);
     setShowEditModal(true);
   };
 
-  const handleEditClientComplete = (clientId: string, updatedClient: ApiClient) => { // New handler
+  const handleEditClientComplete = (clientId: string, updatedClient: ApiClient) => {
     setAllClients(prevClients =>
       prevClients.map(client => (client.id === clientId ? { ...client, ...updatedClient, id: updatedClient.id.toString() } : client))
     );
     setShowEditModal(false);
-    setSelectedClient(null); // Clear selected client after edit
+    setSelectedClient(null);
   };
 
   const handleFilterChange = (key: keyof ClientsPageFilters, value: string) => {
@@ -450,7 +655,10 @@ export default function ClientsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
             <p className="text-muted-foreground">Manage and track your valuable clients</p>
           </div>
-          {/* No create client button as clients are converted from leads */}
+          <Button onClick={() => setShowExportOptionsModal(true)} variant="outline" disabled={isExporting}>
+            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExportIcon className="mr-2 h-4 w-4" />}
+            Export to Excel
+          </Button>
         </div>
       </div>
 
@@ -565,7 +773,7 @@ export default function ClientsPage() {
                       client={client}
                       columns={visibleColumns}
                       handleViewDetails={handleViewDetails}
-                      handleEditClient={handleEditClient} // Pass the handler
+                      handleEditClient={handleEditClient}
                     />
                   ))}
                 </TableBody>
@@ -621,6 +829,15 @@ export default function ClientsPage() {
           onSave={handleEditClientComplete}
         />
       )}
+
+      <ExportOptionsModal
+          isOpen={showExportOptionsModal}
+          onClose={() => setShowExportOptionsModal(false)}
+          onConfirm={handleConfirmExport}
+          allColumns={ALL_CLIENT_COLUMNS}
+          currentTableFilters={filters}
+          isExporting={isExporting}
+      />
     </div>
   );
-}
+} 

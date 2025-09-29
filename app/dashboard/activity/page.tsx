@@ -279,7 +279,7 @@ export default function ActivityPage() {
         fetchDataForUser(loggedInUser.username);
     }, [router]);
 
-
+    // --- START OF CORRECTED FILTER LOGIC ---
     const filteredActivities = useMemo(() => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -287,13 +287,29 @@ export default function ActivityPage() {
         return allActivities
             .filter(act => {
                 const scheduledDate = act.scheduled_for ? new Date(act.scheduled_for) : null;
+                const statusLower = act.status ? act.status.toLowerCase() : ""; // Safe lowercase status
+
                 switch (activeFilter) {
-                    case 'today': return scheduledDate && scheduledDate.toDateString() === today.toDateString() && act.status === 'pending';
-                    case 'scheduled': return act.type === 'reminder' && act.status === 'pending';
-                    case 'completed': return act.status !== 'pending';
-                    case 'canceled': return act.status === 'canceled';
-                    case 'overdue': return scheduledDate && scheduledDate < now && act.status === 'pending';
-                    default: return true;
+                    case 'today':
+                        return scheduledDate && scheduledDate.toDateString() === today.toDateString() && statusLower === 'pending';
+                    
+                    case 'scheduled':
+                        return act.type === 'reminder' && statusLower === 'pending';
+                    
+                    case 'completed':
+                        // A completed activity is anything that is NOT pending and NOT canceled.
+                        // This correctly includes reminders with status 'completed' and all logged activities
+                        // which represent past actions, while excluding explicitly canceled ones.
+                        return statusLower !== 'pending' && statusLower !== 'canceled';
+                    
+                    case 'canceled':
+                        return statusLower === 'canceled';
+                    
+                    case 'overdue':
+                        return scheduledDate && scheduledDate < now && statusLower === 'pending';
+                    
+                    default: // 'all'
+                        return true;
                 }
             })
             .filter(act => {
@@ -305,6 +321,7 @@ export default function ActivityPage() {
                 );
             });
     }, [allActivities, activeFilter, searchTerm]);
+    // --- END OF CORRECTED FILTER LOGIC ---
 
     const pageCount = Math.ceil(filteredActivities.length / pagination.pageSize);
     const paginatedActivities = filteredActivities.slice(
@@ -526,4 +543,4 @@ export default function ActivityPage() {
             )}
         </>
     );
-}
+} 

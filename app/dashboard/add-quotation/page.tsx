@@ -88,8 +88,8 @@ export default function AddQuotationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Add Quotation</h1>
-        <p className="text-muted-foreground">Upload a quotation file and log it as an activity for a lead.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Add Proposal</h1>
+        <p className="text-muted-foreground">Upload a Proposal file and log it as an activity for a lead.</p>
       </div>
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
@@ -124,7 +124,7 @@ export default function AddQuotationPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="file-input">Quotation File *</Label>
+              <Label htmlFor="file-input">Proposal File *</Label>
               <Input id="file-input" type="file" onChange={handleFileChange} />
             </div>
             <Button type="submit" disabled={isLoading} className="w-full">

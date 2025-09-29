@@ -1,4 +1,4 @@
-
+// frontend/app/google-calendar/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { api, type ApiUser } from "@/lib/api"
-import { Loader2, Copy, Info, ExternalLink } from "lucide-react" // Added ExternalLink icon
+import { Loader2, Copy, Info, ExternalLink } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
@@ -51,7 +51,7 @@ export default function GoogleCalendarPage() {
         setIsLoading(true);
         try {
             const [eventData, usersData] = await Promise.all([
-                api.getAllCalendarEvents(), // This fetches all CRM events for display
+                api.getAllCalendarEvents(),
                 api.getUsers()
             ]);
 
@@ -60,11 +60,11 @@ export default function GoogleCalendarPage() {
             const formattedEvents = eventData.map(event => {
                 const assignee = event.extendedProps.assignee;
                 if (assignee) {
-                    const color = stringToColor(assignee);
+                    const eventColor = stringToColor(assignee);
                     if (!legend[assignee]) {
-                        legend[assignee] = color;
+                        legend[assignee] = eventColor;
                     }
-                    return { ...event, backgroundColor: color, borderColor: color };
+                    return { ...event, backgroundColor: eventColor, borderColor: eventColor };
                 }
                 return event;
             });
@@ -88,7 +88,6 @@ export default function GoogleCalendarPage() {
             const user = JSON.parse(userJson);
             setCurrentUser(user);
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-            // Ensure this URL is correctly pointing to your backend's ICS feed
             setSubscriptionUrl(`${apiUrl}/web/calendar/subscribe/${user.id}`);
         }
         fetchCalendarData();
@@ -106,28 +105,37 @@ export default function GoogleCalendarPage() {
         toast({ title: "Success", description: "Subscription URL copied to clipboard!" });
     };
 
-    // New function to open Google Calendar "Add by URL"
     const handleAddToGoogleCalendar = () => {
         const googleCalendarUrl = `https://calendar.google.com/calendar/r/settings/addbyurl?url=${encodeURIComponent(subscriptionUrl)}`;
         window.open(googleCalendarUrl, '_blank');
     };
     
+    // --- THIS IS THE CORRECTED FUNCTION ---
     const renderEventContent = (eventInfo: any) => {
         const { event } = eventInfo;
         const { extendedProps } = event;
+        const isDone = extendedProps.status === 'Done';
 
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <div className="fc-event-main-frame w-full overflow-hidden whitespace-nowrap">
-                        <div className="fc-event-time">{eventInfo.timeText}</div>
-                        <div className="fc-event-title-container">
-                            <div className="fc-event-title fc-sticky">{event.title}</div>
+                    {/* Add conditional class for opacity if the event is completed */}
+                    <div className={`fc-event-main-frame w-full overflow-hidden whitespace-nowrap flex items-center gap-1.5 p-0.5 ${isDone ? 'opacity-60' : ''}`}>
+                        <span
+                            className="h-2 w-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: event.backgroundColor }}
+                        />
+                        <div className="flex-1 overflow-hidden">
+                            <span className="fc-event-time">{eventInfo.timeText}</span>
+                            {/* Add conditional class for line-through if the event is completed */}
+                            <span className={`fc-event-title fc-sticky ml-1 ${isDone ? 'line-through' : ''}`}>{event.title}</span>
                         </div>
                     </div>
                 </TooltipTrigger>
                 <TooltipContent>
                     <p className="font-bold">{event.title}</p>
+                    {/* Display the status in the tooltip */}
+                    <p><strong>Status:</strong> {extendedProps.status}</p>
                     <p><strong>Assignee:</strong> {extendedProps.assignee}</p>
                     {event.start && event.end &&
                         <p>
@@ -182,7 +190,7 @@ export default function GoogleCalendarPage() {
                                 </div>
                             </div>
                             
-                            {/* Right Side: Sync instructions, now in a details accordion */}
+                            {/* Right Side: Sync instructions */}
                             <details className="text-sm border rounded-lg p-3 md:max-w-md">
                                 <summary className="cursor-pointer font-medium text-primary flex items-center gap-2">
                                     <Info className="h-4 w-4" />

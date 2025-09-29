@@ -1,3 +1,4 @@
+// frontend/components/auth/register-form.tsx
 "use client"
 
 import type React from "react"
@@ -10,6 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, CheckCircle } from "lucide-react"
+// --- START OF FIX: Import the unified 'api' object ---
+import { api } from "@/lib/api"
+// --- END OF FIX ---
 
 export function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -18,6 +22,7 @@ export function RegisterForm() {
     password: "",
     confirmPassword: "",
     role: "",
+    company_name: "",
     usernumber: "",
     department: "",
   })
@@ -32,7 +37,7 @@ export function RegisterForm() {
   }
 
   const validateForm = () => {
-    if (!formData.username || !formData.email || !formData.password || !formData.role) {
+    if (!formData.username || !formData.email || !formData.password || !formData.role || !formData.company_name) {
       setError("Please fill in all required fields")
       return false
     }
@@ -67,35 +72,15 @@ export function RegisterForm() {
     }
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "https://4adc3d24dcb8.ngrok-free.app"}/register`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            username: formData.username,
-            password: formData.password,
-            usernumber: formData.usernumber,
-            email: formData.email,
-            department: formData.department,
-            role: formData.role,
-          }),
-        },
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Registration failed")
-      }
-
-      const userData = await response.json()
+      const { confirmPassword, ...payload } = formData;
+      // --- START OF FIX: Use the 'api' object for the register call ---
+      const userData = await api.register(payload);
+      // --- END OF FIX ---
+      
       console.log("[v0] Registration successful:", userData)
 
       setSuccess(true)
 
-      // Redirect to login after successful registration
       setTimeout(() => {
         router.push("/login")
       }, 2000)
@@ -157,6 +142,19 @@ export function RegisterForm() {
               />
             </div>
           </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="company_name">Company *</Label>
+            <Select value={formData.company_name} onValueChange={(value) => handleInputChange("company_name", value)} required>
+                <SelectTrigger>
+                    <SelectValue placeholder="Select your company" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="Indas Analytics">Indas Analytics</SelectItem>
+                    <SelectItem value="Amar Ujala">Amar Ujala</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -189,7 +187,7 @@ export function RegisterForm() {
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Administrator">Administrator</SelectItem>
+                  <SelectItem value="Admin">Admin</SelectItem>
                   <SelectItem value="Company User">Company User</SelectItem>
                 </SelectContent>
               </Select>

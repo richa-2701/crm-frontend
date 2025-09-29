@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { authApi } from "@/lib/api" // Import the API library
+import { authApi } from "@/lib/api"
 
 interface User {
   id: string
@@ -20,21 +20,23 @@ interface User {
   phone?: string
   department?: string
   createdAt?: string
+  company_name: string;
 }
 
 interface CreateUserModalProps {
   isOpen: boolean
   onClose: () => void
-  onUserCreated: (user: User) => void
+  onUserCreated: () => void; // Changed to not expect a user object
+  currentUser: User | null; // Accept the current user as a prop
 }
 
-export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserModalProps) {
+export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }: CreateUserModalProps) {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: "",
+    role: "user", // Default to 'user'
     phone: "",
     department: "",
   })
@@ -47,9 +49,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
   }
 
   const validateForm = () => {
-    // A phone number is required by the backend's UserCreate schema
     if (!formData.name || !formData.email || !formData.password || !formData.role || !formData.phone) {
-      setError("Please fill in all required fields, including Phone Number")
+      setError("Please fill in all required fields: Name, Email, Password, Role, and Phone.")
       return false
     }
 
@@ -74,6 +75,13 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // --- START: ADDED A CHECK FOR CURRENT USER ---
+    if (!currentUser) {
+        setError("Cannot create user: Admin context is lost. Please refresh the page.");
+        return;
+    }
+    // --- END: ADDED A CHECK FOR CURRENT USER ---
 
     if (!validateForm()) {
       return
@@ -83,44 +91,23 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
     setError("")
 
     try {
-      // Make the actual API call to the register endpoint
-      const apiResponse = await authApi.register({
+      // --- START: CORRECTED API CALL ---
+      await authApi.register({
         username: formData.name,
+        company_name: currentUser.company_name, // Pass the admin's company name
         password: formData.password,
         usernumber: formData.phone,
         email: formData.email,
         department: formData.department,
+        role: formData.role,
       })
+      // --- END: CORRECTED API CALL ---
 
-      // Transform the API response to the local User type
-      const newUser: User = {
-        id: apiResponse.id.toString(),
-        name: apiResponse.username,
-        email: apiResponse.email || "",
-        role: (apiResponse.role as "admin" | "user") || "user",
-        phone: apiResponse.usernumber,
-        department: apiResponse.department,
-        createdAt: apiResponse.created_at,
-      }
-
-      onUserCreated(newUser)
-
-      // Reset form
-      setFormData({
-        name: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-        role: "",
-        phone: "",
-        department: "",
-      })
-
-      onClose()
+      onUserCreated() // Signal success to the parent page
+      handleClose() // Close and reset the modal
     } catch (err: any) {
-      // Display the actual error from the API if possible
-      const errorMessage = err.response?.data?.detail || "Failed to create user. Please try again."
-      setError(errorMessage)
+      const errorMessage = err.message || "Failed to create user. Please try again."
+      setError(errorMessage.includes("already exists") ? "A user with this username already exists in your company." : errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -133,7 +120,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
       email: "",
       password: "",
       confirmPassword: "",
-      role: "",
+      role: "user",
       phone: "",
       department: "",
     })

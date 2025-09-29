@@ -1,14 +1,34 @@
-// frontend/components/layout/sidebar.tsx
+//frontend/components/layout/sidebar.tsx
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Menu, Calendar, FileText, Mail, Workflow, MessageSquare, Upload, UploadCloud, ListChecks, Database, Calendar as CalendarIcon, Briefcase  } from "lucide-react" // --- CHANGE: IMPORTED DATABASE ICON, BRIEFCASE ICON ---
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { 
+  LayoutDashboard, 
+  Menu, 
+  Calendar, 
+  FileText, 
+  Mail, 
+  Workflow, 
+  MessageSquare, 
+  Upload, 
+  UploadCloud, 
+  ListChecks, 
+  Database, 
+  Calendar as CalendarIcon, 
+  Briefcase,
+  BarChartHorizontal,
+  ChevronRight, 
+  ChevronLeft,
+  Users,
+  ChevronDown // <-- 1. Icon for the accordion toggle
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ChevronRight, ChevronLeft } from "lucide-react"
 import { ApiUser } from "@/lib/api"
+// <-- 2. Import the Collapsible component from shadcn/ui -->
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { useState } from "react"
 
 interface SidebarProps {
   currentUser: ApiUser
@@ -17,54 +37,165 @@ interface SidebarProps {
   onItemClick?: () => void
 }
 
-const navigationItems = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
-  { title: "Leads", href: "/dashboard/leads", icon: ListChecks, adminOnly: false },
-  { title: "Clients", href: "/dashboard/clients", icon: Briefcase, adminOnly: false }, // New Clients Link
-  { title: "Create Lead", href: "/dashboard/create-lead", icon: Menu, adminOnly: false },
-  { title: "Schedule Meeting/Demo", href: "/dashboard/schedule", icon: Calendar, adminOnly: false },
-  { title: "Events", href: "/dashboard/events", icon: FileText, adminOnly: false },
-  { title: "Activity", href: "/dashboard/activity", icon: MessageSquare, adminOnly: false },
-  { title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
-  { title: "Add Quotation", href: "/dashboard/add-quotation", icon: Upload, adminOnly: false },
-  { title: "Bulk Upload Leads", href: "/dashboard/bulk-upload", icon: UploadCloud, adminOnly: false },
-  { title: "Masters", href: "/dashboard/masters", icon: Database, adminOnly: true },
+interface NavLink {
+  type: 'link';
+  title: string;
+  href: string;
+  icon: React.ElementType;
+  adminOnly: boolean;
+}
+
+interface NavGroup {
+  type: 'group';
+  title: string;
+  icon: React.ElementType;
+  adminOnly: boolean;
+  children: {
+    title: string;
+    href: string;
+    icon: React.ElementType;
+  }[];
+}
+
+type NavItem = NavLink | NavGroup;
+
+const navigationConfig: NavItem[] = [
+  { type: 'link', title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
+  {
+    type: 'group',
+    title: "Leads",
+    icon: ListChecks,
+    adminOnly: false,
+    children: [
+      { title: "Leads", href: "/dashboard/leads", icon: ListChecks },
+      { title: "Create Lead", href: "/dashboard/create-lead", icon: Menu },
+      { title: "Bulk Upload Leads", href: "/dashboard/bulk-upload", icon: UploadCloud },
+    ]
+  },
+  {
+    type: 'group',
+    title: "Proposal",
+    icon: FileText,
+    adminOnly: false,
+    children: [
+      { title: "Proposal Sent", href: "/dashboard/proposals", icon: FileText },
+      { title: "Add Proposal", href: "/dashboard/add-quotation", icon: Upload },
+    ]
+  },
+  { type: 'link', title: "Clients", href: "/dashboard/clients", icon: Briefcase, adminOnly: false },
+  {
+    type: 'group',
+    title: "Events",
+    icon: Users,
+    adminOnly: false,
+    children: [
+      { title: "Schedule Events", href: "/dashboard/schedule", icon: Calendar },
+      { title: "Events", href: "/dashboard/events", icon: FileText },
+      { title: "Activity", href: "/dashboard/activity", icon: MessageSquare },
+    ]
+  },
+  { type: 'link', title: "Reports", href: "/dashboard/reports", icon: BarChartHorizontal, adminOnly: true },
+  { type: 'link', title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
+  {
+    type: 'group',
+    title: "Drip Sequence",
+    icon: Workflow,
+    adminOnly: false,
+    children: [
+        { title: "Message Master", href: "/dashboard/message-master", icon: Mail },
+        { title: "Drip Master", href: "/dashboard/drip-sequence", icon: Workflow },
+    ]
+  },
+  { type: 'link', title: "Masters", href: "/dashboard/masters", icon: Database, adminOnly: true },
 ]
 
-function DripSequenceMenu({ isCollapsed, onItemClick }: { isCollapsed?: boolean, onItemClick?: () => void }) {
+
+// <-- 3. This is the new component that creates the accordion effect -->
+function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGroup; isCollapsed?: boolean; onItemClick?: () => void }) {
     const pathname = usePathname();
-    const isDripActive = pathname.startsWith("/dashboard/message-master") || pathname.startsWith("/dashboard/drip-sequence");
-    const triggerContent = (
-        <div className={cn("flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer w-full", isCollapsed ? "justify-center" : "space-x-3", isDripActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}>
-            <Workflow className="h-4 w-4 shrink-0" />
-            {!isCollapsed && <span className="truncate">Drip Sequence</span>}
-        </div>
-    );
-    const trigger = isCollapsed ? ( <TooltipProvider><Tooltip><TooltipTrigger asChild>{triggerContent}</TooltipTrigger><TooltipContent side="right"><p>Drip Sequence</p></TooltipContent></Tooltip></TooltipProvider> ) : ( triggerContent );
+    const isGroupActive = group.children.some(child => pathname === child.href);
+    
+    // Each group manages its own open/closed state. It starts open if a child link is active.
+    const [isOpen, setIsOpen] = useState(isGroupActive);
+
+    // When the sidebar is fully collapsed, we just show a tooltip, no accordion.
+    if (isCollapsed) {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                         <div className={cn(
+                            "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium justify-center",
+                            isGroupActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                        )}>
+                            <group.icon className="h-4 w-4 shrink-0" />
+                            <span className="sr-only">{group.title}</span>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right"><p>{group.title}</p></TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
+    
+    // This is the main accordion-style menu for the expanded sidebar
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="start" className="ml-2">
-                <DropdownMenuItem asChild><Link href="/dashboard/message-master" onClick={onItemClick}><Mail className="mr-2 h-4 w-4" /><span>Message Master</span></Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/dashboard/drip-sequence" onClick={onItemClick}><Workflow className="mr-2 h-4 w-4" /><span>Drip Master</span></Link></DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+            <CollapsibleTrigger asChild>
+                <div className={cn(
+                    "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer w-full",
+                    isGroupActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}>
+                    <div className="flex items-center space-x-3">
+                        <group.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{group.title}</span>
+                    </div>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+                </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="py-1 space-y-1">
+                {group.children.map((child) => {
+                    const isActive = pathname === child.href;
+                    return (
+                        <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={onItemClick}
+                            className={cn(
+                                "flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors pl-10 pr-3", // Indented sub-item
+                                isActive
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            )}
+                        >
+                            {/* You can optionally add child icons here too if you want */}
+                            {/* <child.icon className="mr-3 h-4 w-4 shrink-0" /> */}
+                            <span className="truncate">{child.title}</span>
+                        </Link>
+                    );
+                })}
+            </CollapsibleContent>
+        </Collapsible>
     );
 }
 
 export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: SidebarProps) {
   const pathname = usePathname()
 
-  // --- CHANGE: FILTER NAVIGATION ITEMS BASED ON USER ROLE ---
-  const accessibleNavItems = navigationItems.filter(item =>
+  const accessibleNavItems = navigationConfig.filter(item =>
       !item.adminOnly || (item.adminOnly && currentUser.role === 'admin')
   );
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-auto py-4">
+      <div className="flex-1 overflow-auto py-4 custom-scrollbar">
         <nav className="space-y-1 px-3">
+          {/* 4. Map over the config, rendering either a group or a link */}
           {accessibleNavItems.map((item) => {
+            if (item.type === 'group') {
+              return <CollapsibleNavGroup key={item.title} group={item} isCollapsed={isCollapsed} onItemClick={onItemClick} />;
+            }
+            
             const Icon = item.icon
             const isActive = pathname === item.href
             const linkContent = (
@@ -74,10 +205,20 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }
                 {!isCollapsed && <span className="truncate">{item.title}</span>}
               </Link>
             )
-            if (isCollapsed) { return ( <TooltipProvider key={item.href}><Tooltip><TooltipTrigger asChild>{linkContent}</TooltipTrigger><TooltipContent side="right"><p>{item.title}</p></TooltipContent></Tooltip></TooltipProvider> ) }
+
+            if (isCollapsed) {
+              return (
+                <TooltipProvider key={item.href}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                    <TooltipContent side="right"><p>{item.title}</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            }
+            
             return linkContent
           })}
-          <DripSequenceMenu isCollapsed={isCollapsed} onItemClick={onItemClick} />
         </nav>
       </div>
       <div className="border-t p-4">

@@ -1,3 +1,4 @@
+// frontend/components/leads/file-preview-modal.tsx
 "use client"
 
 import {

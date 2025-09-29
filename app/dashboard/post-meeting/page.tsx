@@ -1,4 +1,4 @@
-//frontend/app/dashboard/post-meeting/page.tsx
+// frontend/app/dashboard/post-meeting/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -23,8 +23,6 @@ export default function PostMeetingPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
-
-  // --- CHANGE: ADDED STATE FOR MEETING TYPE ---
   const [meetingType, setMeetingType] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -39,7 +37,7 @@ export default function PostMeetingPage() {
       try {
         const [leadsData, meetingsData] = await Promise.all([
             api.getAllLeads(),
-            api.getAllMeetings() // Fetch all meetings to ensure we find the one from the URL
+            api.getAllMeetings()
         ]);
         
         setAllLeads(leadsData);
@@ -55,7 +53,6 @@ export default function PostMeetingPage() {
                 meeting_id: meetingIdFromUrl,
             }));
 
-            // --- CHANGE: FIND AND SET THE MEETING TYPE ---
             const currentMeeting = meetingsData.find(m => m.id.toString() === meetingIdFromUrl);
             if (currentMeeting && currentMeeting.meeting_type) {
                 setMeetingType(currentMeeting.meeting_type);
@@ -74,7 +71,7 @@ export default function PostMeetingPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (field === "lead_id") {
-        setMeetingType(null); // Reset meeting type when lead changes
+        setMeetingType(null);
         const meetingsForLead = scheduledMeetings.filter((m) => String(m.lead_id) === value);
         if (meetingsForLead.length > 0) {
             const latestMeeting = meetingsForLead.sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime())[0];
@@ -105,17 +102,14 @@ export default function PostMeetingPage() {
         updated_by: currentUser.username || "System",
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/meetings/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(meetingData),
-      })
-
-      if (!response.ok) { throw new Error(`Failed to complete meeting: ${response.statusText}`) }
+      // --- START OF FIX: Replace direct fetch with api object ---
+      await api.completeMeeting(meetingData);
+      // --- END OF FIX ---
       
       setShowConfirmation(true)
     } catch (error) {
-      toast({ title: "Error", description: "Failed to save meeting notes.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({ title: "Error", description: `Failed to save meeting notes: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsLoading(false)
     }
@@ -126,10 +120,8 @@ export default function PostMeetingPage() {
     router.push("/dashboard")
   }
   
-  // --- THIS IS THE CORRECTED LOGIC ---
   const isPrefilled = !!searchParams.get('leadId');
   
-  // Determine which leads to show in the dropdown
   const leadsWithOptions = isPrefilled 
     ? allLeads.filter(l => l.id.toString() === formData.lead_id) 
     : allLeads.filter(lead => scheduledMeetings.some(meeting => String(meeting.lead_id) === String(lead.id)));
@@ -156,7 +148,6 @@ export default function PostMeetingPage() {
               <CardTitle>Meeting Outcome</CardTitle>
               <CardDescription>Select the lead and enter the notes from your meeting.</CardDescription>
             </div>
-            {/* --- CHANGE: DISPLAYING THE MEETING TYPE BADGE --- */}
             {meetingType && (
               <Badge variant="outline">{meetingType}</Badge>
             )}

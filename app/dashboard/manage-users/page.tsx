@@ -16,6 +16,7 @@ import { CreateUserModal } from "@/components/users/create-user-modal"
 import { DeleteUserModal } from "@/components/users/delete-user-modal"
 import { userApi, type ApiUser } from "@/lib/api"
 
+// This interface is only used on the frontend, ApiUser is from the backend
 interface User {
   id: string
   name: string
@@ -24,6 +25,7 @@ interface User {
   phone?: string
   department?: string
   createdAt?: string
+  company_name: string; // Add company_name to the local User type
 }
 
 export default function ManageUsersPage() {
@@ -40,24 +42,7 @@ export default function ManageUsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (!userData) {
-      router.push("/login")
-      return
-    }
-
-    const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== "admin") {
-      router.push("/dashboard")
-      return
-    }
-
-    setCurrentUser(parsedUser)
-    loadUsers()
-  }, [router])
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setIsLoading(true)
       setError("")
@@ -67,11 +52,11 @@ export default function ManageUsersPage() {
         id: user.id.toString(),
         name: user.username,
         email: user.email || `${user.username}@company.com`,
-        // Correctly map the role from the API data
-        role: user.role === "admin" ? "admin" : "user",
+        role: user.role?.toLowerCase() === "admin" ? "admin" : "user",
         phone: user.usernumber,
         department: user.department || "N/A",
         createdAt: user.created_at,
+        company_name: user.company_name, // Map the company name
       }))
 
       setUsers(transformedUsers)
@@ -82,7 +67,34 @@ export default function ManageUsersPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user")
+    if (!userData) {
+      router.push("/login")
+      return
+    }
+
+    const parsedUser: ApiUser = JSON.parse(userData)
+    if (parsedUser.role?.toLowerCase() !== "admin") {
+      router.push("/dashboard")
+      return
+    }
+
+    // Transform the current user to the local User type as well
+    setCurrentUser({
+        id: parsedUser.id.toString(),
+        name: parsedUser.username,
+        email: parsedUser.email || "",
+        role: parsedUser.role?.toLowerCase() === "admin" ? "admin" : "user",
+        phone: parsedUser.usernumber,
+        department: parsedUser.department,
+        createdAt: parsedUser.created_at,
+        company_name: parsedUser.company_name
+    })
+    loadUsers()
+  }, [router, loadUsers])
 
   useEffect(() => {
     const filtered = users.filter(
@@ -110,12 +122,13 @@ export default function ManageUsersPage() {
         username: updatedUser.name,
         usernumber: updatedUser.phone,
         role: updatedUser.role,
+        email: updatedUser.email,
+        department: updatedUser.department,
       })
-
-      const updatedUsers = users.map((user) => (user.id === updatedUser.id ? updatedUser : user))
-      setUsers(updatedUsers)
+      
       setSuccess("User updated successfully!")
       setTimeout(() => setSuccess(""), 3000)
+      loadUsers(); // Reload to ensure data is fresh from the server
     } catch (error) {
       console.error("Failed to update user:", error)
       setError("Failed to update user. Please try again.")
@@ -123,13 +136,10 @@ export default function ManageUsersPage() {
     }
   }
 
-  const handleUserCreated = (newUser: User) => {
-    const updatedUsers = [...users, newUser]
-    setUsers(updatedUsers)
+  const handleUserCreated = () => {
     setSuccess("User created successfully!")
     setTimeout(() => setSuccess(""), 3000)
-    // Reload users to get the latest data from backend
-    loadUsers()
+    loadUsers() // The best way to show the new user is to reload the list
   }
 
   const handleUserDeleted = async (userId: string) => {
@@ -156,15 +166,11 @@ export default function ManageUsersPage() {
     })
   }
 
-  if (!currentUser) {
-    return <div>Loading...</div>
-  }
-
-  if (isLoading) {
+  if (isLoading || !currentUser) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading users...</span>
+        <span className="ml-2">Loading...</span>
       </div>
     )
   }
@@ -301,6 +307,7 @@ export default function ManageUsersPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onUserCreated={handleUserCreated}
+        currentUser={currentUser}
       />
 
       <DeleteUserModal

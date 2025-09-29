@@ -1,4 +1,4 @@
-//frontend/app/dashboard/post-demo/page.tsx
+// frontend/app/dashboard/post-demo/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -19,8 +19,6 @@ export default function PostDemoPage() {
   const { toast } = useToast()
   const [allLeads, setAllLeads] = useState<ApiLead[]>([])
   const [scheduledDemos, setScheduledDemos] = useState<ApiDemo[]>([])
-  const [leads, setLeads] = useState<ApiLead[]>([])
-  const [demos, setDemos] = useState<ApiDemo[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -65,8 +63,8 @@ export default function PostDemoPage() {
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (field === "lead_id") {
-      const demosForLead = scheduledDemos.find((d) => String(d.lead_id) === value);
-      if (demosForLead) {
+      const demosForLead = scheduledDemos.filter((d) => String(d.lead_id) === value);
+      if (demosForLead.length > 0) {
         const latestDemo = demosForLead.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())[0];
         setFormData((prev) => ({ ...prev, demo_id: String(latestDemo.id) }))
       } else {
@@ -92,18 +90,14 @@ export default function PostDemoPage() {
         updated_by: currentUser.username || "System",
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/web/demos/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(demoData),
-      })
-      if (!response.ok) {
-        throw new Error(`Failed to complete demo: ${response.statusText}`)
-      }
+      // --- START OF FIX: Replace direct fetch with api object ---
+      await api.completeDemo(demoData);
+      // --- END OF FIX ---
       
       setShowConfirmation(true)
     } catch (error) {
-      toast({ title: "Error", description: "Failed to save demo notes.", variant: "destructive" });
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        toast({ title: "Error", description: `Failed to save demo notes: ${errorMessage}`, variant: "destructive" });
     } finally {
       setIsLoading(false)
     }
@@ -114,10 +108,13 @@ export default function PostDemoPage() {
     router.push("/dashboard")
   }
   
-  // --- THIS IS THE FIX ---
   const isPrefilled = !!searchParams.get('leadId');
-  const leadOptions = (isPrefilled ? allLeads.filter(l => l.id.toString() === formData.lead_id) : allLeads)
-    .map((lead) => ({ value: String(lead.id), label: lead.company_name }));
+  
+  const leadsWithOptions = isPrefilled 
+    ? allLeads.filter(l => l.id.toString() === formData.lead_id) 
+    : allLeads.filter(lead => scheduledDemos.some(demo => String(demo.lead_id) === String(lead.id)));
+
+  const leadOptions = leadsWithOptions.map((lead) => ({ value: String(lead.id), label: lead.company_name }));
 
   if (isDataLoading) {
     return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;

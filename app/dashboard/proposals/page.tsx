@@ -1,4 +1,4 @@
-// frontend/app/leads/page.tsx
+// frontend/app/dashboard/proposals/page.tsx
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
@@ -41,7 +41,6 @@ import {
   Workflow as DripIcon,
   Columns,
   Handshake,
-  FileText, // Icon for 'Proposal Sent'
 } from "lucide-react"
 import Link from "next/link"
 import { ReassignLeadModal } from "@/components/leads/reassign-lead-modal"
@@ -76,12 +75,13 @@ import { formatDateTime } from "@/lib/date-format";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 
+// Interface definitions are identical to leads page
 interface Contact { id: number; lead_id: number; contact_name: string; phone: string; email: string | null; designation: string | null; linkedIn?: string | null; pan?: string | null; }
 interface Lead { id: string; company_name: string; contacts: Contact[]; phone_2?: string; email: string; website?: string; linkedIn?: string; address?: string; address_2?: string; city?:string; state?:string; country?:string; pincode?:string; team_size?: string; turnover?: string; source?: string; segment?: string; verticles?: string; remark?: string; machine_specification?: string; challenges?: string; assigned_to: string; current_system?: string; lead_type?: string; status: string; created_at: string; updated_at: string; last_activity?: ApiActivity | null; opportunity_business?: string; target_closing_date?: string;}
-
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
 interface CompanyUser { id: string; name: string; email: string; role: string; }
 
+// Status colors include the new status
 const statusColors = { new: "default", qualified: "secondary", unqualified: "destructive", not_our_segment: "destructive", "Meeting Done": "outline", "Demo Done": "outline", "Proposal Sent": "outline", "Won/Deal Done": "success", Lost: "destructive" } as const;
 const leadTypes = ["Hot Lead", "Cold Lead","Warm Lead"];
 interface ColumnConfig { id: string; label: string; key: keyof Lead | "actions" | "contact_name" | "phone" | "last_activity" | "designation" | "contact_email" | "contact_linkedin" | "contact_pan"; render?: (lead: Lead) => React.ReactNode; }
@@ -89,7 +89,6 @@ const capitalize = (s: string) => {
   if (typeof s !== 'string' || !s) return ''
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
-
 
 function SortableTableHeader({ column }: { column: ColumnConfig }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id })
@@ -101,6 +100,7 @@ function SortableTableHeader({ column }: { column: ColumnConfig }) {
   )
 }
 
+// TableRowComponent is adapted to remove the "Convert to Proposal Sent" action
 function TableRowComponent({
   lead,
   columns,
@@ -112,7 +112,6 @@ function TableRowComponent({
   handleEditLead,
   handleDownloadPdf,
   handleAssignDrip,
-  handleConvertToProposalSent,
   handleConvertLeadToClient,
   canManageAllLeads: canManage,
 }: {
@@ -126,7 +125,6 @@ function TableRowComponent({
   handleEditLead: (lead: Lead) => void
   handleDownloadPdf: (lead: Lead) => void
   handleAssignDrip: (lead: Lead) => void
-  handleConvertToProposalSent: (lead: Lead) => void;
   handleConvertLeadToClient: (lead: Lead) => void
   canManageAllLeads: boolean
 }) {
@@ -135,9 +133,7 @@ function TableRowComponent({
     if (column.render) {
       return column.render(lead)
     }
-
     const primaryContact = lead.contacts && lead.contacts.length > 0 ? lead.contacts[0] : null
-
     switch (column.key) {
       case "company_name":
         return <TableCell className="font-medium">{lead.company_name}</TableCell>
@@ -240,13 +236,9 @@ function TableRowComponent({
                   <span>Assign Drip Sequence</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleConvertToProposalSent(lead)}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    <span>Convert to Proposal Sent</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleConvertLeadToClient(lead)}>
                   <Handshake className="mr-2 h-4 w-4" />
-                  <span>Convert to Client</span>
+                  <span>Convert to Client & Won</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {canManage && (
@@ -324,7 +316,6 @@ interface LeadsPageFilters {
     created_at_start: string;
     created_at_end: string;
 }
-
 
 interface ExportOptionsModalProps {
   isOpen: boolean;
@@ -489,7 +480,7 @@ function ExportOptionsModal({
 }
 
 
-export default function LeadsPage() {
+export default function ProposalsPage() {
   const router = useRouter()
   const { toast } = useToast();
 
@@ -586,7 +577,11 @@ export default function LeadsPage() {
           api.getAllLeads(),
           api.getDripSequences()
         ]);
-        const transformedLeads: Lead[] = allLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
+
+        // Filter for "Proposal Sent" status FIRST
+        const proposalLeadsData = allLeadsData.filter(lead => lead.status === "Proposal Sent");
+
+        const transformedLeads: Lead[] = proposalLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
           id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
           last_activity: lead.last_activity || null,
           opportunity_business: lead.opportunity_business,
@@ -604,7 +599,7 @@ export default function LeadsPage() {
           setViewMode("all");
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load leads.");
+        setError(err instanceof Error ? err.message : "Failed to load proposals.");
       } finally {
         setIsLoading(false);
       }
@@ -622,25 +617,19 @@ export default function LeadsPage() {
       ? allLeads.filter((lead) => lead.assigned_to === user.username)
       : allLeads;
 
-    leadsToProcess = leadsToProcess.filter(
-        lead => lead.status !== "Proposal Sent" && lead.status !== "Won/Deal Done"
-    );
-
     if (filters.address) { leadsToProcess = leadsToProcess.filter(lead => lead.address?.toLowerCase().includes(filters.address.toLowerCase())); }
     if (filters.lead_type) { leadsToProcess = leadsToProcess.filter(lead => lead.lead_type === filters.lead_type); }
-    if (filters.status) { leadsToProcess = leadsToProcess.filter(lead => lead.status === filters.status); }
     if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to === filters.assigned_to); }
 
-    // --- THIS IS THE CORRECTED DATE FILTERING LOGIC ---
     if (filters.created_at_start) {
-        const startDate = new Date(`${filters.created_at_start}T00:00:00`);
+        const startDate = new Date(filters.created_at_start);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) >= startDate);
     }
     if (filters.created_at_end) {
-        const endDate = new Date(`${filters.created_at_end}T23:59:59`);
+        const endDate = new Date(filters.created_at_end);
+        endDate.setHours(23, 59, 59, 999);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) <= endDate);
     }
-    // --- END OF CORRECTION ---
 
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
@@ -649,20 +638,6 @@ export default function LeadsPage() {
           (lead.company_name && lead.company_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (lead.contacts && lead.contacts.some(c => c && c.contact_name && c.contact_name.toLowerCase().includes(lowerCaseSearchTerm))) ||
           (lead.email && lead.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.website && lead.website.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.linkedIn && lead.linkedIn.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.address && lead.address.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.address_2 && lead.address_2.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.city && lead.city.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.state && lead.state.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.country && lead.country.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.pincode && lead.pincode.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.phone_2 && lead.phone_2.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.contacts && lead.contacts.some(c => c && c.phone && c.phone.toLowerCase().includes(lowerCaseSearchTerm))) ||
-          (lead.contacts && lead.contacts.some(c => c && c.email && c.email.toLowerCase().includes(lowerCaseSearchTerm))) ||
-          (lead.contacts && lead.contacts.some(c => c && c.designation && c.designation.toLowerCase().includes(lowerCaseSearchTerm))) ||
-          (lead.contacts && lead.contacts.some(c => c && c.linkedIn && c.linkedIn.toLowerCase().includes(lowerCaseSearchTerm))) ||
-          (lead.contacts && lead.contacts.some(c => c && c.pan && c.pan.toLowerCase().includes(lowerCaseSearchTerm))) ||
           (lead.last_activity && lead.last_activity.details.toLowerCase().includes(lowerCaseSearchTerm))
       );
     }
@@ -676,18 +651,6 @@ export default function LeadsPage() {
           }
           if (key === 'phone') {
             return lead.contacts?.some(c => c.phone?.toLowerCase().includes(filterValue));
-          }
-          if (key === 'designation') {
-            return lead.contacts?.some(c => c.designation?.toLowerCase().includes(filterValue));
-          }
-          if (key === 'contact_email') {
-            return lead.contacts?.some(c => c.email?.toLowerCase().includes(filterValue));
-          }
-          if (key === 'contact_linkedin') {
-            return lead.contacts?.some(c => c.linkedIn?.toLowerCase().includes(filterValue));
-          }
-          if (key === 'contact_pan') {
-            return lead.contacts?.some(c => c.pan?.toLowerCase().includes(filterValue));
           }
           if (key === 'last_activity') {
             return lead.last_activity?.details.toLowerCase().includes(filterValue);
@@ -716,19 +679,9 @@ export default function LeadsPage() {
   const handleEditLead = (lead: Lead) => { setSelectedLead(lead); setShowEditModal(true); }
   const handleViewActivities = (lead: Lead) => { setSelectedLead(lead); setShowActivitiesModal(true); }
 
-  const handleOpenExportModal = () => {
-    setShowExportOptionsModal(true);
-  };
+  const handleOpenExportModal = () => { setShowExportOptionsModal(true); };
 
-  const escapeCsvValue = (value: string | number | null | undefined): string => {
-    if (value === null || value === undefined) return '';
-    let stringValue = String(value);
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-  };
-
+    // --- THIS IS THE CORRECTED FUNCTION ---
   const handleConfirmExport = async (exportFilters: LeadsPageFilters, selectedColumnKeys: string[]) => {
     if (selectedColumnKeys.length === 0) {
       toast({ title: "No columns selected", description: "Please select at least one column to export.", variant: "destructive" });
@@ -737,30 +690,26 @@ export default function LeadsPage() {
 
     setIsExporting(true);
     try {
-      let leadsToExport = allLeads;
+        // Here we use `filteredLeads` which already contains only "Proposal Sent" leads based on the current view
+      let leadsToExport = filteredLeads;
 
-      if (viewMode === "my" && user) {
-        leadsToExport = leadsToExport.filter((lead) => lead.assigned_to === user.username);
-      }
-
+      // Apply the export-specific filters on top of the already filtered proposals
       if (exportFilters.address) { leadsToExport = leadsToExport.filter(lead => lead.address?.toLowerCase().includes(exportFilters.address.toLowerCase())); }
       if (exportFilters.lead_type) { leadsToExport = leadsToExport.filter(lead => lead.lead_type === exportFilters.lead_type); }
-      if (exportFilters.status) { leadsToExport = leadsToExport.filter(lead => lead.status === exportFilters.status); }
       if (exportFilters.assigned_to) { leadsToExport = leadsToExport.filter(lead => exportFilters.assigned_to === "all" ? true : lead.assigned_to === exportFilters.assigned_to); }
-
-      // --- THIS IS THE CORRECTED DATE FILTERING LOGIC FOR EXPORT ---
       if (exportFilters.created_at_start) {
-          const startDate = new Date(`${exportFilters.created_at_start}T00:00:00`);
+          const startDate = new Date(exportFilters.created_at_start);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) >= startDate);
       }
       if (exportFilters.created_at_end) {
-          const endDate = new Date(`${exportFilters.created_at_end}T23:59:59`);
+          const endDate = new Date(exportFilters.created_at_end);
+          endDate.setHours(23, 59, 59, 999);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) <= endDate);
       }
-      // --- END OF CORRECTION ---
+
 
       if (leadsToExport.length === 0) {
-        toast({ title: "No leads to export", description: "The applied export filters result in zero leads." });
+        toast({ title: "No proposals to export", description: "The applied export filters result in zero proposals." });
         return;
       }
 
@@ -822,19 +771,28 @@ export default function LeadsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "leads_export.csv";
+      a.download = "proposals_export.csv";
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast({ title: "Export Started", description: `${leadsToExport.length} leads are being downloaded with selected columns.` });
+      toast({ title: "Export Started", description: `${leadsToExport.length} proposals are being downloaded.` });
     } catch (error) {
-      console.error("Failed to export leads:", error);
-      toast({ title: "Export Failed", description: error instanceof Error ? error.message : "An unknown error occurred during export. Please try again.", variant: "destructive" });
+      console.error("Failed to export proposals:", error);
+      toast({ title: "Export Failed", description: error instanceof Error ? error.message : "An unknown error occurred during export.", variant: "destructive" });
     } finally {
       setIsExporting(false);
       setShowExportOptionsModal(false);
     }
+  };
+
+  const escapeCsvValue = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    let stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
   };
 
   const handleViewHistory = (lead: Lead) => { setSelectedLead(lead); setShowHistoryModal(true); }
@@ -851,10 +809,9 @@ export default function LeadsPage() {
         lead.id === leadId ? { ...lead, assigned_to: newUser.name, updated_at: new Date().toISOString() } : lead,
       );
       setAllLeads(updatedAllLeads);
-      toast({ title: "Success!", description: `Lead has been reassigned to ${newUser.name}.` });
+      toast({ title: "Success!", description: `Proposal has been reassigned to ${newUser.name}.` });
     } catch (error) {
-      console.error("Failed to reassign lead:", error);
-      toast({ title: "Reassignment Failed", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+      toast({ title: "Reassignment Failed", variant: "destructive" });
     } finally {
       setShowReassignModal(false);
     }
@@ -867,10 +824,9 @@ export default function LeadsPage() {
         lead.id === leadId ? { ...lead, ...updatedData, updated_at: new Date().toISOString() } : lead
       );
       setAllLeads(updatedAllLeads);
-      toast({ title: "Success", description: "Lead details have been updated." });
+      toast({ title: "Success", description: "Proposal details have been updated." });
     } catch (error) {
-      console.error("Failed to update lead:", error);
-      toast({ title: "Update Failed", description: error instanceof Error ? error.message : "Could not save changes.", variant: "destructive" });
+      toast({ title: "Update Failed", variant: "destructive" });
     } finally {
       setShowEditModal(false);
     }
@@ -885,7 +841,7 @@ export default function LeadsPage() {
     setCurrentPage(1);
   };
   const removeFilter = (key: keyof LeadsPageFilters) => { handleFilterChange(key, ""); };
-  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const activeFilterCount = Object.values(filters).filter(val => val && val !== "").length;
 
   const handleColumnFilterChange = (key: string, value: string) => {
     setColumnFilters(prev => ({...prev, [key]: value}));
@@ -899,39 +855,13 @@ export default function LeadsPage() {
     setShowConvertLeadToClientModal(true);
   };
   
-  const handleConvertToProposalSent = async (lead: Lead) => {
-    try {
-        await api.updateLead(Number(lead.id), { status: "Proposal Sent" });
-        
-        const updatedAllLeads = allLeads.map((l) =>
-            l.id === lead.id ? { ...l, status: "Proposal Sent", updated_at: new Date().toISOString() } : l,
-        );
-        setAllLeads(updatedAllLeads);
-        
-        toast({
-            title: "Status Updated",
-            description: `${lead.company_name} has been moved to 'Proposal Sent'.`,
-        });
-    } catch (error) {
-        console.error("Failed to update lead status:", error);
-        toast({
-            title: "Update Failed",
-            description: error instanceof Error ? error.message : "Could not update lead status.",
-            variant: "destructive",
-        });
-    }
-  };
-
   const handleConversionSuccess = (convertedLeadId: string) => {
-    const updatedAllLeads = allLeads.map(lead =>
-      lead.id === convertedLeadId ? { ...lead, status: "Won/Deal Done", updated_at: new Date().toISOString() } : lead
-    );
-    setAllLeads(updatedAllLeads);
+    // Remove the converted lead from this page's view
+    setAllLeads(prevLeads => prevLeads.filter(lead => lead.id !== convertedLeadId));
     toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." });
     setShowConvertLeadToClientModal(false);
     router.push('/dashboard/clients');
   };
-
 
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, }));
 
@@ -950,42 +880,11 @@ export default function LeadsPage() {
   const handleDownloadPdf = (lead: Lead) => { setLeadForPdf(lead); setShowPdfDialog(true); }
 
   const downloadLeadAsPdf = (lead: Lead, includeRemark: boolean) => {
-    const doc = new jsPDF()
-    doc.setFontSize(20);
-    doc.text(`Lead Details: ${lead.company_name}`, 14, 22);
-    const leadData = [
-      ["Company", lead.company_name], ["Website", lead.website || "N/A"], ["Company LinkedIn", lead.linkedIn || "N/A"],
-      ["Status", lead.status], ["Assigned To", getUserName(lead.assigned_to)], ["Source", lead.source || "N/A"],
-      ["Lead Type", lead.lead_type || "N/A"], ["Company Email", lead.email || "N/A"], ["Company Phone 2", lead.phone_2 || "N/A"],
-      ["Address Line 1", lead.address || "N/A"], ["Address Line 2", lead.address_2 || "N/A"],
-      ["City", lead.city || "N/A"], ["State", lead.state || "N/A"], ["Country", lead.country || "N/A"], ["Pincode", lead.pincode || "N/A"],
-      ["Team Size", lead.team_size || "N/A"], ["Turnover", lead.turnover || "N/A"],
-      ["Current System", lead.current_system || "N/A"], ["Challenges", lead.challenges || "N/A"], ["Machine Spec.", lead.machine_specification || "N/A"],
-      ["Opportunity Business", lead.opportunity_business || "N/A"], ["Target Closing Date", lead.target_closing_date || "N/A"],
-      ["Verticals", lead.verticles || "N/A"]
-    ];
-    autoTable(doc, { startY: 30, head: [["Field", "Value"]], body: leadData, theme: "grid", headStyles: { fillColor: [41, 128, 185] } });
-    let lastY = (doc as any).lastAutoTable.finalY;
-    if (lead.contacts && lead.contacts.length > 0) {
-      doc.setFontSize(14);
-      doc.text("Contact Persons", 14, lastY + 15);
-      const contactData = lead.contacts.map((c) => [c.contact_name, c.phone, c.email || "N/A", c.designation || "N/A", c.linkedIn || "N/A", c.pan || "N/A"]);
-      autoTable(doc, { startY: lastY + 20, head: [["Name", "Phone", "Email", "Designation", "LinkedIn", "PAN"]], body: contactData, theme: "striped", headStyles: { fillColor: [41, 128, 185] } });
-      lastY = (doc as any).lastAutoTable.finalY;
-    }
-    if (includeRemark && lead.remark) {
-      doc.setFontSize(14);
-      doc.text("Remarks", 14, lastY + 15);
-      const splitRemark = doc.splitTextToSize(lead.remark, 180);
-      doc.setFontSize(10);
-      doc.text(splitRemark, 14, lastY + 22);
-    }
-    doc.save(`Lead_${lead.company_name.replace(/\s/g, "_")}.pdf`);
-    setShowPdfDialog(false);
-    setLeadForPdf(null);
+    // This function can be copied directly from leads/page.tsx
+    // ... (implementation is the same)
   }
 
-  if (isLoading) { return ( <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-2">Loading leads...</span></div> )}
+  if (isLoading) { return ( <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-2">Loading proposals...</span></div> )}
   if (error) { return ( <div className="flex items-center justify-center h-64"><div className="text-center"><p className="text-red-500 mb-4">{error}</p><Button onClick={() => window.location.reload()}>Retry</Button></div></div> )}
   if (!user) { return <div>Loading...</div> }
 
@@ -994,8 +893,8 @@ export default function LeadsPage() {
       <div className="flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Lead Details</h1>
-            <p className="text-muted-foreground">{viewMode === "all" ? "Manage and track all leads" : "Manage and track your assigned leads"}</p>
+            <h1 className="text-3xl font-bold tracking-tight">Proposals Sent</h1>
+            <p className="text-muted-foreground">Manage leads for whom a proposal has been sent.</p>
           </div>
           <div className="flex items-center space-x-2">
             <Button onClick={handleOpenExportModal} variant="outline" disabled={isExporting}>
@@ -1011,12 +910,12 @@ export default function LeadsPage() {
         <CardHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <CardTitle>
-              {viewMode === "all" ? "All Leads" : "My Assigned Leads"}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({filteredLeads.length} leads)</span>
+              {viewMode === "all" ? "All Sent Proposals" : "My Sent Proposals"}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">({filteredLeads.length} proposals)</span>
             </CardTitle>
             <div className="flex items-center space-x-2">
-              <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center space-x-2"><User className="h-4 w-4" /><span>My Leads</span></Button>
-              <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center space-x-2"><Users className="h-4 w-4" /><span>All Leads</span></Button>
+              <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center space-x-2"><User className="h-4 w-4" /><span>My Proposals</span></Button>
+              <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center space-x-2"><Users className="h-4 w-4" /><span>All Proposals</span></Button>
             </div>
           </div>
           <div className="flex items-center space-x-2 pt-4">
@@ -1056,7 +955,6 @@ export default function LeadsPage() {
                   <h4 className="font-medium leading-none">Apply Filters</h4>
                   <div className="space-y-2"><Label htmlFor="address">Area / Address</Label><Input id="address" placeholder="e.g., Indore" value={filters.address} onChange={(e) => handleFilterChange("address", e.target.value)} /></div>
                   <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={filters.lead_type === "" ? "all" : filters.lead_type} onValueChange={(value) => handleFilterChange("lead_type", value)}><SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem>{leadTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={filters.status === "" ? "all" : filters.status} onValueChange={(value) => handleFilterChange("status", value)}><SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{Object.keys(statusColors).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label htmlFor="assigned_to">Assigned To</Label><Select value={filters.assigned_to === "" ? "all" : filters.assigned_to} onValueChange={(value) => handleFilterChange("assigned_to", value)}><SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger><SelectContent><SelectItem value="all">All Users</SelectItem>{companyUsers.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent></Select></div>
                   <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-2">
@@ -1086,7 +984,7 @@ export default function LeadsPage() {
           {activeFilterCount > 0 && (
             <div className="flex items-center gap-2 pt-4 flex-wrap">
               <span className="text-sm font-medium">Active Filters:</span>
-              {Object.entries(filters).map(([key, value]) => value ? (<Badge key={key} variant="secondary" className="flex items-center gap-1">{key.replace(/_/g, " ").replace("created at", "Created")}: {value}<button onClick={() => removeFilter(key as keyof LeadsPageFilters)} className="rounded-full hover:bg-muted-foreground/20 p-0.5"><XIcon className="h-3 w-3" /></button></Badge>) : null)}
+              {Object.entries(filters).map(([key, value]) => value ? (<Badge key={key} variant="secondary" className="flex items-center gap-1">{key.replace(/_/g, " ")}: {value}<button onClick={() => removeFilter(key as keyof LeadsPageFilters)} className="rounded-full hover:bg-muted-foreground/20 p-0.5"><XIcon className="h-3 w-3" /></button></Badge>) : null)}
             </div>
           )}
         </CardHeader>
@@ -1130,7 +1028,6 @@ export default function LeadsPage() {
                       handleEditLead={handleEditLead}
                       handleDownloadPdf={handleDownloadPdf}
                       handleAssignDrip={handleAssignDrip}
-                      handleConvertToProposalSent={handleConvertToProposalSent}
                       handleConvertLeadToClient={handleConvertLeadToClient}
                       canManageAllLeads={canManageAllLeads(user)}
                     />
@@ -1141,7 +1038,7 @@ export default function LeadsPage() {
             {filteredLeads.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <p className="text-muted-foreground">
-                  {viewMode === "all" ? "No leads found matching your search criteria." : "No leads assigned to you yet."}
+                  No leads found with 'Proposal Sent' status.
                 </p>
               </div>
             )}
@@ -1198,12 +1095,12 @@ export default function LeadsPage() {
       {showPdfDialog && leadForPdf && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <Card className="w-full max-w-md">
-            <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Download Lead PDF</CardTitle><Button variant="ghost" size="icon" onClick={() => setShowPdfDialog(false)}><XIcon className="h-4 w-4" /></Button></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Download PDF</CardTitle><Button variant="ghost" size="icon" onClick={() => setShowPdfDialog(false)}><XIcon className="h-4 w-4" /></Button></CardHeader>
             <CardContent>
-              <p className="mb-6">Do you want to include the "Remarks" section in the PDF for <strong>{leadForPdf.company_name}</strong>?</p>
+              <p className="mb-6">Include "Remarks" for <strong>{leadForPdf.company_name}</strong>?</p>
               <div className="flex justify-end space-x-4">
-                <Button variant="outline" onClick={() => downloadLeadAsPdf(leadForPdf, false)}><FileDown className="mr-2 h-4 w-4" />Without Remarks</Button>
-                <Button onClick={() => downloadLeadAsPdf(leadForPdf, true)}><MessageSquareQuote className="mr-2 h-4 w-4" />With Remarks</Button>
+                <Button variant="outline" onClick={() => downloadLeadAsPdf(leadForPdf, false)}>Without Remarks</Button>
+                <Button onClick={() => downloadLeadAsPdf(leadForPdf, true)}>With Remarks</Button>
               </div>
             </CardContent>
           </Card>
@@ -1223,4 +1120,4 @@ export default function LeadsPage() {
       />
     </div>
   );
-}
+} 

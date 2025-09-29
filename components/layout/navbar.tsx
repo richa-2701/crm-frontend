@@ -14,12 +14,10 @@ import { Moon, Sun, LogOut, Menu, User, Settings, Users } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { ApiUser } from "@/lib/api"
-// --- CHANGE 1: Import React to handle children ---
 import React from "react"
 
 interface NavbarProps {
   user: ApiUser
-  // --- CHANGE 2: Add children prop ---
   children?: React.ReactNode
 }
 
@@ -36,11 +34,33 @@ export function Navbar({ user, children }: NavbarProps) {
     setTheme(theme === "dark" ? "light" : "dark")
   }
 
+  const handleProposalManagementClick = () => {
+    // 1. Ensure this URL is exactly correct for your local VB.NET project.
+    const vbNetAppUrl = "http://proposal.indusanalytics.co.in/";
+
+    const params = new URLSearchParams();
+    if (user) {
+        params.append("username", user.username);
+        params.append("email", user.email || "");
+        params.append("role", user.role || "user");
+        params.append("userId", user.id.toString());
+    }
+
+    const finalUrl = `${vbNetAppUrl}?${params.toString()}`;
+
+    // --- THIS IS THE FIX ---
+    // Log to the console to confirm the function is running and the URL is correct.
+    console.log("Attempting to navigate to external VB.NET application:", finalUrl);
+
+    // Use window.open with '_self' to navigate in the current tab. This is often more reliable
+    // than window.location.href for cross-origin navigation, especially from localhost.
+    window.open(finalUrl, '_self');
+  };
+
   return (
     <nav className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-4">
-          {/* --- CHANGE 3: Render the children here --- */}
           {children}
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight cursor-pointer">INDUS CRM</h1>
@@ -48,27 +68,31 @@ export function Navbar({ user, children }: NavbarProps) {
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-4">
-          <button className="h-8">
-            Proposal Management
-          </button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 px-3 group">
-                <Settings className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Management</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {user.role === "admin" && (
+          {user.role === "admin" && user.company_name !== "Amar Ujala" && (
+            <Button variant="ghost" size="sm" className="h-8 px-3" onClick={handleProposalManagementClick}>
+              Proposal Management
+            </Button>
+          )}
+
+          {/* This "Management" dropdown remains unchanged, visible to all admins. */}
+          {user.role === "admin" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 px-3 group">
+                  <Settings className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Management</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/manage-users">
                     <Users className="mr-2 h-4 w-4" />
                     <span>Manage Users</span>
                   </Link>
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-8 w-8 sm:h-9 sm:w-9">
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
