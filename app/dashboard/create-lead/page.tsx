@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,8 +38,8 @@ interface Contact {
   phone: string
   email: string
   designation: string
-  linkedIn: string // New field
-  pan: string // New field
+  linkedIn: string
+  pan: string
 }
 
 const namePrefixes = ["Mr.", "Mrs.", "Ms."];
@@ -52,6 +52,17 @@ interface MasterDataOptions {
     current_system: string[];
 }
 
+type ValidationErrors = {
+  [key: string]: string | undefined; // General form fields
+  contacts?: { // Nested errors for contacts
+    [index: number]: {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+    }
+  }
+}
+
 export default function CreateLeadPage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -62,14 +73,17 @@ export default function CreateLeadPage() {
     { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" },
   ])
 
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const formRef = useRef<HTMLFormElement>(null);
+
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
       source: [], segment: [], verticles: [], lead_type: [], current_system: []
   });
 
   const [formData, setFormData] = useState({
     company_name: "",
-    website: "", // New field
-    linkedIn: "", // New field
+    website: "",
+    linkedIn: "",
     phone_2: "",
     email: "",
     address: "",
@@ -91,6 +105,13 @@ export default function CreateLeadPage() {
     lead_type: "",
     opportunity_business: "",
     target_closing_date: "",
+    // --- START: NEW FIELDS ---
+    version: "",
+    database_type: "",
+    amc: "",
+    gst: "",
+    company_pan: "",
+    // --- END: NEW FIELDS ---
   })
 
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
@@ -174,6 +195,8 @@ export default function CreateLeadPage() {
   const cityOptions = useMemo(() => (selectedCountry && selectedState) ? City.getCitiesOfState(selectedCountry, selectedState).map(c => ({ value: c.name, label: c.name })) : [], [selectedCountry, selectedState])
 
   const handleInputChange = (field: string, value: string) => {
+    setErrors(prev => ({...prev, [field]: undefined}));
+
     if (field === "phone_2") {
         const formattedPhone = value.startsWith('+') ? value : `+${value}`;
         setFormData(prev => ({ ...prev, [field]: formattedPhone }));
@@ -183,12 +206,26 @@ export default function CreateLeadPage() {
   }
 
   const handleContactChange = (index: number, field: keyof Omit<Contact, "phone">, value: string) => {
+    setErrors(prev => ({
+      ...prev,
+      contacts: {
+        ...prev.contacts,
+        [index]: { ...prev.contacts?.[index], [field]: undefined }
+      }
+    }));
     const newContacts = [...contacts]
     newContacts[index][field] = value
     setContacts(newContacts)
   }
 
   const handleContactPhoneChange = (index: number, phoneValue: string) => {
+    setErrors(prev => ({
+      ...prev,
+      contacts: {
+        ...prev.contacts,
+        [index]: { ...prev.contacts?.[index], phone: undefined }
+      }
+    }));
     const newContacts = [...contacts]
     const formattedPhone = phoneValue.startsWith('+') ? phoneValue : `+${phoneValue}`;
     newContacts[index].phone = formattedPhone;
@@ -205,36 +242,64 @@ export default function CreateLeadPage() {
       setContacts(newContacts)
     }
   }
+  
+  const validateForm = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    let firstErrorId: string | null = null;
+
+    if (!formData.company_name.trim()) {
+      newErrors.company_name = "Company Name is required.";
+      if (!firstErrorId) firstErrorId = "company_name";
+    }
+    if (!formData.assigned_to.trim()) {
+      newErrors.assigned_to = "'Assigned To' is required.";
+      if (!firstErrorId) firstErrorId = "assigned_to";
+    }
+
+    const contactErrors: ValidationErrors['contacts'] = {};
+    contacts.forEach((contact, index) => {
+        const currentContactErrors: {first_name?: string; last_name?: string; phone?: string;} = {};
+        if (!contact.first_name.trim()) {
+            currentContactErrors.first_name = "First Name is required.";
+            if (!firstErrorId) firstErrorId = `first_name_${index}`;
+        }
+        if (!contact.last_name.trim()) {
+            currentContactErrors.last_name = "Last Name is required.";
+            if (!firstErrorId) firstErrorId = `last_name_${index}`;
+        }
+        if (!contact.phone || contact.phone.length <= 3) {
+            currentContactErrors.phone = "Phone number is required.";
+            if (!firstErrorId) firstErrorId = `phone_${index}`;
+        }
+        if (Object.keys(currentContactErrors).length > 0) {
+            contactErrors[index] = currentContactErrors;
+        }
+    });
+
+    if (Object.keys(contactErrors).length > 0) {
+        newErrors.contacts = contactErrors;
+    }
+
+    setErrors(newErrors);
+
+    if (firstErrorId) {
+        const errorElement = formRef.current?.querySelector(`#${firstErrorId}`);
+        errorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        toast({
+            title: "Missing Required Fields",
+            description: "Please fill in all the highlighted fields.",
+            variant: "destructive",
+        });
+    }
+
+    return Object.keys(newErrors).length === 0;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.company_name || !formData.assigned_to) {
-      toast({
-        title: "Missing Required Fields",
-        description: "Please fill in Company Name and select a user for 'Assigned To'.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    for (const [index, contact] of contacts.entries()) {
-      if (!contact.first_name || !contact.last_name) {
-        toast({
-          title: `Missing Name for Contact ${index + 1}`,
-          description: "Please provide a first name and last name for all contact persons.",
-          variant: "destructive",
-        })
-        return
-      }
-      if (!contact.phone) {
-        toast({
-          title: `Missing Phone for Contact ${index + 1}`,
-          description: "Please provide a phone number for all contact persons.",
-          variant: "destructive",
-        })
-        return
-      }
+    if (!validateForm()) {
+      return;
     }
 
     setIsLoading(true)
@@ -249,8 +314,8 @@ export default function CreateLeadPage() {
         phone: contact.phone,
         email: contact.email,
         designation: contact.designation,
-        linkedIn: contact.linkedIn, // New field
-        pan: contact.pan, // New field
+        linkedIn: contact.linkedIn,
+        pan: contact.pan,
       }))
 
       const leadData = {
@@ -264,14 +329,14 @@ export default function CreateLeadPage() {
         contacts: processedContacts,
       }
 
-      await leadApi.createLead(leadData)
+      const newLead = await leadApi.createLead(leadData);
 
       toast({
         title: "Lead Created",
         description: "The lead has been successfully created. Redirecting...",
       })
 
-      window.location.href = "/dashboard/leads"
+      router.push(`/dashboard/leads/${newLead.id}`);
 
     } catch (error) {
       console.error("[v0] Failed to create lead:", error)
@@ -304,7 +369,7 @@ export default function CreateLeadPage() {
           <CardTitle className="text-lg sm:text-xl">Lead Information</CardTitle>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="company_name">Company *</Label>
@@ -312,7 +377,7 @@ export default function CreateLeadPage() {
                   id="company_name"
                   value={formData.company_name}
                   onChange={e => handleInputChange("company_name", e.target.value)}
-                  required
+                  className={errors.company_name ? "border-red-500" : ""}
                 />
               </div>
               <div className="space-y-1">
@@ -326,7 +391,6 @@ export default function CreateLeadPage() {
               </div>
             </div>
 
-            {/* New fields: Website and LinkedIn for Company */}
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="website">Website</Label>
@@ -391,7 +455,7 @@ export default function CreateLeadPage() {
                           id={`first_name_${index}`}
                           value={contact.first_name}
                           onChange={e => handleContactChange(index, "first_name", e.target.value)}
-                          required
+                          className={errors.contacts?.[index]?.first_name ? "border-red-500" : ""}
                         />
                       </div>
                       <div className="space-y-1">
@@ -400,7 +464,7 @@ export default function CreateLeadPage() {
                           id={`last_name_${index}`}
                           value={contact.last_name}
                           onChange={e => handleContactChange(index, "last_name", e.target.value)}
-                          required
+                          className={errors.contacts?.[index]?.last_name ? "border-red-500" : ""}
                         />
                       </div>
                     </div>
@@ -413,12 +477,9 @@ export default function CreateLeadPage() {
                         value={contact.phone}
                         onChange={phone => handleContactPhoneChange(index, phone)}
                         enableSearch={true}
-                        inputProps={{
-                          id: `phone_${index}`,
-                          required: true,
-                        }}
+                        inputProps={{ id: `phone_${index}` }}
                         containerClass="w-full"
-                        inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm"
+                        inputClass={`!w-full !flex !h-10 !rounded-md !border !bg-background !pl-10 !px-3 !py-2 !text-sm ${errors.contacts?.[index]?.phone ? "!border-red-500" : "!border-input"}`}
                       />
                     </div>
                     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
@@ -441,7 +502,6 @@ export default function CreateLeadPage() {
                       </div>
                     </div>
                   </div>
-                  {/* New fields: LinkedIn and PAN for Contact */}
                   <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                     <div className="space-y-1">
                       <Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label>
@@ -524,7 +584,7 @@ export default function CreateLeadPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ">
               <div className="space-y-1">
                 <Label htmlFor="phone_2">Company Phone 2</Label>
                 <PhoneInput
@@ -534,7 +594,7 @@ export default function CreateLeadPage() {
                   enableSearch={true}
                   inputProps={{ id: "phone_2" }}
                   containerClass="w-full"
-                  inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm"
+                  inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm"
                 />
               </div>
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
@@ -583,6 +643,34 @@ export default function CreateLeadPage() {
                 </div>
             </div>
 
+            {/* --- START: NEW SECTION FOR NEW FIELDS --- */}
+            <div className="space-y-4 rounded-md border p-4">
+                <h3 className="text-md font-semibold">Technical & Financial Details</h3>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                    <div className="space-y-1">
+                        <Label htmlFor="version">Version</Label>
+                        <Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="database_type">Database Type</Label>
+                        <Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} />
+                    </div>
+                     <div className="space-y-1">
+                        <Label htmlFor="amc">AMC</Label>
+                        <Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="gst">Company GST</Label>
+                        <Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor="company_pan">Company PAN</Label>
+                        <Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} />
+                    </div>
+                </div>
+            </div>
+            {/* --- END: NEW SECTION --- */}
+
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               <div className="space-y-1">
                 <Label htmlFor="source">Source</Label>
@@ -614,8 +702,10 @@ export default function CreateLeadPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="assigned_to">Assigned To *</Label>
-                <Select value={formData.assigned_to} onValueChange={value => handleInputChange("assigned_to", value)} required>
-                  <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                <Select value={formData.assigned_to} onValueChange={value => handleInputChange("assigned_to", value)}>
+                  <SelectTrigger id="assigned_to" className={errors.assigned_to ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select user" />
+                  </SelectTrigger>
                   <SelectContent>{companyUsers.map(user => <SelectItem key={user.id} value={user.username}>{user.username}</SelectItem>)}</SelectContent>
                 </Select>
               </div>

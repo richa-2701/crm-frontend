@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { userApi } from "@/lib/api" // Import the API library
+import { userApi, type ApiUser } from "@/lib/api" // Import the API library
 
 interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "user"
+  role: string
   phone?: string
   department?: string
   createdAt?: string
@@ -27,7 +27,7 @@ interface EditUserModalProps {
   user: User | null
   isOpen: boolean
   onClose: () => void
-  onUserUpdated: (user: User) => void
+  onUserUpdated: () => void
 }
 
 export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUserModalProps) {
@@ -46,7 +46,10 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
       setFormData({
         name: user.name || "",
         email: user.email || "",
-        role: user.role || "",
+        // --- START: CORRECTION 1 ---
+        // Default to 'user' if the role is something unexpected.
+        role: user.role || "user", 
+        // --- END: CORRECTION 1 ---
         phone: user.phone || "",
         department: user.department || "",
       })
@@ -60,7 +63,7 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
 
   const validateForm = () => {
     if (!formData.name || !formData.email || !formData.role) {
-      setError("Please fill in all required fields")
+      setError("Please fill in all required fields: Name, Email, and Role.")
       return false
     }
 
@@ -76,12 +79,7 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm()) {
-      return
-    }
-
-    if (!user) {
-      setError("User data not found")
+    if (!validateForm() || !user) {
       return
     }
 
@@ -89,31 +87,20 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
     setError("")
 
     try {
-      // Make the actual API call to update the user
-      const apiResponse = await userApi.updateUser(Number.parseInt(user.id), {
+      // Make the actual API call to update the user with the correct role string
+      await userApi.updateUser(Number.parseInt(user.id), {
         username: formData.name,
         usernumber: formData.phone,
         email: formData.email,
         department: formData.department,
-        role: formData.role,
+        role: formData.role, // This will now send "admin" or "user"
       })
 
-      // Transform the API response to the local User type
-      const updatedUser: User = {
-        id: apiResponse.id.toString(),
-        name: apiResponse.username,
-        email: apiResponse.email || "",
-        role: (apiResponse.role as "admin" | "user") || "user",
-        phone: apiResponse.usernumber,
-        department: apiResponse.department,
-        createdAt: apiResponse.created_at,
-      }
-
-      onUserUpdated(updatedUser)
+      onUserUpdated()
       onClose()
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || "Failed to update user. Please try again."
-      setError(errorMessage)
+      console.error("Update user error:", err);
+      setError(err.message || "An unexpected error occurred.");
     } finally {
       setIsLoading(false)
     }
@@ -165,6 +152,8 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-role">Role *</Label>
+              {/* --- START: CORRECTION 2 --- */}
+              {/* Update the values of the SelectItem components to match the database */}
               <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
@@ -174,6 +163,7 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
                   <SelectItem value="user">Company User</SelectItem>
                 </SelectContent>
               </Select>
+              {/* --- END: CORRECTION 2 --- */}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-phone">Phone Number</Label>

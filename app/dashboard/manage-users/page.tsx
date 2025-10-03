@@ -1,6 +1,6 @@
 // frontend/app/dashboard/manage-users/page.tsx
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,16 +16,15 @@ import { CreateUserModal } from "@/components/users/create-user-modal"
 import { DeleteUserModal } from "@/components/users/delete-user-modal"
 import { userApi, type ApiUser } from "@/lib/api"
 
-// This interface is only used on the frontend, ApiUser is from the backend
 interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "user"
+  role: string
   phone?: string
   department?: string
   createdAt?: string
-  company_name: string; // Add company_name to the local User type
+  company_name: string;
 }
 
 export default function ManageUsersPage() {
@@ -52,11 +51,11 @@ export default function ManageUsersPage() {
         id: user.id.toString(),
         name: user.username,
         email: user.email || `${user.username}@company.com`,
-        role: user.role?.toLowerCase() === "admin" ? "admin" : "user",
+        role: user.role || "user",
         phone: user.usernumber,
         department: user.department || "N/A",
         createdAt: user.created_at,
-        company_name: user.company_name, // Map the company name
+        company_name: user.company_name,
       }))
 
       setUsers(transformedUsers)
@@ -77,17 +76,16 @@ export default function ManageUsersPage() {
     }
 
     const parsedUser: ApiUser = JSON.parse(userData)
-    if (parsedUser.role?.toLowerCase() !== "admin") {
+    if (parsedUser.role !== "admin") {
       router.push("/dashboard")
       return
     }
 
-    // Transform the current user to the local User type as well
     setCurrentUser({
         id: parsedUser.id.toString(),
         name: parsedUser.username,
         email: parsedUser.email || "",
-        role: parsedUser.role?.toLowerCase() === "admin" ? "admin" : "user",
+        role: parsedUser.role || "user",
         phone: parsedUser.usernumber,
         department: parsedUser.department,
         createdAt: parsedUser.created_at,
@@ -116,46 +114,41 @@ export default function ManageUsersPage() {
     setIsDeleteModalOpen(true)
   }
 
-  const handleUserUpdated = async (updatedUser: User) => {
-    try {
-      await userApi.updateUser(Number.parseInt(updatedUser.id), {
-        username: updatedUser.name,
-        usernumber: updatedUser.phone,
-        role: updatedUser.role,
-        email: updatedUser.email,
-        department: updatedUser.department,
-      })
-      
-      setSuccess("User updated successfully!")
-      setTimeout(() => setSuccess(""), 3000)
-      loadUsers(); // Reload to ensure data is fresh from the server
-    } catch (error) {
-      console.error("Failed to update user:", error)
-      setError("Failed to update user. Please try again.")
-      setTimeout(() => setError(""), 3000)
-    }
+  const handleUserUpdated = async () => {
+    setSuccess("User updated successfully!")
+    setTimeout(() => setSuccess(""), 3000)
+    await loadUsers();
   }
 
   const handleUserCreated = () => {
     setSuccess("User created successfully!")
     setTimeout(() => setSuccess(""), 3000)
-    loadUsers() // The best way to show the new user is to reload the list
+    loadUsers()
   }
 
+  // --- START: CORRECTION ---
+  // This function is now the single source of truth for the delete action.
   const handleUserDeleted = async (userId: string) => {
     try {
+      // 1. Make the single API call
       await userApi.deleteUser(Number.parseInt(userId))
 
+      // 2. Update the local state
       const updatedUsers = users.filter((user) => user.id !== userId)
       setUsers(updatedUsers)
+      
+      // 3. Show success message
       setSuccess("User deleted successfully!")
       setTimeout(() => setSuccess(""), 3000)
     } catch (error) {
       console.error("Failed to delete user:", error)
       setError("Failed to delete user. Please try again.")
       setTimeout(() => setError(""), 3000)
+      // Re-throw the error so the modal can catch it and display it
+      throw error; 
     }
   }
+  // --- END: CORRECTION ---
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A"
@@ -256,7 +249,7 @@ export default function ManageUsersPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                          {user.role === "admin" ? "Administrator" : "Company User"}
+                          {user.role === 'admin' ? 'Admin' : 'User'}
                         </Badge>
                       </TableCell>
                       <TableCell>{user.department || "N/A"}</TableCell>
@@ -292,7 +285,6 @@ export default function ManageUsersPage() {
         </CardContent>
       </Card>
 
-      {/* Modals */}
       <EditUserModal
         user={selectedUser}
         isOpen={isEditModalOpen}

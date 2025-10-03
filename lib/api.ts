@@ -42,6 +42,14 @@ export interface ClientContact {
   pan?: string | null;
 }
 
+export interface LeadAttachment {
+  id: number;
+  file_path: string;
+  original_file_name: string;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
 export interface ApiLead {
   id: number;
   company_name: string;
@@ -58,8 +66,8 @@ export interface ApiLead {
   segment?: string;
   team_size?: string;
   remark?: string;
-  status: string;
-  assigned_to: string;
+  status: string | null;
+  assigned_to: string | null;
   created_by: string;
   created_at: string;
   updated_at?: string;
@@ -72,7 +80,69 @@ export interface ApiLead {
   opportunity_business?: string;
   target_closing_date?: string;
   contacts?: Contact[];
+  version?: string;
+  database_type?: string;
+  amc?: string;
+  gst?: string;
+  company_pan?: string;
+  isActive: boolean;
+  attachments: LeadAttachment[];
 }
+
+// --- START: NEW PROPOSAL INTERFACES ---
+export interface ProposalSentContact {
+    id: number;
+    proposal_id: number;
+    contact_name: string;
+    phone: string;
+    email: string | null;
+    designation: string | null;
+    linkedIn: string | null;
+    pan: string | null;
+}
+
+export interface ApiProposalSent extends Omit<ApiLead, 'id' | 'contacts' | 'isActive' | 'attachments'> {
+    id: number;
+    original_lead_id: number;
+    converted_at: string;
+    contacts: ProposalSentContact[];
+    gst: string; // Is mandatory on proposal
+}
+
+export interface ConvertToProposalPayload {
+    company_name?: string;
+    email?: string;
+    gst: string;
+    company_pan?: string;
+    version?: string;
+    database_type?: string;
+    amc?: string;
+    contacts: Omit<Contact, 'id' | 'lead_id'>[];
+    // --- START: FIX - Added all editable fields ---
+    website?: string;
+    linkedIn?: string;
+    address?: string;
+    address_2?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    country?: string;
+    source?: string;
+    segment?: string;
+    team_size?: string;
+    remark?: string;
+    phone_2?: string;
+    turnover?: string;
+    current_system?: string;
+    machine_specification?: string;
+    challenges?: string;
+    lead_type?: string;
+    opportunity_business?: string;
+    target_closing_date?: string;
+    // --- END: FIX ---
+}
+// --- END: NEW PROPOSAL INTERFACES ---
+
 
 export interface ApiClient {
   id: number;
@@ -102,6 +172,9 @@ export interface ApiClient {
   created_at: string;
   updated_at?: string | null;
   contacts?: ClientContact[];
+  // --- START: FIX ---
+  attachments?: LeadAttachment[];
+  // --- END: FIX ---
 }
 
 export interface ApiReportKpiSummary {
@@ -315,7 +388,8 @@ export interface ApiBulkUploadResponse {
 }
 
 export interface ApiScheduleActivityPayload {
-    lead_id: number;
+    lead_id?: number;
+    proposal_id?: number;
     details: string;
     activity_type: string;
     created_by_user_id: number;
@@ -347,7 +421,6 @@ export interface ConvertLeadToClientPayload {
   converted_date?: string;
   contacts?: ClientContact[];
 }
-
 
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
   if (!API_BASE_URL) {
@@ -397,6 +470,11 @@ async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
       return null as T;
     }
 
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+      return response.blob() as Promise<T>;
+    }
+
     return response.json();
   } catch (error) {
     console.error(`Fetch failed for URL: ${url}`, error);
@@ -404,46 +482,57 @@ async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
+async function authFetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
+    if (!API_BASE_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL is not defined.");
+    }
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+        ...options.headers,
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}${url}`, {
+            ...options,
+            headers,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Authentication request failed");
+        }
+        return response.json();
+    } catch (error) {
+        console.error(`Auth fetch failed for URL: ${url}`, error);
+        throw error;
+    }
+}
+
 const unifiedApi = {
-  // --- Auth ---
   login: (username: string, password: string, company_name: string): Promise<ApiUser> => {
-    return fetch(`${API_BASE_URL}/login`, {
+    return authFetcher(`/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
       body: JSON.stringify({ username, password, company_name }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Login failed");
-      }
-      return res.json();
     });
   },
   register: (userData: Omit<ApiUser, 'id' | 'created_at' | 'updated_at'> & { password?: string }): Promise<ApiUser> => {
-    return fetch(`${API_BASE_URL}/register`, {
+    return authFetcher(`/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
       body: JSON.stringify(userData),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Registration failed");
-      }
-      return res.json();
     });
   },
   changePassword: (data: { username: string, old_password: string, new_password: string }) => {
     return fetcher(`/change-password`, { method: 'POST', body: JSON.stringify(data) });
   },
 
-  // --- Users ---
   getUsers: (): Promise<ApiUser[]> => fetcher('/users'),
   updateUser: (userId: number, userData: Partial<ApiUser>): Promise<ApiUser> => {
     return fetcher(`/web/users/${userId}`, { method: 'PUT', body: JSON.stringify(userData) });
   },
   deleteUser: (userId: number): Promise<void> => fetcher(`/web/users/${userId}`, { method: 'DELETE' }),
 
-  // --- Leads ---
   getAllLeads: (): Promise<ApiLead[]> => fetcher('/web/leads'),
   getLeadsByUser: (userId: string): Promise<ApiLead[]> => fetcher(`/leads/${userId}`),
   getLeadById: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}`),
@@ -453,6 +542,22 @@ const unifiedApi = {
   updateLead: (leadId: number, leadData: Partial<ApiLead> & { activity_type?: string; activity_details?: string; }): Promise<ApiLead> => {
     return fetcher(`/web/leads/${leadId}`, { method: 'PUT', body: JSON.stringify(leadData) });
   },
+  softDeleteLead: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}`, { method: 'DELETE' }),
+  getDeletedLeads: (): Promise<ApiLead[]> => fetcher('/web/leads/deleted'),
+  restoreLead: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}/restore`, { method: 'PUT' }),
+  uploadLeadAttachment: (leadId: number, file: File, uploadedBy: string): Promise<LeadAttachment> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('uploaded_by', uploadedBy);
+    return fetcher(`/web/leads/${leadId}/attachments`, { method: 'POST', body: formData });
+  },
+  deleteLeadAttachment: (attachmentId: number): Promise<void> => fetcher(`/web/attachments/${attachmentId}`, { method: 'DELETE' }),
+  // --- START: NEW PROPOSAL FUNCTIONS ---
+  convertLeadToProposal: (leadId: number, payload: ConvertToProposalPayload): Promise<ApiProposalSent> => {
+    return fetcher(`/web/leads/${leadId}/convert-to-proposal`, { method: 'POST', body: JSON.stringify(payload) });
+  },
+  getAllProposals: (): Promise<ApiProposalSent[]> => fetcher('/web/proposals'),
+  // --- END: NEW PROPOSAL FUNCTIONS ---
   convertToClient: (leadId: number, payload: ConvertLeadToClientPayload): Promise<ApiClient> => {
     return fetcher(`/web/leads/${leadId}/convert-to-client`, { method: "POST", body: JSON.stringify(payload) });
   },
@@ -463,6 +568,15 @@ const unifiedApi = {
         user_id: userId,
         start_date: startDate,
         end_date: endDate
+      }),
+    });
+  },
+  exportSummaryReport: (startDate: string, endDate: string): Promise<Blob> => {
+    return fetcher('/web/reports/export-summary-excel', {
+      method: 'POST',
+      body: JSON.stringify({
+        start_date: startDate,
+        end_date: endDate,
       }),
     });
   },
@@ -605,6 +719,15 @@ export const leadApi = {
   uploadBulkLeads: unifiedApi.uploadBulkLeads,
   assignDripToLead: unifiedApi.assignDripToLead,
   convertToClient: unifiedApi.convertToClient,
+  softDeleteLead: unifiedApi.softDeleteLead,
+  getDeletedLeads: unifiedApi.getDeletedLeads,
+  restoreLead: unifiedApi.restoreLead,
+  uploadLeadAttachment: unifiedApi.uploadLeadAttachment,
+  deleteLeadAttachment: unifiedApi.deleteLeadAttachment,
+  // --- START: NEW EXPORTS ---
+  convertLeadToProposal: unifiedApi.convertLeadToProposal,
+  getAllProposals: unifiedApi.getAllProposals,
+  // --- END: NEW EXPORTS ---
 };
 
 export const clientApi = {
@@ -665,4 +788,5 @@ export const demosApi = {
 
 export const reportApi = {
     getUserPerformanceReport: unifiedApi.getUserPerformanceReport,
+    exportSummaryReport: unifiedApi.exportSummaryReport,
 };

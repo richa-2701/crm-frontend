@@ -21,9 +21,14 @@ import { format } from 'date-fns';
 // Use the imported types instead of redefining them
 interface Lead extends ApiLead {}
 interface User extends ApiUser {}
-interface Meeting extends Omit<ApiMeeting, 'type'> {
+// --- START: FIX ---
+interface Meeting extends Omit<ApiMeeting, 'type' | 'lead_id'> {
     type: "meeting" | "demo";
+    lead_id: string | null; // Allow lead_id to be null
+    start_time: string;
+    end_time: string;
 }
+// --- END: FIX ---
 
 
 export default function SchedulePage() {
@@ -103,11 +108,13 @@ export default function SchedulePage() {
           ...demosData.map(d => ({...d, start_time: d.start_time, end_time: d.event_end_time, type: 'demo' as const}))
         ];
         
+        // --- START: FIX ---
         setMeetings(allEvents.map(e => ({
           ...e,
           id: e.id.toString(),
-          lead_id: e.lead_id.toString(),
+          lead_id: e.lead_id ? e.lead_id.toString() : null, // Safely handle null lead_id
         })));
+        // --- END: FIX ---
 
       } catch (error) {
         console.error("Failed to fetch initial data:", error);
@@ -146,14 +153,14 @@ export default function SchedulePage() {
       const isAssigned = meeting.assigned_to === assignedUser.username || meeting.assigned_to === assignedUser.usernumber;
       if (!isAssigned) return false;
       
-      const meetingStart = new Date(meeting.event_time || meeting.start_time);
-      const meetingEnd = new Date(meeting.event_end_time || meeting.end_time);
+      const meetingStart = new Date(meeting.start_time);
+      const meetingEnd = new Date(meeting.end_time);
 
       return start < meetingEnd && end > meetingStart;
     });
 
     if (conflicts.length > 0) {
-      setBusySlots(conflicts.map(m => ({ start: m.event_time || m.start_time, end: m.event_end_time || m.end_time })));
+      setBusySlots(conflicts.map(m => ({ start: m.start_time, end: m.end_time })));
       return false;
     }
 

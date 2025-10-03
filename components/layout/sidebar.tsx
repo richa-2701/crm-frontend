@@ -21,7 +21,8 @@ import {
   ChevronRight, 
   ChevronLeft,
   Users,
-  ChevronDown // <-- 1. Icon for the accordion toggle
+  ChevronDown, // <-- 1. Icon for the accordion toggle
+  Trash2 // <-- NEW: Icon for Recycle Bin
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -70,6 +71,7 @@ const navigationConfig: NavItem[] = [
       { title: "Leads", href: "/dashboard/leads", icon: ListChecks },
       { title: "Create Lead", href: "/dashboard/create-lead", icon: Menu },
       { title: "Bulk Upload Leads", href: "/dashboard/bulk-upload", icon: UploadCloud },
+      { title: "Recycle Bin", href: "/dashboard/leads/recycle-bin", icon: Trash2 }, // <-- NEW: Recycle Bin Link
     ]
   },
   {
@@ -113,7 +115,7 @@ const navigationConfig: NavItem[] = [
 // <-- 3. This is the new component that creates the accordion effect -->
 function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGroup; isCollapsed?: boolean; onItemClick?: () => void }) {
     const pathname = usePathname();
-    const isGroupActive = group.children.some(child => pathname === child.href);
+    const isGroupActive = group.children.some(child => pathname.startsWith(child.href));
     
     // Each group manages its own open/closed state. It starts open if a child link is active.
     const [isOpen, setIsOpen] = useState(isGroupActive);
@@ -132,7 +134,10 @@ function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGr
                             <span className="sr-only">{group.title}</span>
                         </div>
                     </TooltipTrigger>
-                    <TooltipContent side="right"><p>{group.title}</p></TooltipContent>
+                    <TooltipContent side="right">
+                      <p className="font-semibold mb-1">{group.title}</p>
+                      {group.children.map(child => <p key={child.href}>{child.title}</p>)}
+                    </TooltipContent>
                 </Tooltip>
             </TooltipProvider>
         );
@@ -168,8 +173,7 @@ function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGr
                                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             )}
                         >
-                            {/* You can optionally add child icons here too if you want */}
-                            {/* <child.icon className="mr-3 h-4 w-4 shrink-0" /> */}
+                            <child.icon className="mr-3 h-4 w-4 shrink-0" />
                             <span className="truncate">{child.title}</span>
                         </Link>
                     );
@@ -193,7 +197,14 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }
           {/* 4. Map over the config, rendering either a group or a link */}
           {accessibleNavItems.map((item) => {
             if (item.type === 'group') {
-              return <CollapsibleNavGroup key={item.title} group={item} isCollapsed={isCollapsed} onItemClick={onItemClick} />;
+              // --- Filter out admin-only children if user is not an admin ---
+              const accessibleChildren = item.adminOnly && currentUser.role !== 'admin' 
+                  ? [] 
+                  : item.children;
+              if (accessibleChildren.length === 0) return null;
+              
+              const groupToRender = {...item, children: accessibleChildren};
+              return <CollapsibleNavGroup key={item.title} group={groupToRender} isCollapsed={isCollapsed} onItemClick={onItemClick} />;
             }
             
             const Icon = item.icon

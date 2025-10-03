@@ -29,10 +29,11 @@ import {
   Filter,
   Columns,
   Edit,
-  Upload as ExportIcon // Import the Export icon
+  Upload as ExportIcon,
+  Paperclip // Import the Paperclip icon
 } from "lucide-react"
 import Link from "next/link"
-import { api, type ApiClient, type ClientContact } from "@/lib/api"
+import { api, type ApiClient, type ClientContact, type LeadAttachment } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
   DndContext,
@@ -85,6 +86,7 @@ interface Client {
   created_at: string;
   updated_at?: string | null;
   contacts?: ClientContact[];
+  attachments?: LeadAttachment[];
 }
 
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
@@ -118,6 +120,7 @@ const ALL_CLIENT_COLUMNS: ColumnConfig[] = [
     { id: "company_email", label: "Company Email", key: "company_email" },
     { id: "website", label: "Website", key: "website" },
     { id: "linkedIn", label: "Company LinkedIn", key: "linkedIn" },
+    { id: "attachments", label: "Attachments", key: "attachments" },
     { id: "contact_email", label: "Contact Email", key: "contact_email" },
     { id: "contact_designation", label: "Contact Designation", key: "contact_designation" },
     { id: "contact_linkedin", label: "Contact LinkedIn", key: "contact_linkedin" },
@@ -302,6 +305,19 @@ function TableRowComponent({
         return <TableCell>{client.converted_date ? format(new Date(client.converted_date), "MMM d, yyyy") : "N/A"}</TableCell>
       case "created_at":
         return <TableCell>{client.created_at ? format(new Date(client.created_at), "MMM d, yyyy HH:mm") : "N/A"}</TableCell>
+      case "attachments":
+        return (
+          <TableCell className="text-center">
+            {client.attachments && client.attachments.length > 0 && (
+              <div className="flex justify-center items-center">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                <span className="ml-1 text-xs text-muted-foreground">
+                  {client.attachments.length}
+                </span>
+              </div>
+            )}
+          </TableCell>
+        );
       case "actions":
         return (
           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -361,13 +377,15 @@ export default function ClientsPage() {
     { id: "website", label: "Website", key: "website" },
     { id: "city", label: "City", key: "city" },
     { id: "converted_date", label: "Converted Date", key: "converted_date" },
+    { id: "attachments", label: "Attachments", key: "attachments" },
     { id: "actions", label: "Actions", key: "actions" },
   ])
 
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
     ALL_CLIENT_COLUMNS.reduce((acc, col) => ({ ...acc, [col.id]: (
       col.id === "company_name" || col.id === "contact_name" || col.id === "contact_phone" ||
-      col.id === "website" || col.id === "city" || col.id === "converted_date" || col.id === "actions"
+      col.id === "website" || col.id === "city" || col.id === "converted_date" ||
+      col.id === "attachments" || col.id === "actions"
     ) }), {})
   );
 
@@ -421,6 +439,7 @@ export default function ClientsPage() {
           created_at: client.created_at,
           updated_at: client.updated_at,
           contacts: client.contacts || [],
+          attachments: client.attachments || [],
         }));
         setAllClients(transformedClients);
 
@@ -492,6 +511,15 @@ export default function ClientsPage() {
           if (key.startsWith('contact_')) {
             const contactKey = key.replace('contact_', '');
             return client.contacts?.some((c: any) => c[contactKey]?.toString().toLowerCase().includes(filterValue));
+          }
+          if (key === 'attachments') {
+            if (filterValue === 'yes' || filterValue === 'true' || filterValue === '1') {
+                return client.attachments && client.attachments.length > 0;
+            }
+            if (filterValue === 'no' || filterValue === 'false' || filterValue === '0') {
+                return !client.attachments || client.attachments.length === 0;
+            }
+            return false;
           }
           const clientValue = (client as any)[key];
           return clientValue?.toString().toLowerCase().includes(filterValue);
@@ -569,6 +597,7 @@ export default function ClientsPage() {
             case 'contact_designation': value = primaryContact?.designation; break;
             case 'contact_linkedin': value = primaryContact?.linkedIn; break;
             case 'contact_pan': value = primaryContact?.pan; break;
+            case 'attachments': value = client.attachments && client.attachments.length > 0 ? 'Yes' : 'No'; break;
             default:
               value = (client as any)[key as keyof Client];
               break;
@@ -607,7 +636,7 @@ export default function ClientsPage() {
 
   const handleEditClientComplete = (clientId: string, updatedClient: ApiClient) => {
     setAllClients(prevClients =>
-      prevClients.map(client => (client.id === clientId ? { ...client, ...updatedClient, id: updatedClient.id.toString() } : client))
+      prevClients.map(client => (client.id === clientId ? { ...client, ...updatedClient, id: updatedClient.id.toString(), attachments: updatedClient.attachments || [] } : client))
     );
     setShowEditModal(false);
     setSelectedClient(null);
@@ -840,4 +869,4 @@ export default function ClientsPage() {
       />
     </div>
   );
-} 
+}

@@ -11,19 +11,19 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -238,7 +238,7 @@ export default function ActivityPage() {
     const [isScheduleModalOpen, setScheduleModalOpen] = useState(false);
     const [isDoneModalOpen, setDoneModalOpen] = useState(false);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('card');
+    const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [searchTerm, setSearchTerm] = useState("");
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
@@ -292,22 +292,22 @@ export default function ActivityPage() {
                 switch (activeFilter) {
                     case 'today':
                         return scheduledDate && scheduledDate.toDateString() === today.toDateString() && statusLower === 'pending';
-                    
+
                     case 'scheduled':
                         return act.type === 'reminder' && statusLower === 'pending';
-                    
+
                     case 'completed':
                         // A completed activity is anything that is NOT pending and NOT canceled.
                         // This correctly includes reminders with status 'completed' and all logged activities
                         // which represent past actions, while excluding explicitly canceled ones.
                         return statusLower !== 'pending' && statusLower !== 'canceled';
-                    
+
                     case 'canceled':
                         return statusLower === 'canceled';
-                    
+
                     case 'overdue':
                         return scheduledDate && scheduledDate < now && statusLower === 'pending';
-                    
+
                     default: // 'all'
                         return true;
                 }
@@ -393,7 +393,7 @@ export default function ActivityPage() {
 
                 <Card>
                     <CardHeader>
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-4">
                             <div className="relative flex-1 max-w-sm">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -404,7 +404,7 @@ export default function ActivityPage() {
                                 />
                             </div>
 
-                            <div className="hidden md:flex items-center justify-between gap-4">
+                            <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
                                 <RadioGroup value={activeFilter} onValueChange={(value) => setActiveFilter(value as FilterType)} className="flex items-center gap-4">
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="all" id="all-desktop" /><Label htmlFor="all-desktop">All</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="today" id="today-desktop" /><Label htmlFor="today-desktop">Today</Label></div>
@@ -456,16 +456,18 @@ export default function ActivityPage() {
                         ) : filteredActivities.length === 0 ? (
                             <div className="text-center py-16 text-muted-foreground">No activities match your current filters.</div>
                         ) : viewMode === 'grid' ? (
-                            <ActivityTable
-                                activities={paginatedActivities}
-                                onMarkAsDone={handleMarkAsDoneClick}
-                                onViewDetails={handleViewDetailsClick}
-                                onViewPastActivities={handleViewPastActivitiesClick}
-                                onEdit={handleEditClick}
-                                onCancel={handleCancelClick}
-                            />
+                            <div className="overflow-x-auto">
+                                <ActivityTable
+                                    activities={paginatedActivities}
+                                    onMarkAsDone={handleMarkAsDoneClick}
+                                    onViewDetails={handleViewDetailsClick}
+                                    onViewPastActivities={handleViewPastActivitiesClick}
+                                    onEdit={handleEditClick}
+                                    onCancel={handleCancelClick}
+                                />
+                            </div>
                         ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {paginatedActivities.map(activity => (
                                     <ActivityCard
                                         key={`${activity.type}-${activity.id}`}

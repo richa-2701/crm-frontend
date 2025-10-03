@@ -1,4 +1,4 @@
-//frontend/components/leads/edit-lead-modal.tsx
+// frontend/components/leads/edit-lead-modal.tsx
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -32,6 +32,8 @@ interface Contact {
   phone: string
   email: string | null
   designation: string | null
+  linkedIn: string | null;
+  pan: string | null;
 }
 
 interface Lead {
@@ -43,6 +45,8 @@ interface Lead {
     phone: string
     email: string | null
     designation: string | null
+    linkedIn: string | null
+    pan: string | null
   }[]
   email: string
   address?: string
@@ -66,6 +70,13 @@ interface Lead {
   status: string
   opportunity_business?: string
   target_closing_date?: string
+  // --- START: NEW FIELDS ---
+  version?: string;
+  database_type?: string;
+  amc?: string;
+  gst?: string;
+  company_pan?: string;
+  // --- END: NEW FIELDS ---
 }
 
 interface User {
@@ -117,6 +128,9 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
     pincode: "", phone_2: "", team_size: "", turnover: "", source: "", segment: "", verticles: "", assigned_to: "",
     current_system: "", machine_specification: "", challenges: "", remark: "", lead_type: "", status: "",
     opportunity_business: "", target_closing_date: "",
+    // --- START: NEW FIELDS ---
+    version: "", database_type: "", amc: "", gst: "", company_pan: "",
+    // --- END: NEW FIELDS ---
   })
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
   const [selectedState, setSelectedState] = useState<string | undefined>()
@@ -173,11 +187,18 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
         status: lead.status || "",
         opportunity_business: lead.opportunity_business || "",
         target_closing_date: lead.target_closing_date ? lead.target_closing_date.split('T')[0] : "",
+        // --- START: NEW FIELDS ---
+        version: lead.version || "",
+        database_type: lead.database_type || "",
+        amc: lead.amc || "",
+        gst: lead.gst || "",
+        company_pan: lead.company_pan || "",
+        // --- END: NEW FIELDS ---
       })
       if (lead.contacts && lead.contacts.length > 0) {
-        setContacts(lead.contacts.map(c => ({ ...c, ...splitFullName(c.contact_name) })))
+        setContacts(lead.contacts.map(c => ({ ...c, ...splitFullName(c.contact_name), linkedIn: c.linkedIn || null, pan: c.pan || null })))
       } else {
-        setContacts([{ prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "" }])
+        setContacts([{ prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" }])
       }
     }
   }, [lead, countryOptions, isOpen])
@@ -185,13 +206,13 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
   const handleInputChange = (field: keyof typeof formData, value: string) => setFormData(prev => ({ ...prev, [field]: value }))
   const handleContactChange = (index: number, field: keyof Omit<Contact, "phone">, value: string) => { const nc = [...contacts]; nc[index] = { ...nc[index], [field]: value }; setContacts(nc); }
   const handleContactPhoneChange = (index: number, value: string) => { const nc = [...contacts]; nc[index].phone = value; setContacts(nc); }
-  const addContact = () => setContacts([...contacts, { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "" }])
+  const addContact = () => setContacts([...contacts, { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" }])
   const removeContact = (index: number) => { if (contacts.length > 1) setContacts(contacts.filter((_, i) => i !== index)) }
 
   const handleSave = async () => {
     if (!lead) return
     setIsLoading(true)
-    const pc = contacts.map(c => ({ id: c.id, contact_name: `${c.prefix} ${c.first_name} ${c.last_name}`.trim(), phone: c.phone, email: c.email, designation: c.designation }))
+    const pc = contacts.map(c => ({ id: c.id, contact_name: `${c.prefix} ${c.first_name} ${c.last_name}`.trim(), phone: c.phone, email: c.email, designation: c.designation, linkedIn: c.linkedIn, pan: c.pan }))
     const countryName = Country.getCountryByCode(formData.country)?.name
     const stateName = State.getStateByCodeAndCountry(formData.state, formData.country)?.name
     const payload = { ...formData, target_closing_date: formData.target_closing_date || null, country: countryName || formData.country, state: stateName || formData.state, contacts: pc }
@@ -235,10 +256,14 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
                     <div className="space-y-2"><Label htmlFor={`first_name_${index}`}>First Name *</Label><Input id={`first_name_${index}`} value={contact.first_name} onChange={e => handleContactChange(index, "first_name", e.target.value)} required /></div>
                     <div className="space-y-2"><Label htmlFor={`last_name_${index}`}>Last Name *</Label><Input id={`last_name_${index}`} value={contact.last_name} onChange={e => handleContactChange(index, "last_name", e.target.value)} required /></div>
                 </div>
-                    <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
+                    <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
                     <div className="space-y-2"><Label htmlFor={`designation_${index}`}>Designation</Label><Input id={`designation_${index}`} value={contact.designation || ""} onChange={e => handleContactChange(index, "designation", e.target.value)} /></div>
                 
                 <div className="space-y-2"><Label htmlFor={`contact_email_${index}`}>Contact Email</Label><Input id={`contact_email_${index}`} type="email" value={contact.email || ""} onChange={e => handleContactChange(index, "email", e.target.value)} /></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="space-y-2"><Label htmlFor={`contact_linkedin_${index}`}>LinkedIn</Label><Input id={`contact_linkedin_${index}`} value={contact.linkedIn || ""} onChange={e => handleContactChange(index, "linkedIn", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor={`contact_pan_${index}`}>PAN</Label><Input id={`contact_pan_${index}`} value={contact.pan || ""} onChange={e => handleContactChange(index, "pan", e.target.value)} /></div>
+                </div>
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add Another Contact</Button>
@@ -258,7 +283,7 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
           
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Lead Classification & Details</h3>
-            <div className="space-y-2"><Label htmlFor="phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.phone_2} onChange={v => handleInputChange("phone_2", v)} inputProps={{ id: 'phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
+            <div className="space-y-2"><Label htmlFor="phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.phone_2} onChange={v => handleInputChange("phone_2", v)} inputProps={{ id: 'phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-2"><Label htmlFor="team_size">Team Size</Label><Input id="team_size" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} /></div>
               <div className="space-y-2"><Label htmlFor="turnover">Turnover</Label><Input id="turnover" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} /></div>
@@ -272,6 +297,19 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
               <div className="space-y-2"><Label htmlFor="status">Lead Status</Label><Select value={formData.status} onValueChange={v => handleInputChange("status", v)}><SelectTrigger id="status"><SelectValue placeholder="Select a status" /></SelectTrigger><SelectContent>{masterOptions.status.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select></div>
             </div>
           </div>
+          
+           {/* --- START: NEW SECTION FOR NEW FIELDS --- */}
+           <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Technical & Financial Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                    <div className="space-y-2"><Label htmlFor="version">Version</Label><Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor="gst">Company GST</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor="company_pan">Company PAN</Label><Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} /></div>
+                </div>
+            </div>
+            {/* --- END: NEW SECTION --- */}
 
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">System & Remarks</h3>

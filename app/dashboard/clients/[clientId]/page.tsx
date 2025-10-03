@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     Loader2, ArrowLeft, Mail, Phone, User, Building, Globe, MapPin,
     Tag, Users, TrendingUp, FileText, Briefcase, MessageSquare, CalendarCheck, DollarSign,
-    Code, HardDrive, Wrench, Receipt, Bug, Edit // Added Edit icon here
+    Code, HardDrive, Wrench, Receipt, Bug, Edit
 } from "lucide-react"
 
 // Import EditClientModal
@@ -44,6 +44,9 @@ const IconInfoField = ({
     );
 };
 
+// IMPORTANT: Ensure this URL is correct and accessible from your browser.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://4adc3d24dcb8.ngrok-free.app";
+
 export default function ClientDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -56,8 +59,13 @@ export default function ClientDetailPage() {
 
   useEffect(() => {
     if (clientId) {
-      api.getClientById(Number(clientId)) // Corrected: Directly call getClientById on api object
+      // This API call fetches all client details, including contacts AND attachments,
+      // because the backend's get_client_by_id function uses `joinedload`.
+      api.getClientById(Number(clientId))
         .then((clientData) => {
+          // When this runs, clientData should contain an `attachments` array.
+          // It might be empty for old clients.
+          console.log("Fetched Client Data:", clientData); // <-- Add this for debugging
           setClient(clientData)
         })
         .catch((err) => {
@@ -115,7 +123,7 @@ export default function ClientDetailPage() {
                   </div>
               </div>
               <div className="flex items-center gap-2">
-                  <Button onClick={() => setShowEditModal(true)}> {/* Edit Client button */}
+                  <Button onClick={() => setShowEditModal(true)}>
                       <Edit className="mr-2 h-4 w-4" />Edit Client
                   </Button>
               </div>
@@ -128,16 +136,20 @@ export default function ClientDetailPage() {
                           <Card>
                               <CardHeader><CardTitle>Contact Information</CardTitle></CardHeader>
                               <CardContent className="space-y-6">
-                                  {client.contacts && client.contacts.map(contact => (
-                                    <div key={contact.id} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                      <IconInfoField label="Contact Person" value={contact.contact_name} icon={User} />
-                                      <IconInfoField label="Designation" value={contact.designation} icon={Briefcase} />
-                                      <IconInfoField label="Email" value={contact.email} icon={Mail} />
-                                      <IconInfoField label="Phone" value={contact.phone} icon={Phone} />
-                                      <IconInfoField label="LinkedIn" value={contact.linkedIn} icon={Globe} />
-                                      <IconInfoField label="PAN" value={contact.pan} icon={FileText} />
-                                    </div>
-                                  ))}
+                                  {client.contacts && client.contacts.length > 0 ? (
+                                    client.contacts.map(contact => (
+                                      <div key={contact.id} className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                                        <IconInfoField label="Contact Person" value={contact.contact_name} icon={User} />
+                                        <IconInfoField label="Designation" value={contact.designation} icon={Briefcase} />
+                                        <IconInfoField label="Email" value={contact.email} icon={Mail} />
+                                        <IconInfoField label="Phone" value={contact.phone} icon={Phone} />
+                                        <IconInfoField label="LinkedIn" value={contact.linkedIn} icon={Globe} />
+                                        <IconInfoField label="PAN" value={contact.pan} icon={FileText} />
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No contacts available.</p>
+                                  )}
                                   <Separator />
                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                        <IconInfoField label="Company Email" value={client.company_email} icon={Building} />
@@ -157,6 +169,42 @@ export default function ClientDetailPage() {
                                 <IconInfoField label="Pincode" value={client.pincode} icon={MapPin} />
                               </CardContent>
                           </Card>
+                          
+                          {/* ======================================================================= */}
+                          {/* ==== THIS IS THE CRITICAL SECTION FOR DISPLAYING ATTACHMENTS ==== */}
+                          {/* This entire <Card> will only appear if `client.attachments` is not empty. */}
+                          {/* ======================================================================= */}
+                          {client.attachments && client.attachments.length > 0 && (
+                            <Card>
+                                <CardHeader><CardTitle>Attachments</CardTitle></CardHeader>
+                                <CardContent>
+                                    <ul className="space-y-3">
+                                        {client.attachments.map((attachment) => (
+                                            <li key={attachment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 border">
+                                                <div className="flex items-center gap-3 truncate">
+                                                    <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                    <div className="flex flex-col truncate">
+                                                        <a
+                                                            href={`${API_BASE_URL}/web/attachments/preview/${attachment.file_path}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-sm font-medium text-primary hover:underline truncate"
+                                                            title={attachment.original_file_name}
+                                                        >
+                                                            {attachment.original_file_name}
+                                                        </a>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            Uploaded by {attachment.uploaded_by} on {format(new Date(attachment.uploaded_at), "MMM d, yyyy")}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </CardContent>
+                            </Card>
+                          )}
+                           {/* --- END OF ATTACHMENTS SECTION --- */}
                       </div>
 
                       <div className="space-y-6">
@@ -179,7 +227,6 @@ export default function ClientDetailPage() {
                                   <IconInfoField label="Challenges" value={client.challenges} icon={Bug} />
                                   <IconInfoField label="Version" value={client.version} icon={Code} />
                                   <IconInfoField label="Database Type" value={client.database_type} icon={HardDrive} />
-                                  <IconInfoField label="Remarks" value={client.remark} icon={MessageSquare} />
                               </CardContent>
                           </Card>
                       </div>

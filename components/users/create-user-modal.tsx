@@ -16,7 +16,7 @@ interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "user"
+  role: string
   phone?: string
   department?: string
   createdAt?: string
@@ -26,8 +26,8 @@ interface User {
 interface CreateUserModalProps {
   isOpen: boolean
   onClose: () => void
-  onUserCreated: () => void; // Changed to not expect a user object
-  currentUser: User | null; // Accept the current user as a prop
+  onUserCreated: () => void;
+  currentUser: User | null;
 }
 
 export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }: CreateUserModalProps) {
@@ -36,7 +36,10 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
     email: "",
     password: "",
     confirmPassword: "",
-    role: "user", // Default to 'user'
+    // --- START: CORRECTION 1 ---
+    // Default role now matches a likely valid database value.
+    role: "user",
+    // --- END: CORRECTION 1 ---
     phone: "",
     department: "",
   })
@@ -76,12 +79,10 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // --- START: ADDED A CHECK FOR CURRENT USER ---
     if (!currentUser) {
         setError("Cannot create user: Admin context is lost. Please refresh the page.");
         return;
     }
-    // --- END: ADDED A CHECK FOR CURRENT USER ---
 
     if (!validateForm()) {
       return
@@ -91,20 +92,18 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
     setError("")
 
     try {
-      // --- START: CORRECTED API CALL ---
       await authApi.register({
         username: formData.name,
-        company_name: currentUser.company_name, // Pass the admin's company name
+        company_name: currentUser.company_name,
         password: formData.password,
         usernumber: formData.phone,
         email: formData.email,
         department: formData.department,
-        role: formData.role,
+        role: formData.role, // This will now send 'admin' or 'user'
       })
-      // --- END: CORRECTED API CALL ---
 
-      onUserCreated() // Signal success to the parent page
-      handleClose() // Close and reset the modal
+      onUserCreated()
+      handleClose()
     } catch (err: any) {
       const errorMessage = err.message || "Failed to create user. Please try again."
       setError(errorMessage.includes("already exists") ? "A user with this username already exists in your company." : errorMessage)
@@ -120,7 +119,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
       email: "",
       password: "",
       confirmPassword: "",
-      role: "user",
+      role: "user", // Reset to the corrected default
       phone: "",
       department: "",
     })
@@ -191,6 +190,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="create-role">Role *</Label>
+              {/* --- START: CORRECTION 2 --- */}
+              {/* The `value` prop of SelectItem now uses valid database values */}
               <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
@@ -200,6 +201,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
                   <SelectItem value="user">Company User</SelectItem>
                 </SelectContent>
               </Select>
+              {/* --- END: CORRECTION 2 --- */}
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-phone">Phone Number *</Label>

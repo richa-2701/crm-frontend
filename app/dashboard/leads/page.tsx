@@ -1,7 +1,7 @@
-// frontend/app/leads/page.tsx
+// frontend/app/dashboard/leads/page.tsx
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo,useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   MoreHorizontal,
@@ -41,7 +51,8 @@ import {
   Workflow as DripIcon,
   Columns,
   Handshake,
-  FileText, // Icon for 'Proposal Sent'
+  FileText,
+  Trash2, // <-- NEW: Import Trash icon
 } from "lucide-react"
 import Link from "next/link"
 import { ReassignLeadModal } from "@/components/leads/reassign-lead-modal"
@@ -50,7 +61,10 @@ import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
-import { api, userApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity } from "@/lib/api"
+// --- START: FIX ---
+import { ConvertToProposalModal } from "@/components/leads/convert-to-proposal-modal";
+// --- END: FIX ---
+import { api, userApi, leadApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
   DndContext,
@@ -114,6 +128,7 @@ function TableRowComponent({
   handleAssignDrip,
   handleConvertToProposalSent,
   handleConvertLeadToClient,
+  handleDeleteLead, // <-- NEW: Pass delete handler
   canManageAllLeads: canManage,
 }: {
   lead: Lead
@@ -128,6 +143,7 @@ function TableRowComponent({
   handleAssignDrip: (lead: Lead) => void
   handleConvertToProposalSent: (lead: Lead) => void;
   handleConvertLeadToClient: (lead: Lead) => void
+  handleDeleteLead: (lead: Lead) => void; // <-- NEW
   canManageAllLeads: boolean
 }) {
 
@@ -259,6 +275,13 @@ function TableRowComponent({
                   <Edit className="mr-2 h-4 w-4" />
                   Edit/Update Lead
                 </DropdownMenuItem>
+                {/* --- START: NEW DELETE OPTION --- */}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleDeleteLead(lead)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Lead
+                </DropdownMenuItem>
+                {/* --- END: NEW DELETE OPTION --- */}
               </DropdownMenuContent>
             </DropdownMenu>
           </TableCell>
@@ -508,6 +531,13 @@ export default function LeadsPage() {
   const [showPdfDialog, setShowPdfDialog] = useState(false)
   const [leadForPdf, setLeadForPdf] = useState<Lead | null>(null)
 
+  // --- START: NEW STATE FOR DELETE CONFIRMATION ---
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  
+  const [showConvertToProposalModal, setShowConvertToProposalModal] = useState(false);
+  // --- END: NEW STATE ---
+
   const [visibleColumns, setVisibleColumns] = useState<ColumnConfig[]>([
     { id: "company_name", label: "Lead Name", key: "company_name" },
     { id: "contact_name", label: "Contact Person Name", key: "contact_name" },
@@ -569,48 +599,49 @@ export default function LeadsPage() {
 
   const [showExportOptionsModal, setShowExportOptionsModal] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        const userData = localStorage.getItem("user")
-        if (!userData) {
-          setError("User not found. Please log in again.")
-          return
-        }
-        const parsedUser = JSON.parse(userData)
-        setUser(parsedUser)
-        const [usersData, allLeadsData, dripsData] = await Promise.all([
-          userApi.getUsers(),
-          api.getAllLeads(),
-          api.getDripSequences()
-        ]);
-        const transformedLeads: Lead[] = allLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
-          id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
-          last_activity: lead.last_activity || null,
-          opportunity_business: lead.opportunity_business,
-          target_closing_date: lead.target_closing_date,
-        }));
-        const transformedUsers: CompanyUser[] = usersData.map((user: ApiUser) => ({
-          id: user.id.toString(), name: user.username, email: user.email || `${user.username}@company.com`, role: user.role || "user",
-        }));
-        setAllLeads(transformedLeads);
-        setCompanyUsers(transformedUsers);
-        setDripSequences(dripsData);
-        if (parsedUser.role !== "admin") {
-          setViewMode("my");
-        } else {
-          setViewMode("all");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load leads.");
-      } finally {
-        setIsLoading(false);
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const userData = localStorage.getItem("user")
+      if (!userData) {
+        setError("User not found. Please log in again.")
+        return
       }
-    };
-    fetchData();
+      const parsedUser = JSON.parse(userData)
+      setUser(parsedUser)
+      const [usersData, allLeadsData, dripsData] = await Promise.all([
+        userApi.getUsers(),
+        api.getAllLeads(),
+        api.getDripSequences()
+      ]);
+      const transformedLeads: Lead[] = allLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
+        id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
+        last_activity: lead.last_activity || null,
+        opportunity_business: lead.opportunity_business,
+        target_closing_date: lead.target_closing_date,
+      }));
+      const transformedUsers: CompanyUser[] = usersData.map((user: ApiUser) => ({
+        id: user.id.toString(), name: user.username, email: user.email || `${user.username}@company.com`, role: user.role || "user",
+      }));
+      setAllLeads(transformedLeads);
+      setCompanyUsers(transformedUsers);
+      setDripSequences(dripsData);
+      if (parsedUser.role !== "admin") {
+        setViewMode("my");
+      } else {
+        setViewMode("all");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load leads.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     const newVisibleColumns = ALL_COLUMNS.filter(col => columnVisibility[col.id]);
@@ -631,7 +662,6 @@ export default function LeadsPage() {
     if (filters.status) { leadsToProcess = leadsToProcess.filter(lead => lead.status === filters.status); }
     if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to === filters.assigned_to); }
 
-    // --- THIS IS THE CORRECTED DATE FILTERING LOGIC ---
     if (filters.created_at_start) {
         const startDate = new Date(`${filters.created_at_start}T00:00:00`);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) >= startDate);
@@ -640,7 +670,6 @@ export default function LeadsPage() {
         const endDate = new Date(`${filters.created_at_end}T23:59:59`);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) <= endDate);
     }
-    // --- END OF CORRECTION ---
 
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
@@ -748,7 +777,6 @@ export default function LeadsPage() {
       if (exportFilters.status) { leadsToExport = leadsToExport.filter(lead => lead.status === exportFilters.status); }
       if (exportFilters.assigned_to) { leadsToExport = leadsToExport.filter(lead => exportFilters.assigned_to === "all" ? true : lead.assigned_to === exportFilters.assigned_to); }
 
-      // --- THIS IS THE CORRECTED DATE FILTERING LOGIC FOR EXPORT ---
       if (exportFilters.created_at_start) {
           const startDate = new Date(`${exportFilters.created_at_start}T00:00:00`);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) >= startDate);
@@ -757,7 +785,6 @@ export default function LeadsPage() {
           const endDate = new Date(`${exportFilters.created_at_end}T23:59:59`);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) <= endDate);
       }
-      // --- END OF CORRECTION ---
 
       if (leadsToExport.length === 0) {
         toast({ title: "No leads to export", description: "The applied export filters result in zero leads." });
@@ -847,10 +874,7 @@ export default function LeadsPage() {
     }
     try {
       await api.updateLead(Number(leadId), { assigned_to: newUser.name });
-      const updatedAllLeads = allLeads.map((lead) =>
-        lead.id === leadId ? { ...lead, assigned_to: newUser.name, updated_at: new Date().toISOString() } : lead,
-      );
-      setAllLeads(updatedAllLeads);
+      fetchData(); // Refetch all data
       toast({ title: "Success!", description: `Lead has been reassigned to ${newUser.name}.` });
     } catch (error) {
       console.error("Failed to reassign lead:", error);
@@ -863,10 +887,7 @@ export default function LeadsPage() {
   const handleEditComplete = async (leadId: string, updatedData: Partial<Lead>) => {
     try {
       await api.updateLead(Number(leadId), updatedData);
-      const updatedAllLeads = allLeads.map((lead) =>
-        lead.id === leadId ? { ...lead, ...updatedData, updated_at: new Date().toISOString() } : lead
-      );
-      setAllLeads(updatedAllLeads);
+      fetchData(); // Refetch all data
       toast({ title: "Success", description: "Lead details have been updated." });
     } catch (error) {
       console.error("Failed to update lead:", error);
@@ -875,6 +896,34 @@ export default function LeadsPage() {
       setShowEditModal(false);
     }
   };
+
+  // --- START: NEW DELETE HANDLERS ---
+  const handleDeleteLead = (lead: Lead) => {
+    setLeadToDelete(lead);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!leadToDelete) return;
+    try {
+      await leadApi.softDeleteLead(parseInt(leadToDelete.id, 10));
+      setAllLeads(prevLeads => prevLeads.filter(l => l.id !== leadToDelete.id));
+      toast({
+        title: "Lead Deleted",
+        description: `${leadToDelete.company_name} has been moved to the recycle bin.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete the lead.",
+        variant: "destructive",
+      });
+    } finally {
+      setLeadToDelete(null);
+      setShowDeleteConfirm(false);
+    }
+  };
+  // --- END: NEW DELETE HANDLERS ---
 
   const handleFilterChange = (key: keyof LeadsPageFilters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value === "all" ? "" : value }));
@@ -899,34 +948,19 @@ export default function LeadsPage() {
     setShowConvertLeadToClientModal(true);
   };
   
-  const handleConvertToProposalSent = async (lead: Lead) => {
-    try {
-        await api.updateLead(Number(lead.id), { status: "Proposal Sent" });
-        
-        const updatedAllLeads = allLeads.map((l) =>
-            l.id === lead.id ? { ...l, status: "Proposal Sent", updated_at: new Date().toISOString() } : l,
-        );
-        setAllLeads(updatedAllLeads);
-        
-        toast({
-            title: "Status Updated",
-            description: `${lead.company_name} has been moved to 'Proposal Sent'.`,
-        });
-    } catch (error) {
-        console.error("Failed to update lead status:", error);
-        toast({
-            title: "Update Failed",
-            description: error instanceof Error ? error.message : "Could not update lead status.",
-            variant: "destructive",
-        });
-    }
+  const handleConvertToProposalSent = (lead: Lead) => {
+    setSelectedLead(lead);
+    setShowConvertToProposalModal(true);
   };
+  
+  const handleProposalConversionSuccess = (convertedLeadId: number) => {
+    setAllLeads(prev => prev.filter(l => l.id !== convertedLeadId.toString()));
+    setShowConvertToProposalModal(false);
+    router.push('/dashboard/proposals');
+  }
 
   const handleConversionSuccess = (convertedLeadId: string) => {
-    const updatedAllLeads = allLeads.map(lead =>
-      lead.id === convertedLeadId ? { ...lead, status: "Won/Deal Done", updated_at: new Date().toISOString() } : lead
-    );
-    setAllLeads(updatedAllLeads);
+    fetchData(); // Refetch all data
     toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." });
     setShowConvertLeadToClientModal(false);
     router.push('/dashboard/clients');
@@ -990,195 +1024,198 @@ export default function LeadsPage() {
   if (!user) { return <div>Loading...</div> }
 
    return (
-    <div className="flex h-full flex-col space-y-4">
-      <div className="flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Lead Details</h1>
-            <p className="text-muted-foreground">{viewMode === "all" ? "Manage and track all leads" : "Manage and track your assigned leads"}</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button onClick={handleOpenExportModal} variant="outline" disabled={isExporting}>
-              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExportIcon className="mr-2 h-4 w-4" />}
-              Export to Excel
-            </Button>
-            <Link href="/dashboard/create-lead"><Button><Plus className="mr-2 h-4 w-4" />Create Lead</Button></Link>
+    <>
+      <div className="flex h-full flex-col space-y-4">
+        <div className="flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Lead Details</h1>
+              <p className="text-muted-foreground">{viewMode === "all" ? "Manage and track all leads" : "Manage and track your assigned leads"}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button onClick={handleOpenExportModal} variant="outline" disabled={isExporting}>
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExportIcon className="mr-2 h-4 w-4" />}
+                Export to Excel
+              </Button>
+              <Link href="/dashboard/create-lead"><Button><Plus className="mr-2 h-4 w-4" />Create Lead</Button></Link>
+            </div>
           </div>
         </div>
-      </div>
 
-      <Card className="flex flex-1 flex-col overflow-hidden">
-        <CardHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle>
-              {viewMode === "all" ? "All Leads" : "My Assigned Leads"}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({filteredLeads.length} leads)</span>
-            </CardTitle>
-            <div className="flex items-center space-x-2">
-              <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center space-x-2"><User className="h-4 w-4" /><span>My Leads</span></Button>
-              <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center space-x-2"><Users className="h-4 w-4" /><span>All Leads</span></Button>
+        <Card className="flex flex-1 flex-col overflow-hidden">
+          <CardHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <CardTitle>
+                {viewMode === "all" ? "All Leads" : "My Assigned Leads"}
+                <span className="ml-2 text-sm font-normal text-muted-foreground">({filteredLeads.length} leads)</span>
+              </CardTitle>
+              <div className="flex items-center space-x-2">
+                <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center space-x-2"><User className="h-4 w-4" /><span>My Leads</span></Button>
+                <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center space-x-2"><Users className="h-4 w-4" /><span>All Leads</span></Button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center space-x-2 pt-4">
-            <div className="relative flex-grow">
-              <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search all columns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 w-full"/>
-            </div>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline"><Columns className="mr-2 h-4 w-4" />Columns</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {ALL_COLUMNS.filter(col => col.key !== 'actions').map((column) => (
-                        <DropdownMenuCheckboxItem
-                            key={column.id}
-                            className="capitalize"
-                            checked={columnVisibility[column.id]}
-                            onCheckedChange={(value) => setColumnVisibility(prev => ({ ...prev, [column.id]: !!value }))}
-                        >
-                            {column.label}
-                        </DropdownMenuCheckboxItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="relative">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filters
-                  {activeFilterCount > 0 && (<Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 justify-center p-0">{activeFilterCount}</Badge>)}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  <h4 className="font-medium leading-none">Apply Filters</h4>
-                  <div className="space-y-2"><Label htmlFor="address">Area / Address</Label><Input id="address" placeholder="e.g., Indore" value={filters.address} onChange={(e) => handleFilterChange("address", e.target.value)} /></div>
-                  <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={filters.lead_type === "" ? "all" : filters.lead_type} onValueChange={(value) => handleFilterChange("lead_type", value)}><SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem>{leadTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={filters.status === "" ? "all" : filters.status} onValueChange={(value) => handleFilterChange("status", value)}><SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{Object.keys(statusColors).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label htmlFor="assigned_to">Assigned To</Label><Select value={filters.assigned_to === "" ? "all" : filters.assigned_to} onValueChange={(value) => handleFilterChange("assigned_to", value)}><SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger><SelectContent><SelectItem value="all">All Users</SelectItem>{companyUsers.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-2">
-                          <Label htmlFor="created_at_start">Created After</Label>
-                          <Input
-                              id="created_at_start"
-                              type="date"
-                              value={filters.created_at_start}
-                              onChange={(e) => handleFilterChange("created_at_start", e.target.value)}
-                          />
-                      </div>
-                      <div className="space-y-2">
-                          <Label htmlFor="created_at_end">Created Before</Label>
-                          <Input
-                              id="created_at_end"
-                              type="date"
-                              value={filters.created_at_end}
-                              onChange={(e) => handleFilterChange("created_at_end", e.target.value)}
-                          />
-                      </div>
-                  </div>
-                  <Button onClick={clearFilters} variant="ghost" className="w-full">Clear All Filters</Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          {activeFilterCount > 0 && (
-            <div className="flex items-center gap-2 pt-4 flex-wrap">
-              <span className="text-sm font-medium">Active Filters:</span>
-              {Object.entries(filters).map(([key, value]) => value ? (<Badge key={key} variant="secondary" className="flex items-center gap-1">{key.replace(/_/g, " ").replace("created at", "Created")}: {value}<button onClick={() => removeFilter(key as keyof LeadsPageFilters)} className="rounded-full hover:bg-muted-foreground/20 p-0.5"><XIcon className="h-3 w-3" /></button></Badge>) : null)}
-            </div>
-          )}
-        </CardHeader>
-
-        <CardContent className="flex flex-1 flex-col min-h-0">
-          <div className="relative flex-1 overflow-auto rounded-md border">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
-                  <SortableContext items={visibleColumns.map((col) => col.id)} strategy={horizontalListSortingStrategy}>
-                    <TableRow>
-                      {visibleColumns.map((column) => (<SortableTableHeader key={column.id} column={column} />))}
-                    </TableRow>
-                  </SortableContext>
-                  <TableRow>
-                      {visibleColumns.map((column) => (
-                          <TableCell key={`${column.id}-filter`} className="p-1 align-top bg-background">
-                              {column.key !== "actions" && (
-                                  <Input
-                                      placeholder={`Filter ${column.label}...`}
-                                      value={columnFilters[column.key] || ""}
-                                      onChange={(e) => handleColumnFilterChange(column.key, e.target.value)}
-                                      className="h-8 text-xs"
-                                  />
-                              )}
-                          </TableCell>
+            <div className="flex items-center space-x-2 pt-4">
+              <div className="relative flex-grow">
+                <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search all columns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 w-full"/>
+              </div>
+              <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                      <Button variant="outline"><Columns className="mr-2 h-4 w-4" />Columns</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {ALL_COLUMNS.filter(col => col.key !== 'actions').map((column) => (
+                          <DropdownMenuCheckboxItem
+                              key={column.id}
+                              className="capitalize"
+                              checked={columnVisibility[column.id]}
+                              onCheckedChange={(value) => setColumnVisibility(prev => ({ ...prev, [column.id]: !!value }))}
+                          >
+                              {column.label}
+                          </DropdownMenuCheckboxItem>
                       ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedLeads.map((lead) => (
-                    <TableRowComponent
-                      key={lead.id}
-                      lead={lead}
-                      columns={visibleColumns}
-                      getUserName={getUserName}
-                      handleViewDetails={handleViewDetails}
-                      handleViewActivities={handleViewActivities}
-                      handleViewHistory={handleViewHistory}
-                      handleReassignLead={handleReassignLead}
-                      handleEditLead={handleEditLead}
-                      handleDownloadPdf={handleDownloadPdf}
-                      handleAssignDrip={handleAssignDrip}
-                      handleConvertToProposalSent={handleConvertToProposalSent}
-                      handleConvertLeadToClient={handleConvertLeadToClient}
-                      canManageAllLeads={canManageAllLeads(user)}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </DndContext>
-            {filteredLeads.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-muted-foreground">
-                  {viewMode === "all" ? "No leads found matching your search criteria." : "No leads assigned to you yet."}
-                </p>
+                  </DropdownMenuContent>
+              </DropdownMenu>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="relative">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filters
+                    {activeFilterCount > 0 && (<Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 justify-center p-0">{activeFilterCount}</Badge>)}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-4">
+                    <h4 className="font-medium leading-none">Apply Filters</h4>
+                    <div className="space-y-2"><Label htmlFor="address">Area / Address</Label><Input id="address" placeholder="e.g., Indore" value={filters.address} onChange={(e) => handleFilterChange("address", e.target.value)} /></div>
+                    <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={filters.lead_type === "" ? "all" : filters.lead_type} onValueChange={(value) => handleFilterChange("lead_type", value)}><SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem>{leadTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={filters.status === "" ? "all" : filters.status} onValueChange={(value) => handleFilterChange("status", value)}><SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{Object.keys(statusColors).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label htmlFor="assigned_to">Assigned To</Label><Select value={filters.assigned_to === "" ? "all" : filters.assigned_to} onValueChange={(value) => handleFilterChange("assigned_to", value)}><SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger><SelectContent><SelectItem value="all">All Users</SelectItem>{companyUsers.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="created_at_start">Created After</Label>
+                            <Input
+                                id="created_at_start"
+                                type="date"
+                                value={filters.created_at_start}
+                                onChange={(e) => handleFilterChange("created_at_start", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="created_at_end">Created Before</Label>
+                            <Input
+                                id="created_at_end"
+                                type="date"
+                                value={filters.created_at_end}
+                                onChange={(e) => handleFilterChange("created_at_end", e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <Button onClick={clearFilters} variant="ghost" className="w-full">Clear All Filters</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="flex items-center gap-2 pt-4 flex-wrap">
+                <span className="text-sm font-medium">Active Filters:</span>
+                {Object.entries(filters).map(([key, value]) => value ? (<Badge key={key} variant="secondary" className="flex items-center gap-1">{key.replace(/_/g, " ").replace("created at", "Created")}: {value}<button onClick={() => removeFilter(key as keyof LeadsPageFilters)} className="rounded-full hover:bg-muted-foreground/20 p-0.5"><XIcon className="h-3 w-3" /></button></Badge>) : null)}
               </div>
             )}
-          </div>
+          </CardHeader>
 
-          <div className="flex-shrink-0 pt-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                    <Label htmlFor="rows-per-page" className="text-sm text-muted-foreground">Rows per page</Label>
-                    <Select value={String(rowsPerPage)} onValueChange={(value) => { setRowsPerPage(Number(value)); setCurrentPage(1); }}>
-                        <SelectTrigger className="w-20 h-9">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {[10, 30, 50, 100, 200].map(size => (
-                                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+          <CardContent className="flex flex-1 flex-col min-h-0">
+            <div className="relative flex-1 overflow-auto rounded-md border">
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <SortableContext items={visibleColumns.map((col) => col.id)} strategy={horizontalListSortingStrategy}>
+                      <TableRow>
+                        {visibleColumns.map((column) => (<SortableTableHeader key={column.id} column={column} />))}
+                      </TableRow>
+                    </SortableContext>
+                    <TableRow>
+                        {visibleColumns.map((column) => (
+                            <TableCell key={`${column.id}-filter`} className="p-1 align-top bg-background">
+                                {column.key !== "actions" && (
+                                    <Input
+                                        placeholder={`Filter ${column.label}...`}
+                                        value={columnFilters[column.key] || ""}
+                                        onChange={(e) => handleColumnFilterChange(column.key, e.target.value)}
+                                        className="h-8 text-xs"
+                                    />
+                                )}
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedLeads.map((lead) => (
+                      <TableRowComponent
+                        key={lead.id}
+                        lead={lead}
+                        columns={visibleColumns}
+                        getUserName={getUserName}
+                        handleViewDetails={handleViewDetails}
+                        handleViewActivities={handleViewActivities}
+                        handleViewHistory={handleViewHistory}
+                        handleReassignLead={handleReassignLead}
+                        handleEditLead={handleEditLead}
+                        handleDownloadPdf={handleDownloadPdf}
+                        handleAssignDrip={handleAssignDrip}
+                        handleConvertToProposalSent={handleConvertToProposalSent}
+                        handleConvertLeadToClient={handleConvertLeadToClient}
+                        handleDeleteLead={handleDeleteLead}
+                        canManageAllLeads={canManageAllLeads(user)}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </DndContext>
+              {filteredLeads.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="text-muted-foreground">
+                    {viewMode === "all" ? "No leads found matching your search criteria." : "No leads assigned to you yet."}
+                  </p>
                 </div>
-                <div className="flex items-center space-x-4">
-                    <span className="text-sm text-muted-foreground">
-                        Page {currentPage} of {Math.ceil(filteredLeads.length / rowsPerPage) || 1}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-                            Previous
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage >= Math.ceil(filteredLeads.length / rowsPerPage)}>
-                            Next
-                        </Button>
-                    </div>
-                </div>
+              )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            <div className="flex-shrink-0 pt-4">
+              <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                      <Label htmlFor="rows-per-page" className="text-sm text-muted-foreground">Rows per page</Label>
+                      <Select value={String(rowsPerPage)} onValueChange={(value) => { setRowsPerPage(Number(value)); setCurrentPage(1); }}>
+                          <SelectTrigger className="w-20 h-9">
+                              <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {[10, 30, 50, 100, 200].map(size => (
+                                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                      <span className="text-sm text-muted-foreground">
+                          Page {currentPage} of {Math.ceil(filteredLeads.length / rowsPerPage) || 1}
+                      </span>
+                      <div className="flex items-center space-x-2">
+                          <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+                              Previous
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage >= Math.ceil(filteredLeads.length / rowsPerPage)}>
+                              Next
+                          </Button>
+                      </div>
+                  </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <AssignDripModal lead={selectedLead as ApiLead | null} dripSequences={dripSequences} isOpen={showAssignDripModal} onClose={() => setShowAssignDripModal(false)} onSuccess={() => { setShowAssignDripModal(false); }} />
       {selectedLead && (
@@ -1186,12 +1223,18 @@ export default function LeadsPage() {
           <LeadActivitiesModal lead={selectedLead} isOpen={showActivitiesModal} onClose={() => setShowActivitiesModal(false)} />
           <LeadHistoryModal lead={selectedLead} isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} />
           {canManageAllLeads(user) && (<ReassignLeadModal lead={selectedLead} isOpen={showReassignModal} onClose={() => setShowReassignModal(false)} onReassign={handleReassignComplete} users={companyUsers} />)}
-          <EditLeadModal lead={selectedLead} isOpen={showEditModal} onClose={() => setShowEditModal(false)} onSave={handleEditComplete} users={companyUsers} statusOptions={statusOptions} />
+          <EditLeadModal lead={selectedLead} isOpen={showEditModal} onClose={() => setShowEditModal(false)} onSave={handleEditComplete} users={companyUsers} />
           <ConvertLeadToClientModal
             lead={selectedLead}
             isOpen={showConvertLeadToClientModal}
             onClose={() => setShowConvertLeadToClientModal(false)}
             onSuccess={handleConversionSuccess}
+          />
+          <ConvertToProposalModal
+            lead={selectedLead as ApiLead | null}
+            isOpen={showConvertToProposalModal}
+            onClose={() => setShowConvertToProposalModal(false)}
+            onSuccess={handleProposalConversionSuccess}
           />
         </>
       )}
@@ -1210,6 +1253,25 @@ export default function LeadsPage() {
         </div>
       )}
 
+      {/* --- START: NEW DELETE CONFIRMATION DIALOG --- */}
+       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will move the lead "{leadToDelete?.company_name}" to the recycle bin. You can restore it later.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        {/* --- END: NEW DELETE CONFIRMATION DIALOG --- */}
+
       <ExportOptionsModal
         isOpen={showExportOptionsModal}
         onClose={() => setShowExportOptionsModal(false)}
@@ -1221,6 +1283,6 @@ export default function LeadsPage() {
         allCompanyUsers={companyUsers}
         isExporting={isExporting}
       />
-    </div>
+    </>
   );
 }

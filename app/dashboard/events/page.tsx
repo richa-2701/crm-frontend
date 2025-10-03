@@ -301,7 +301,7 @@ export default function EventsPage() {
   const [allEvents, setAllEvents] = useState<EnhancedEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
@@ -503,12 +503,14 @@ export default function EventsPage() {
               </RadioGroup>
 
               <div className="flex items-center gap-2">
-                <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('grid')}>
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
+
                 <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('list')}>
                   <List className="h-4 w-4" />
                 </Button>
+                <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('grid')}>
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                
               </div>
             </div>
           </div>

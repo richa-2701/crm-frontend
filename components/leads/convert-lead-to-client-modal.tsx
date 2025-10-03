@@ -188,6 +188,18 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
 
   const handleConvert = async () => {
     if (!lead) return
+
+    // --- START: FIX ---
+    if (!formData.gst || formData.gst.trim() === "") {
+        toast({
+            title: "Missing Information",
+            description: "GST No. is mandatory to convert a lead to a client.",
+            variant: "destructive",
+        });
+        return; // Stop the function here
+    }
+    // --- END: FIX ---
+
     setIsLoading(true)
 
     // Prepare contacts for client conversion
@@ -215,7 +227,7 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
 
     try {
       await api.convertToClient(Number(lead.id), payload)
-      onSuccess(lead.id) // Notify parent component of successful conversion
+      onSuccess(lead.id.toString()) // Notify parent component of successful conversion
     } catch (error) {
       console.error("Failed to convert lead to client:", error)
       toast({
@@ -258,7 +270,7 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
                     <div className="space-y-2"><Label htmlFor={`last_name_${index}`}>Last Name *</Label><Input id={`last_name_${index}`} value={contact.last_name} onChange={e => handleContactChange(index, "last_name", e.target.value)} required /></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                  <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
+                  <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
                   <div className="space-y-2"><Label htmlFor={`designation_${index}`}>Designation</Label><Input id={`designation_${index}`} value={contact.designation || ""} onChange={e => handleContactChange(index, "designation", e.target.value)} /></div>
                   <div className="space-y-2"><Label htmlFor={`contact_email_${index}`}>Email</Label><Input id={`contact_email_${index}`} type="email" value={contact.email || ""} onChange={e => handleContactChange(index, "email", e.target.value)} /></div>
                   <div className="space-y-2"><Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label><Input id={`contact_linkedin_${index}`} type="url" value={contact.linkedIn || ""} onChange={e => handleContactChange(index, "linkedIn", e.target.value)} /></div>
@@ -284,7 +296,7 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Classification & System Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              <div className="space-y-2"><Label htmlFor="company_phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.company_phone_2} onChange={v => handleInputChange("company_phone_2", v)} inputProps={{ id: 'company_phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !px-3 !py-2 !text-sm" /></div>
+              <div className="space-y-2"><Label htmlFor="company_phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.company_phone_2} onChange={v => handleInputChange("company_phone_2", v)} inputProps={{ id: 'company_phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
               <div className="space-y-2"><Label htmlFor="team_size">Team Size</Label><Input id="team_size" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} /></div>
               <div className="space-y-2"><Label htmlFor="turnover">Turnover</Label><Input id="turnover" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} /></div>
               {/* Using Select for Segment */}
@@ -332,8 +344,9 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               <div className="space-y-2"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
               {/* Changed from Select to Input */}
               <div className="space-y-2"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
-              {/* Changed from Select to Input */}
-              <div className="space-y-2"><Label htmlFor="gst">GST</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
+              {/* --- START: FIX --- */}
+              <div className="space-y-2"><Label htmlFor="gst">GST No. *</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
+              {/* --- END: FIX --- */}
               <div className="space-y-2"><Label htmlFor="converted_date">Date Converted</Label><Input id="converted_date" type="date" value={formData.converted_date} onChange={e => handleInputChange("converted_date", e.target.value)} /></div>
             </div>
           </div>

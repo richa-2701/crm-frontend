@@ -1,28 +1,42 @@
-//frontend/app/dashboard/leads/[leadId]/page.tsx
+// frontend/app/dashboard/leads/[leadId]/page.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { api, userApi, type ApiLead, type ApiUser } from "@/lib/api"
+import { api, userApi, leadApi, type ApiLead, type ApiUser, LeadAttachment } from "@/lib/api"
+import { useAuth } from "@/hooks/useAuth"
 
 // MODULAR COMPONENTS
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
-// MODALS (These will now be functional)
+
+// MODALS
 import { EditLeadModal } from "@/components/leads/edit-lead-modal"
 import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { useToast } from "@/hooks/use-toast"
 
 import { 
     Loader2, ArrowLeft, Edit, Activity, Mail, Phone, User, Building, Globe, MapPin, 
-    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare, CalendarCheck, DollarSign
+    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare, CalendarCheck, 
+    DollarSign, Upload, File, Trash2, Download, Database
 } from "lucide-react"
 
-// A reusable component for displaying fields with icons.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 const IconInfoField = ({ 
     label, 
     value, 
@@ -38,7 +52,7 @@ const IconInfoField = ({
             <Icon className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
             <div className="ml-4">
                 <h4 className="text-xs font-semibold text-muted-foreground">{label}</h4>
-                <p className="text-sm">{value}</p>
+                <p className="text-sm break-words">{value}</p>
             </div>
         </div>
     );
@@ -48,33 +62,42 @@ export default function LeadDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const { user: currentUser } = useAuth();
   const leadId = params.leadId as string
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const [lead, setLead] = useState<ApiLead | null>(null)
   const [users, setUsers] = useState<{ id: string; name: string }[]>([])
-  const [statusOptions, setStatusOptions] = useState<string[]>(["new", "qualified", "unqualified"])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivitiesModal, setShowActivitiesModal] = useState(false)
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<LeadAttachment | null>(null);
+
+  const fetchLeadData = useCallback(() => {
+    if (leadId) {
+        setIsLoading(true);
+        Promise.all([
+            api.getLeadById(Number(leadId)),
+            userApi.getUsers()
+        ]).then(([leadData, usersData]) => {
+            setLead(leadData);
+            setUsers(usersData.map(u => ({ id: u.id.toString(), name: u.username })));
+        }).catch((err) => {
+            console.error("Failed to fetch lead details:", err);
+            setError("Could not load lead details. The lead may not exist or an error occurred.");
+        }).finally(() => {
+            setIsLoading(false);
+        });
+    }
+  }, [leadId]);
 
   useEffect(() => {
-    if (leadId) {
-      Promise.all([
-        api.getLeadById(Number(leadId)),
-        userApi.getUsers()
-      ]).then(([leadData, usersData]) => {
-          setLead(leadData)
-          setUsers(usersData.map(u => ({ id: u.id.toString(), name: u.username })))
-      }).catch((err) => {
-          console.error("Failed to fetch lead details:", err)
-          setError("Could not load lead details. The lead may not exist or an error occurred.")
-      }).finally(() => {
-          setIsLoading(false)
-      })
-    }
-  }, [leadId])
+    fetchLeadData();
+  }, [fetchLeadData]);
 
   const handleEditComplete = (updatedLeadId: string, updatedData: Partial<ApiLead>) => {
     if (lead && lead.id.toString() === updatedLeadId) {
@@ -82,6 +105,47 @@ export default function LeadDetailPage() {
     }
     setShowEditModal(false);
   };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!lead || !currentUser) return;
+    setIsUploading(true);
+    try {
+      const newAttachment = await leadApi.uploadLeadAttachment(lead.id, file, currentUser.username);
+      setLead(prevLead => prevLead ? { ...prevLead, attachments: [...prevLead.attachments, newAttachment] } : null);
+      toast({ title: "Success", description: "File uploaded successfully." });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload file.", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+      }
+    }
+  };
+
+  const handleDeleteAttachment = async () => {
+    if (!attachmentToDelete || !lead) return;
+    try {
+        await leadApi.deleteLeadAttachment(attachmentToDelete.id);
+        setLead(prevLead => prevLead ? {
+            ...prevLead,
+            attachments: prevLead.attachments.filter(att => att.id !== attachmentToDelete.id)
+        } : null);
+        toast({ title: "Success", description: "Attachment deleted." });
+    } catch (error) {
+        toast({ title: "Error", description: "Failed to delete attachment.", variant: "destructive" });
+    } finally {
+        setAttachmentToDelete(null);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -144,6 +208,8 @@ export default function LeadDetailPage() {
                                       <IconInfoField label="Designation" value={contact.designation} icon={Briefcase} />
                                       <IconInfoField label="Email" value={contact.email} icon={Mail} />
                                       <IconInfoField label="Phone" value={contact.phone} icon={Phone} />
+                                      <IconInfoField label="LinkedIn" value={contact.linkedIn} icon={Users} />
+                                      <IconInfoField label="PAN" value={contact.pan} icon={FileText} />
                                     </div>
                                   ))}
                                   <Separator />
@@ -163,6 +229,45 @@ export default function LeadDetailPage() {
                                 <IconInfoField label="Pincode" value={lead.pincode} icon={MapPin} />
                               </CardContent>
                           </Card>
+                          {/* --- START: NEW ATTACHMENTS CARD --- */}
+                           <Card>
+                                <CardHeader>
+                                    <CardTitle>Attachments</CardTitle>
+                                    <CardDescription>Upload and manage related documents for this lead.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2">
+                                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+                                            <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                                                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />}
+                                                Upload File
+                                            </Button>
+                                        </div>
+                                        {lead.attachments && lead.attachments.length > 0 ? (
+                                            <ul className="space-y-2">
+                                                {lead.attachments.map(att => (
+                                                    <li key={att.id} className="flex items-center justify-between text-sm p-2 rounded-md border bg-muted/50">
+                                                        <a href={`${API_BASE_URL}/web/attachments/preview/${att.file_path}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline truncate">
+                                                            <File className="h-4 w-4 flex-shrink-0" />
+                                                            <span className="truncate">{att.original_file_name}</span>
+                                                        </a>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-muted-foreground">by {att.uploaded_by}</span>
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAttachmentToDelete(att)}>
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No attachments uploaded yet.</p>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                          {/* --- END: NEW ATTACHMENTS CARD --- */}
                       </div>
 
                       <div className="space-y-6">
@@ -174,7 +279,6 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Lead Type" value={lead.lead_type} icon={Tag} />
                                   <IconInfoField label="Team Size" value={lead.team_size} icon={Users} />
                                   <IconInfoField label="Turnover" value={lead.turnover} icon={TrendingUp} />
-                                  {/* --- CHANGE: DISPLAYING NEW FIELDS --- */}
                                   <IconInfoField label="Opportunity Business" value={lead.opportunity_business} icon={DollarSign} />
                                   <IconInfoField label="Target Closing Date" value={lead.target_closing_date} icon={CalendarCheck} />
                               </CardContent>
@@ -186,6 +290,18 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Remarks" value={lead.remark} icon={MessageSquare} />
                               </CardContent>
                           </Card>
+                           {/* --- START: NEW CARD FOR NEW FIELDS --- */}
+                          <Card>
+                              <CardHeader><CardTitle>Technical & Financial Details</CardTitle></CardHeader>
+                              <CardContent className="space-y-5">
+                                  <IconInfoField label="Version" value={lead.version} icon={Tag} />
+                                  <IconInfoField label="Database Type" value={lead.database_type} icon={Database} />
+                                  <IconInfoField label="AMC" value={lead.amc} icon={FileText} />
+                                  <IconInfoField label="Company GST" value={lead.gst} icon={FileText} />
+                                  <IconInfoField label="Company PAN" value={lead.company_pan} icon={FileText} />
+                              </CardContent>
+                          </Card>
+                          {/* --- END: NEW CARD --- */}
                       </div>
                   </div>
               </TabsContent>
@@ -198,7 +314,6 @@ export default function LeadDetailPage() {
         onClose={() => setShowEditModal(false)}
         onSave={handleEditComplete}
         users={users}
-        statusOptions={statusOptions}
       />
 
       <LeadActivitiesModal
@@ -206,6 +321,23 @@ export default function LeadDetailPage() {
         isOpen={showActivitiesModal}
         onClose={() => setShowActivitiesModal(false)}
       />
+
+      <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete the attachment "{attachmentToDelete?.original_file_name}". This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAttachment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

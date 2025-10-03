@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, History, Edit, UserCheck, Calendar } from "lucide-react"
-// --- CORRECTED: Import the correct types from the central API file ---
 import { leadApi, ApiLead } from "@/lib/api"
 import { formatDateTime } from "@/lib/date-format";
 

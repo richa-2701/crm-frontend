@@ -5,18 +5,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle, AlertCircle } from "lucide-react"
-import { userApi } from "@/lib/api" // Import the API library
+// --- START: CORRECTION - REMOVED UNUSED IMPORT ---
+// import { userApi } from "@/lib/api"
+// --- END: CORRECTION ---
 
 interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "user"
+  role: string
   phone?: string
   department?: string
   createdAt?: string
   company_name: string;
 }
+
 
 interface DeleteUserModalProps {
   user: User | null
@@ -36,13 +39,15 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
     setError("")
 
     try {
-      // Make the actual API call to delete the user
-      await userApi.deleteUser(Number.parseInt(user.id))
-
-      onUserDeleted(user.id)
-      onClose()
+      // --- START: CORRECTION ---
+      // The API call is removed from the modal.
+      // We now ONLY call the prop function, letting the parent component handle the logic.
+      await onUserDeleted(user.id)
+      // --- END: CORRECTION ---
+      
+      onClose() // Close the modal on success
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || "Failed to delete user. Please try again."
+      const errorMessage = err.message || "Failed to delete user. Please try again."
       setError(errorMessage)
     } finally {
       setIsLoading(false)
@@ -87,7 +92,7 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
                 <strong>Email:</strong> {user.email}
               </p>
               <p>
-                <strong>Role:</strong> {user.role === "admin" ? "Administrator" : "Company User"}
+                <strong>Role:</strong> {user.role === 'admin' ? 'Admin' : 'User'}
               </p>
               {user.department && (
                 <p>

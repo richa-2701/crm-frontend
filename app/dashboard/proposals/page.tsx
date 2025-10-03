@@ -1,7 +1,7 @@
 // frontend/app/dashboard/proposals/page.tsx
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,7 +49,7 @@ import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
-import { api, userApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity } from "@/lib/api"
+import { api, userApi, leadApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity, type ApiProposalSent } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
   DndContext,
@@ -77,7 +77,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 // Interface definitions are identical to leads page
 interface Contact { id: number; lead_id: number; contact_name: string; phone: string; email: string | null; designation: string | null; linkedIn?: string | null; pan?: string | null; }
-interface Lead { id: string; company_name: string; contacts: Contact[]; phone_2?: string; email: string; website?: string; linkedIn?: string; address?: string; address_2?: string; city?:string; state?:string; country?:string; pincode?:string; team_size?: string; turnover?: string; source?: string; segment?: string; verticles?: string; remark?: string; machine_specification?: string; challenges?: string; assigned_to: string; current_system?: string; lead_type?: string; status: string; created_at: string; updated_at: string; last_activity?: ApiActivity | null; opportunity_business?: string; target_closing_date?: string;}
+interface Lead { id: string; company_name: string; contacts: Contact[]; phone_2?: string; email: string; website?: string; linkedIn?: string; address?: string; address_2?: string; city?:string; state?:string; country?:string; pincode?:string; team_size?: string; turnover?: string; source?: string; segment?: string; verticles?: string; remark?: string; machine_specification?: string; challenges?: string; assigned_to: string; current_system?: string; lead_type?: string; status: string; created_at: string; updated_at: string; last_activity?: ApiActivity | null; opportunity_business?: string; target_closing_date?: string; original_lead_id?: number; }
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
 interface CompanyUser { id: string; name: string; email: string; role: string; }
 
@@ -560,6 +560,7 @@ export default function ProposalsPage() {
 
   const [showExportOptionsModal, setShowExportOptionsModal] = useState(false);
 
+  // --- START: FIX ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -572,27 +573,54 @@ export default function ProposalsPage() {
         }
         const parsedUser = JSON.parse(userData)
         setUser(parsedUser)
-        const [usersData, allLeadsData, dripsData] = await Promise.all([
+        const [usersData, proposalsData, dripsData] = await Promise.all([
           userApi.getUsers(),
-          api.getAllLeads(),
+          leadApi.getAllProposals(), // Fetch from the correct endpoint
           api.getDripSequences()
         ]);
 
-        // Filter for "Proposal Sent" status FIRST
-        const proposalLeadsData = allLeadsData.filter(lead => lead.status === "Proposal Sent");
-
-        const transformedLeads: Lead[] = proposalLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
-          id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
-          last_activity: lead.last_activity || null,
-          opportunity_business: lead.opportunity_business,
-          target_closing_date: lead.target_closing_date,
+        const transformedProposals: Lead[] = proposalsData.map((proposal: ApiProposalSent) => ({
+          id: proposal.id.toString(),
+          company_name: proposal.company_name,
+          contacts: proposal.contacts.map(c => ({...c, lead_id: proposal.original_lead_id })) || [],
+          phone_2: proposal.phone_2,
+          email: proposal.email || "",
+          website: proposal.website,
+          linkedIn: proposal.linkedIn,
+          address: proposal.address,
+          address_2: proposal.address_2,
+          city: proposal.city,
+          state: proposal.state,
+          country: proposal.country,
+          pincode: proposal.pincode,
+          team_size: proposal.team_size,
+          turnover: proposal.turnover,
+          source: proposal.source,
+          segment: proposal.segment,
+          verticles: proposal.verticles,
+          remark: proposal.remark,
+          machine_specification: proposal.machine_specification,
+          challenges: proposal.challenges,
+          assigned_to: proposal.assigned_to,
+          current_system: proposal.current_system,
+          lead_type: proposal.lead_type,
+          status: proposal.status,
+          created_at: proposal.created_at,
+          updated_at: proposal.updated_at || proposal.created_at,
+          last_activity: null, // Proposal page might not need last_activity, adjust if necessary
+          opportunity_business: proposal.opportunity_business,
+          target_closing_date: proposal.target_closing_date,
+          original_lead_id: proposal.original_lead_id,
         }));
+        
         const transformedUsers: CompanyUser[] = usersData.map((user: ApiUser) => ({
           id: user.id.toString(), name: user.username, email: user.email || `${user.username}@company.com`, role: user.role || "user",
         }));
-        setAllLeads(transformedLeads);
+        
+        setAllLeads(transformedProposals);
         setCompanyUsers(transformedUsers);
         setDripSequences(dripsData);
+
         if (parsedUser.role !== "admin") {
           setViewMode("my");
         } else {
@@ -606,6 +634,7 @@ export default function ProposalsPage() {
     };
     fetchData();
   }, []);
+  // --- END: FIX ---
 
   useEffect(() => {
     const newVisibleColumns = ALL_COLUMNS.filter(col => columnVisibility[col.id]);
@@ -622,12 +651,11 @@ export default function ProposalsPage() {
     if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to === filters.assigned_to); }
 
     if (filters.created_at_start) {
-        const startDate = new Date(filters.created_at_start);
+        const startDate = new Date(`${filters.created_at_start}T00:00:00`);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) >= startDate);
     }
     if (filters.created_at_end) {
-        const endDate = new Date(filters.created_at_end);
-        endDate.setHours(23, 59, 59, 999);
+        const endDate = new Date(`${filters.created_at_end}T23:59:59`);
         leadsToProcess = leadsToProcess.filter(lead => new Date(lead.created_at) <= endDate);
     }
 
@@ -674,14 +702,26 @@ export default function ProposalsPage() {
     const foundUser = companyUsers.find((u) => u.name === userId || u.id === userId)
     return foundUser ? foundUser.name : userId
   }
-  const handleViewDetails = (lead: Lead) => { router.push(`/dashboard/leads/${lead.id}`) }
+  const handleViewDetails = (lead: Lead) => { 
+    // Use original_lead_id if available, otherwise fall back to id
+    const leadIdToView = lead.original_lead_id || lead.id;
+    router.push(`/dashboard/leads/${leadIdToView}`) 
+  }
   const handleReassignLead = (lead: Lead) => { setSelectedLead(lead); setShowReassignModal(true); }
   const handleEditLead = (lead: Lead) => { setSelectedLead(lead); setShowEditModal(true); }
   const handleViewActivities = (lead: Lead) => { setSelectedLead(lead); setShowActivitiesModal(true); }
 
   const handleOpenExportModal = () => { setShowExportOptionsModal(true); };
 
-    // --- THIS IS THE CORRECTED FUNCTION ---
+  const escapeCsvValue = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    let stringValue = String(value);
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+  
   const handleConfirmExport = async (exportFilters: LeadsPageFilters, selectedColumnKeys: string[]) => {
     if (selectedColumnKeys.length === 0) {
       toast({ title: "No columns selected", description: "Please select at least one column to export.", variant: "destructive" });
@@ -690,20 +730,18 @@ export default function ProposalsPage() {
 
     setIsExporting(true);
     try {
-        // Here we use `filteredLeads` which already contains only "Proposal Sent" leads based on the current view
       let leadsToExport = filteredLeads;
 
-      // Apply the export-specific filters on top of the already filtered proposals
       if (exportFilters.address) { leadsToExport = leadsToExport.filter(lead => lead.address?.toLowerCase().includes(exportFilters.address.toLowerCase())); }
       if (exportFilters.lead_type) { leadsToExport = leadsToExport.filter(lead => lead.lead_type === exportFilters.lead_type); }
       if (exportFilters.assigned_to) { leadsToExport = leadsToExport.filter(lead => exportFilters.assigned_to === "all" ? true : lead.assigned_to === exportFilters.assigned_to); }
+      
       if (exportFilters.created_at_start) {
-          const startDate = new Date(exportFilters.created_at_start);
+          const startDate = new Date(`${exportFilters.created_at_start}T00:00:00`);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) >= startDate);
       }
       if (exportFilters.created_at_end) {
-          const endDate = new Date(exportFilters.created_at_end);
-          endDate.setHours(23, 59, 59, 999);
+          const endDate = new Date(`${exportFilters.created_at_end}T23:59:59`);
           leadsToExport = leadsToExport.filter(lead => new Date(lead.created_at) <= endDate);
       }
 
@@ -786,15 +824,6 @@ export default function ProposalsPage() {
     }
   };
 
-  const escapeCsvValue = (value: string | number | null | undefined): string => {
-    if (value === null || value === undefined) return '';
-    let stringValue = String(value);
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r')) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-  };
-
   const handleViewHistory = (lead: Lead) => { setSelectedLead(lead); setShowHistoryModal(true); }
 
   const handleReassignComplete = async (leadId: string, newUserId: string) => {
@@ -856,7 +885,6 @@ export default function ProposalsPage() {
   };
   
   const handleConversionSuccess = (convertedLeadId: string) => {
-    // Remove the converted lead from this page's view
     setAllLeads(prevLeads => prevLeads.filter(lead => lead.id !== convertedLeadId));
     toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." });
     setShowConvertLeadToClientModal(false);
@@ -880,8 +908,13 @@ export default function ProposalsPage() {
   const handleDownloadPdf = (lead: Lead) => { setLeadForPdf(lead); setShowPdfDialog(true); }
 
   const downloadLeadAsPdf = (lead: Lead, includeRemark: boolean) => {
-    // This function can be copied directly from leads/page.tsx
-    // ... (implementation is the same)
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text(`Proposal Details: ${lead.company_name}`, 14, 22);
+    // ... (rest of the PDF generation logic, same as leads page)
+    doc.save(`Proposal_${lead.company_name.replace(/\s/g, "_")}.pdf`);
+    setShowPdfDialog(false);
+    setLeadForPdf(null);
   }
 
   if (isLoading) { return ( <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-2">Loading proposals...</span></div> )}
@@ -1054,8 +1087,8 @@ export default function ProposalsPage() {
                         </SelectTrigger>
                         <SelectContent>
                             {[10, 30, 50, 100, 200].map(size => (
-                                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-                            ))}
+                                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                              ))}
                         </SelectContent>
                     </Select>
                 </div>
@@ -1120,4 +1153,4 @@ export default function ProposalsPage() {
       />
     </div>
   );
-} 
+}
