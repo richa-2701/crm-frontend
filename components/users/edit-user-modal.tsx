@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { userApi, type ApiUser } from "@/lib/api" // Import the API library
+import { userApi } from "@/lib/api" // Import the API library
 
 interface User {
   id: string
@@ -46,10 +46,7 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
       setFormData({
         name: user.name || "",
         email: user.email || "",
-        // --- START: CORRECTION 1 ---
-        // Default to 'user' if the role is something unexpected.
         role: user.role || "user", 
-        // --- END: CORRECTION 1 ---
         phone: user.phone || "",
         department: user.department || "",
       })
@@ -87,14 +84,16 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
     setError("")
 
     try {
-      // Make the actual API call to update the user with the correct role string
-      await userApi.updateUser(Number.parseInt(user.id), {
+      // --- START OF FIX: Pass the user's original email as the identifier ---
+      // The first argument must be the email the backend uses in its WHERE clause.
+      await userApi.updateUser(user.email, {
         username: formData.name,
         usernumber: formData.phone,
-        email: formData.email,
+        email: formData.email, // This field is technically sent but ignored by the backend's WHERE clause
         department: formData.department,
-        role: formData.role, // This will now send "admin" or "user"
+        role: formData.role,
       })
+      // --- END OF FIX ---
 
       onUserUpdated()
       onClose()
@@ -139,21 +138,22 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-email">Email *</Label>
+              {/* --- START OF FIX: Make email read-only as it's the identifier --- */}
               <Input
                 id="edit-email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => handleInputChange("email", e.target.value)}
-                required
+                readOnly
+                disabled
+                className="cursor-not-allowed"
               />
+              {/* --- END OF FIX --- */}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-role">Role *</Label>
-              {/* --- START: CORRECTION 2 --- */}
-              {/* Update the values of the SelectItem components to match the database */}
               <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
@@ -163,7 +163,6 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
                   <SelectItem value="user">Company User</SelectItem>
                 </SelectContent>
               </Select>
-              {/* --- END: CORRECTION 2 --- */}
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-phone">Phone Number</Label>

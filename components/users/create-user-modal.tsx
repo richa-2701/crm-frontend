@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { authApi } from "@/lib/api"
+// --- START OF FIX: Import 'userApi' instead of 'authApi' ---
+import { userApi } from "@/lib/api"
+// --- END OF FIX ---
 
 interface User {
   id: string
@@ -36,10 +38,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
     email: "",
     password: "",
     confirmPassword: "",
-    // --- START: CORRECTION 1 ---
-    // Default role now matches a likely valid database value.
     role: "user",
-    // --- END: CORRECTION 1 ---
     phone: "",
     department: "",
   })
@@ -92,21 +91,23 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
     setError("")
 
     try {
-      await authApi.register({
+      // --- START OF FIX: Call 'userApi.createUser' instead of 'authApi.register' ---
+      await userApi.createUser({
         username: formData.name,
         company_name: currentUser.company_name,
         password: formData.password,
         usernumber: formData.phone,
         email: formData.email,
         department: formData.department,
-        role: formData.role, // This will now send 'admin' or 'user'
+        role: formData.role,
       })
+      // --- END OF FIX ---
 
       onUserCreated()
       handleClose()
     } catch (err: any) {
       const errorMessage = err.message || "Failed to create user. Please try again."
-      setError(errorMessage.includes("already exists") ? "A user with this username already exists in your company." : errorMessage)
+      setError(errorMessage.includes("already exists") ? "A user with this username or email already exists." : errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -119,7 +120,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
       email: "",
       password: "",
       confirmPassword: "",
-      role: "user", // Reset to the corrected default
+      role: "user",
       phone: "",
       department: "",
     })
@@ -190,8 +191,6 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="create-role">Role *</Label>
-              {/* --- START: CORRECTION 2 --- */}
-              {/* The `value` prop of SelectItem now uses valid database values */}
               <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
@@ -201,7 +200,6 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated, currentUser }:
                   <SelectItem value="user">Company User</SelectItem>
                 </SelectContent>
               </Select>
-              {/* --- END: CORRECTION 2 --- */}
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-phone">Phone Number *</Label>

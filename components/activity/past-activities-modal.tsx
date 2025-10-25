@@ -29,7 +29,10 @@ export function PastActivitiesModal({ isOpen, onClose, leadId, leadName }: PastA
     // Fetch activities only when the modal is open and a valid leadId is provided
     if (isOpen && leadId) {
       setIsLoading(true);
-      api.getActivities(leadId)
+      // --- START: FIX ---
+      // The function name was incorrect. It should be `getActivitiesByLead`.
+      api.getActivitiesByLead(leadId)
+      // --- END: FIX ---
         .then((data) => {
           // The API returns activities; we'll sort them to show the most recent first
           setActivities(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));

@@ -1,7 +1,8 @@
-// frontend/components/leads/convert-lead-to-client-modal.tsx
+//frontend/components/leads/convert-lead-to-client-modal.tsx
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -64,7 +65,6 @@ const splitFullName = (fullName: string) => {
   return { prefix: prefix || "Mr.", first_name: firstName, last_name: lastName }
 }
 
-// NEW: MasterDataOptions for ConvertLeadToClientModal
 interface MasterDataOptions {
     version: string[];
     segment: string[];
@@ -74,20 +74,20 @@ interface MasterDataOptions {
 
 export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: ConvertLeadToClientModalProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const [formData, setFormData] = useState({
     company_name: "", website: "", linkedIn: "", company_email: "", company_phone_2: "",
     address: "", address_2: "", country: "", state: "", city: "", pincode: "",
     segment: "", verticles: "", team_size: "", turnover: "", current_system: "",
-    machine_specification: "", challenges: "", remark: "",
-    version: "", database_type: "", amc: "", gst: "", // database_type, amc, gst are text fields
-    converted_date: format(new Date(), "yyyy-MM-dd"), // Default to today
+    machine_specification: "", challenges: "",
+    version: "", database_type: "", amc: "", gst: "",
+    converted_date: format(new Date(), "yyyy-MM-dd"),
   })
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
   const [selectedState, setSelectedState] = useState<string | undefined>()
   const [contacts, setContacts] = useState<LeadContactForConversion[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  // NEW: State for master options for the dropdowns in this modal
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
       version: [], segment: [], verticles: [], current_system: []
   });
@@ -100,7 +100,6 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
     if (isOpen) {
         const fetchMasterData = async () => {
             try {
-                // Corrected API calls: directly call getByCategory on the api object
                 const [versionData, segmentData, verticlesData, currentSystemData] = await Promise.all([
                     api.getByCategory("version"),
                     api.getByCategory("segment"),
@@ -121,20 +120,21 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
         fetchMasterData();
     }
   }, [isOpen, toast]);
-
+  
   useEffect(() => {
     if (lead && isOpen) {
-      const countryObj = countryOptions.find(c => c.label === lead.country)
-      let foundStateCode: string | undefined;
-
-      if (countryObj && lead.state) {
-        const statesOfSelectedCountry = State.getStatesOfCountry(countryObj.value);
-        const stateObj = statesOfSelectedCountry.find(s => s.name === lead.state);
-        foundStateCode = stateObj?.isoCode;
+      const countryObj = countryOptions.find(c => c.label === lead.country);
+      const countryCode = countryObj?.value;
+      
+      let stateCode: string | undefined;
+      if (countryCode && lead.state) {
+        const statesOfCountry = State.getStatesOfCountry(countryCode);
+        const stateObj = statesOfCountry.find(s => s.name === lead.state);
+        stateCode = stateObj?.isoCode;
       }
 
-      setSelectedCountry(countryObj?.value)
-      setSelectedState(foundStateCode)
+      setSelectedCountry(countryCode);
+      setSelectedState(stateCode);
 
       setFormData({
         company_name: lead.company_name || "",
@@ -144,29 +144,28 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
         company_phone_2: lead.phone_2 || "",
         address: lead.address || "",
         address_2: lead.address_2 || "",
-        country: countryObj?.value || "",
-        state: foundStateCode || "",
+        country: countryCode || "",
+        state: stateCode || "",
         city: lead.city || "",
         pincode: lead.pincode || "",
         segment: lead.segment || "",
         verticles: lead.verticles || "",
-        team_size: String(lead.team_size || "") || "",
+        team_size: String(lead.team_size || ""),
         turnover: lead.turnover || "",
         current_system: lead.current_system || "",
         machine_specification: lead.machine_specification || "",
         challenges: lead.challenges || "",
-        remark: lead.remark || "",
-        version: "", // Default empty for client specific
-        database_type: "", // Default empty for client specific
-        amc: "", // Default empty for client specific
-        gst: "", // Default empty for client specific
+        version: lead.version || "",
+        database_type: lead.database_type || "",
+        amc: lead.amc || "",
+        gst: lead.gst || "",
         converted_date: format(new Date(), "yyyy-MM-dd"),
-      })
+      });
 
       if (lead.contacts && lead.contacts.length > 0) {
         setContacts(lead.contacts.map(c => ({
           ...c,
-          ...splitFullName(c.contact_name || ""), // Ensure contact_name is not null for splitFullName
+          ...splitFullName(c.contact_name || ""),
           linkedIn: c.linkedIn || "",
           pan: c.pan || "",
         })))
@@ -174,9 +173,9 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
         setContacts([{ prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" }])
       }
     }
-  }, [lead, isOpen, countryOptions])
+  }, [lead, isOpen, countryOptions]);
 
-  const handleInputChange = (field: keyof typeof formData, value: string) => setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof Omit<typeof formData, "remark">, value: string) => setFormData(prev => ({ ...prev, [field]: value }))
   const handleContactChange = (index: number, field: keyof LeadContactForConversion, value: string) => {
     const newContacts = [...contacts];
     newContacts[index] = { ...newContacts[index], [field]: value };
@@ -189,20 +188,17 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
   const handleConvert = async () => {
     if (!lead) return
 
-    // --- START: FIX ---
     if (!formData.gst || formData.gst.trim() === "") {
         toast({
             title: "Missing Information",
             description: "GST No. is mandatory to convert a lead to a client.",
             variant: "destructive",
         });
-        return; // Stop the function here
+        return;
     }
-    // --- END: FIX ---
 
     setIsLoading(true)
 
-    // Prepare contacts for client conversion
     const clientContacts: ClientContact[] = contacts.map(c => ({
       contact_name: `${c.prefix} ${c.first_name} ${c.last_name}`.trim(),
       phone: c.phone,
@@ -213,28 +209,45 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
     }))
 
     const countryName = Country.getCountryByCode(formData.country)?.name
-    const stateName = State.getStateByCodeAndCountry(formData.state, formData.country)?.name || formData.state; // Use name if found, else ISO code
+    const stateName = State.getStateByCodeAndCountry(formData.state, formData.country)?.name || formData.state;
 
     const payload: ConvertLeadToClientPayload = {
       ...formData,
-      company_name: formData.company_name, // Explicitly use current form company_name
       country: countryName || formData.country,
       state: stateName,
       contacts: clientContacts,
-      converted_date: formData.converted_date,
-      // Lead_type is not transferred to client model as per requirement
     }
 
     try {
-      await api.convertToClient(Number(lead.id), payload)
-      onSuccess(lead.id.toString()) // Notify parent component of successful conversion
-    } catch (error) {
-      console.error("Failed to convert lead to client:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Conversion failed. Please try again.",
-        variant: "destructive",
-      })
+      await api.convertToClient(Number(lead.id), null, payload)
+      onSuccess(lead.id.toString())
+    } catch (error: any) {
+      if (error.message && error.message.includes("409")) {
+        let message = "This lead has already been converted to a Client.";
+        try {
+          // Extract the JSON part of the message for a more specific error
+          const jsonString = error.message.substring(error.message.indexOf('{'));
+          const parsed = JSON.parse(jsonString);
+          message = parsed.Message || message;
+        } catch (e) {
+            // Fallback for non-JSON messages
+            const simpleMessage = error.message.split(':').slice(1).join(':').trim();
+            message = simpleMessage || message;
+        }
+        toast({
+            title: "Already Converted",
+            description: message,
+            variant: "default",
+        });
+        router.push('/dashboard/clients'); 
+        onClose();
+      } else {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Conversion failed. Please try again.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setIsLoading(false)
     }
@@ -299,7 +312,6 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               <div className="space-y-2"><Label htmlFor="company_phone_2">Company Phone 2</Label><PhoneInput country={"in"} value={formData.company_phone_2} onChange={v => handleInputChange("company_phone_2", v)} inputProps={{ id: 'company_phone_2' }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
               <div className="space-y-2"><Label htmlFor="team_size">Team Size</Label><Input id="team_size" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} /></div>
               <div className="space-y-2"><Label htmlFor="turnover">Turnover</Label><Input id="turnover" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} /></div>
-              {/* Using Select for Segment */}
               <div className="space-y-2">
                 <Label htmlFor="segment">Segment</Label>
                 <Select value={formData.segment} onValueChange={v => handleInputChange("segment", v)}>
@@ -307,7 +319,6 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
                     <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {/* Using Select for Verticles */}
               <div className="space-y-2">
                 <Label htmlFor="verticles">Verticals</Label>
                 <Select value={formData.verticles} onValueChange={v => handleInputChange("verticles", v)}>
@@ -315,7 +326,6 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
                     <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {/* Using Select for Current System */}
               <div className="space-y-2">
                 <Label htmlFor="current_system">Current System</Label>
                 <Select value={formData.current_system} onValueChange={v => handleInputChange("current_system", v)}>
@@ -325,14 +335,16 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               </div>
               <div className="space-y-2"><Label htmlFor="machine_specification">Machine Specification</Label><Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={2} /></div>
               <div className="space-y-2"><Label htmlFor="challenges">Challenges Faced</Label><Textarea id="challenges" value={formData.challenges} onChange={e => handleInputChange("challenges", e.target.value)} rows={2} /></div>
-              <div className="md:col-span-2 space-y-2"><Label htmlFor="remark">Remarks</Label><Textarea id="remark" value={formData.remark} onChange={e => handleInputChange("remark", e.target.value)} rows={3} /></div>
             </div>
           </div>
 
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Additional Client Fields</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {/* Using Select for Version */}
+              <div className="space-y-2"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="gst">GST No. *</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
+              <div className="space-y-2"><Label htmlFor="converted_date">Date Converted</Label><Input id="converted_date" type="date" value={formData.converted_date} onChange={e => handleInputChange("converted_date", e.target.value)} /></div>
               <div className="space-y-2">
                 <Label htmlFor="version">Version</Label>
                 <Select value={formData.version} onValueChange={v => handleInputChange("version", v)}>
@@ -340,14 +352,6 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
                     <SelectContent>{masterOptions.version.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {/* Changed from Select to Input */}
-              <div className="space-y-2"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
-              {/* Changed from Select to Input */}
-              <div className="space-y-2"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
-              {/* --- START: FIX --- */}
-              <div className="space-y-2"><Label htmlFor="gst">GST No. *</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
-              {/* --- END: FIX --- */}
-              <div className="space-y-2"><Label htmlFor="converted_date">Date Converted</Label><Input id="converted_date" type="date" value={formData.converted_date} onChange={e => handleInputChange("converted_date", e.target.value)} /></div>
             </div>
           </div>
 

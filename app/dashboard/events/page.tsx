@@ -1,4 +1,3 @@
-// frontend/app/events/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -23,8 +22,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Users, Calendar, Search, AlertCircle, Loader2, Check, LayoutGrid, List, User, Clock, FileText, MoreHorizontal, Edit, Calendar as CalendarIcon, XCircle, FileEdit } from "lucide-react"
-import { api, type ApiLead, type ApiMeeting, type ApiDemo, type ApiUser } from "@/lib/api"
-import { format } from "date-fns"
+import { api, type ApiLead, type ApiMeeting, type ApiDemo, type ApiUser, type ApiEventReschedulePayload } from "@/lib/api"
+import { formatDateTime, parseAsUTCDate } from "@/lib/date-format" 
 import { useToast } from "@/hooks/use-toast"
 
 // --- INTERFACES AND TYPE DEFINITIONS ---
@@ -60,13 +59,15 @@ type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue' | 'canceled' | '
 type ViewMode = 'grid' | 'list';
 
 const getEventStatus = (event: { start_time: string; phase?: string }): 'Pending' | 'Completed' | 'Overdue' | 'Canceled' | 'Rescheduled' => {
-  if (!event.start_time) return 'Pending';
-  if (event.phase === 'Done') return 'Completed';
+  if (event.phase === 'Completed' || event.phase === 'Done') return 'Completed';
   if (event.phase === 'Canceled') return 'Canceled';
   if (event.phase === 'Rescheduled') return 'Rescheduled';
-  const eventDate = new Date(event.start_time);
-  if (isNaN(eventDate.getTime())) return 'Pending';
+  
+  const eventDate = parseAsUTCDate(event.start_time);
+  if (!eventDate) return 'Pending';
+  
   if (eventDate < new Date()) return 'Overdue';
+
   return 'Pending';
 }
 
@@ -81,9 +82,11 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
 
     useEffect(() => {
         if (event?.start_time) {
-            const date = new Date(event.start_time);
-            date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-            setStartTime(date.toISOString().slice(0, 16));
+            const date = parseAsUTCDate(event.start_time);
+            if (date) {
+                date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                setStartTime(date.toISOString().slice(0, 16));
+            }
         }
     }, [event]);
 
@@ -96,23 +99,15 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
         }
         setIsLoading(true);
         
-        // --- START: THIS IS THE FIX ---
-        // 1. Create a Date object from the local time string from the input.
         const start = new Date(startTime);
-        
-        // 2. Calculate the end time based on the duration.
         const end = new Date(start.getTime() + parseInt(duration, 10) * 60000);
 
         try {
-            // 3. Convert the local Date objects to full ISO 8601 strings in UTC.
-            //    The 'Z' at the end is crucial. It tells the backend "this is UTC time".
-            //    Example: "2025-10-08T09:30:00.000Z"
             await api.rescheduleEvent(event.type, event.numericId, {
                 start_time: start.toISOString(),
                 end_time: end.toISOString(),
                 updated_by: currentUser.username,
             });
-            // --- END: THIS IS THE FIX ---
 
             toast({ title: "Success", description: "Event has been rescheduled." });
             onSuccess();
@@ -147,8 +142,6 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
         </Dialog>
     );
 }
-
-// ... (The rest of your file remains exactly the same)
 
 function ReassignModal({ isOpen, onClose, event, onSuccess, currentUser, users }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onSuccess: () => void, currentUser: ApiUser | null, users: ApiUser[] }) {
   const { toast } = useToast();
@@ -254,9 +247,7 @@ function EditNotesModal({ isOpen, onClose, event, onSuccess, currentUser }: { is
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (event?.remark) {
-      setNotes(event.remark);
-    }
+    setNotes(event?.remark || "");
   }, [event]);
 
   if (!isOpen || !event || !currentUser) return null;
@@ -282,10 +273,12 @@ function EditNotesModal({ isOpen, onClose, event, onSuccess, currentUser }: { is
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader><DialogTitle>Edit Notes for Completed {event.type}</DialogTitle></DialogHeader>
-        <div className="py-4">
+        {/* --- START OF FIX: Added scrollable container and increased textarea size --- */}
+        <div className="py-4 max-h-[60vh] overflow-y-auto pr-4">
           <Label htmlFor="notes">Post-Event Notes</Label>
-          <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={5} />
+          <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={10} />
         </div>
+        {/* --- END OF FIX --- */}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={isLoading}>
@@ -315,10 +308,9 @@ export default function EventsPage() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   const loadEvents = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-
       const [meetingsData, demosData, leadsData, usersData] = await Promise.all([
         api.getAllMeetings(),
         api.getAllDemos(),
@@ -329,6 +321,10 @@ export default function EventsPage() {
 
       const leadsMap = new Map<string, ApiLead>(
         leadsData.map(lead => [String(lead.id), lead])
+      );
+
+      const userNumberToNameMap = new Map<string, string>(
+        usersData.map(user => [user.usernumber, user.username])
       );
 
       const combinedEvents: EnhancedEvent[] = [
@@ -342,7 +338,7 @@ export default function EventsPage() {
             lead_id: String(meeting.lead_id),
             company_name: leadsMap.get(String(meeting.lead_id))?.company_name || 'Unknown Lead',
             contact_name: leadsMap.get(String(meeting.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
-            assigned_to: meeting.assigned_to,
+            assigned_to: meeting.assigned_to, 
             start_time: meeting.event_time,
             end_time: meeting.event_end_time,
             status: getEventStatus({ start_time: meeting.event_time, phase: meeting.phase }),
@@ -359,7 +355,7 @@ export default function EventsPage() {
             lead_id: String(demo.lead_id),
             company_name: leadsMap.get(String(demo.lead_id))?.company_name || 'Unknown Lead',
             contact_name: leadsMap.get(String(demo.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
-            assigned_to: demo.assigned_to,
+            assigned_to: userNumberToNameMap.get(demo.assigned_to) || demo.assigned_to,
             start_time: demo.start_time,
             end_time: demo.event_end_time,
             status: getEventStatus({ start_time: demo.start_time, phase: demo.phase }),
@@ -369,7 +365,12 @@ export default function EventsPage() {
           }))
       ];
 
-      combinedEvents.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+      combinedEvents.sort((a, b) => {
+        const dateA = parseAsUTCDate(a.start_time) ?? new Date(0);
+        const dateB = parseAsUTCDate(b.start_time) ?? new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
       setAllEvents(combinedEvents);
     } catch (err) {
       console.error("Failed to load events:", err);
@@ -503,14 +504,12 @@ export default function EventsPage() {
               </RadioGroup>
 
               <div className="flex items-center gap-2">
-
-                <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('list')}>
-                  <List className="h-4 w-4" />
-                </Button>
                 <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('grid')}>
                   <LayoutGrid className="h-4 w-4" />
                 </Button>
-                
+                <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('list')}>
+                  <List className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -559,11 +558,7 @@ export default function EventsPage() {
                             <div className="space-y-2">
                               <div><p className="font-medium">Assigned To:</p><p className="text-muted-foreground">{event.assigned_to}</p></div>
                               <div><p className="font-medium">Date & Time:</p>
-                                {event.start_time ? (
-                                  <p className="text-muted-foreground">{format(new Date(event.start_time), 'PPP p')}</p>
-                                ) : (
-                                  <p className="text-muted-foreground">Not set</p>
-                                )}
+                                <p className="text-muted-foreground">{formatDateTime(event.start_time)}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -583,13 +578,16 @@ export default function EventsPage() {
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
+                      {/* --- START OF FIX: Updated table headers --- */}
                       <TableRow>
-                        <TableHead>Event</TableHead>
+                        <TableHead>Lead</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead>Assigned To</TableHead>
                         <TableHead>Date & Time</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
+                      {/* --- END OF FIX --- */}
                     </TableHeader>
                     <TableBody>
                       {paginatedEvents.map(event => {
@@ -599,14 +597,17 @@ export default function EventsPage() {
                         const isActionable = ['Pending', 'Rescheduled', 'Overdue'].includes(event.status);
                         return (
                           <TableRow key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="cursor-pointer hover:bg-muted/50">
+                            {/* --- START OF FIX: Updated table cells --- */}
                             <TableCell>
-                              <div className="font-medium capitalize">{event.type}</div>
-                              <div className="text-sm text-muted-foreground">
-                                  {event.type === 'meeting' ? `${event.meeting_type || ''} with ` : ''}{event.company_name}
-                              </div>
+                              <div className="font-medium">{event.company_name}</div>
+                              <div className="text-sm text-muted-foreground">{event.contact_name}</div>
                             </TableCell>
+                            <TableCell>
+                              <div className="capitalize">{event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}</div>
+                            </TableCell>
+                            {/* --- END OF FIX --- */}
                             <TableCell>{event.assigned_to}</TableCell>
-                            <TableCell>{event.start_time ? format(new Date(event.start_time), 'PPp') : 'N/A'}</TableCell>
+                            <TableCell>{formatDateTime(event.start_time)}</TableCell>
                             <TableCell><Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end items-center gap-2">
@@ -727,7 +728,9 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             For {event.company_name}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        {/* --- START OF FIX: Added scrollable container --- */}
+        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+        {/* --- END OF FIX --- */}
           <div className="grid grid-cols-3 items-center gap-4">
             <Label className="text-right font-semibold">Status</Label>
             <div className="col-span-2">
@@ -758,15 +761,13 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             <Label htmlFor="created-at" className="text-right font-semibold flex items-center justify-end gap-2">
               <Clock className="h-4 w-4" /> Scheduled On
             </Label>
-            <p id="created-at" className="col-span-2">
-              {event.createdAt ? format(new Date(event.createdAt), 'PPP p') : 'N/A'}
-            </p>
+            <p id="created-at" className="col-span-2">{formatDateTime(event.createdAt)}</p>
           </div>
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="event-time" className="text-right font-semibold flex items-center justify-end gap-2">
               <Calendar className="h-4 w-4" /> Event Time
             </Label>
-            <p id="event-time" className="col-span-2">{event.start_time ? format(new Date(event.start_time), 'PPP p') : 'Not Set'}</p>
+            <p id="event-time" className="col-span-2">{formatDateTime(event.start_time)}</p>
           </div>
 
           {event.status === 'Completed' && event.remark && (
@@ -791,4 +792,3 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
     </Dialog>
   )
 }
-

@@ -1,13 +1,15 @@
+// app/dashboard/view-quotations/[leadId]/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { formatDate } from "@/lib/date-format";
+// --- START OF FIX: Import the correct function name ---
+import { formatDateTime } from "@/lib/date-format";
+// --- END OF FIX ---
 import { api, type ApiActivity, type ApiLead } from "@/lib/api"
-import { Loader2, Download, Paperclip, ArrowLeft, Eye } from "lucide-react"
-import { FilePreviewModal } from "@/components/leads/file-preview-modal"
+import { Loader2, Download, Paperclip, ArrowLeft } from "lucide-react"
 
 export default function ViewQuotationsPage() {
   const router = useRouter()
@@ -18,22 +20,21 @@ export default function ViewQuotationsPage() {
   const [quotations, setQuotations] = useState<ApiActivity[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  // --- CHANGE 2: Add state for the preview modal ---
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
-
   useEffect(() => {
     if (leadId) {
       const fetchData = async () => {
         setIsLoading(true)
         try {
+          // --- START OF CHANGE: Use correct API method and filter results ---
           const [leadData, activitiesData] = await Promise.all([
             api.getLeadById(Number(leadId)),
-            api.getActivities(Number(leadId)),
+            api.getActivitiesByLead(Number(leadId)), // Use the correct API function to fetch activities
           ])
           setLead(leadData)
-          const quotationActivities = activitiesData.filter(activity => activity.attachment_path);
+          // Filter activities to only show those marked as 'Quotation' and have an attachment
+          const quotationActivities = activitiesData.filter(activity => activity.activity_type === 'Quotation' && activity.attachment_path);
           setQuotations(quotationActivities)
+          // --- END OF CHANGE ---
         } catch (error) {
           console.error("Failed to fetch lead data or activities:", error)
         } finally {
@@ -44,17 +45,9 @@ export default function ViewQuotationsPage() {
     }
   }, [leadId])
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || ""
-  
-  const handlePreview = (quotation: ApiActivity) => {
-    if (quotation.attachment_path) {
-        setPreviewFile({
-            url: `${API_URL}/web/attachments/preview/${quotation.attachment_path}`,
-            name: quotation.details,
-        });
-        setIsPreviewOpen(true);
-    }
-  };
+  // --- START OF CHANGE: Correctly construct the base API URL for downloads, removing the trailing /api if present ---
+  const API_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "").replace(/\/api$/, "");
+  // --- END OF CHANGE ---
 
   if (isLoading) {
     return (
@@ -81,7 +74,7 @@ export default function ViewQuotationsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Attached Files ({quotations.length})</CardTitle>
-            <CardDescription>Each file was logged as a separate activity.</CardDescription>
+            <CardDescription>Each file was logged as a separate activity with the type 'Quotation'.</CardDescription>
           </CardHeader>
           <CardContent>
             {quotations.length > 0 ? (
@@ -94,22 +87,21 @@ export default function ViewQuotationsPage() {
                         {q.details}
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Uploaded on: {formatDate(q.created_at)}
+                        {/* --- START OF FIX: Use the correct function name here --- */}
+                        Uploaded on: {formatDateTime(q.created_at)}
+                        {/* --- END OF FIX --- */}
                       </p>
                     </div>
-                    {/* --- CHANGE 4: Add the Preview button and wrap buttons in a container --- */}
+                    {/* --- START OF CHANGE: Simplify to a single download button and remove preview logic --- */}
                     <div className="flex items-center gap-2">
-                        <Button variant="secondary" onClick={() => handlePreview(q)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Preview
-                        </Button>
-                        <a href={`${API_URL}/attachments/${q.attachment_path}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`${API_URL}${q.attachment_path}`} target="_blank" rel="noopener noreferrer" download>
                             <Button>
                                 <Download className="mr-2 h-4 w-4" />
                                 Download
                             </Button>
                         </a>
                     </div>
+                    {/* --- END OF CHANGE --- */}
                   </div>
                 ))}
               </div>
@@ -121,13 +113,6 @@ export default function ViewQuotationsPage() {
           </CardContent>
         </Card>
       </div>
-      
-      <FilePreviewModal 
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        fileUrl={previewFile?.url || null}
-        fileName={previewFile?.name || null}
-      />
     </>
   )
 }

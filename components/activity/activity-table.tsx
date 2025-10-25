@@ -3,8 +3,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ApiUnifiedActivity } from "@/lib/api";
-import { formatDateTime } from "@/lib/date-format"; // Only one formatter is needed
+import { formatDateTime } from "@/lib/date-format";
 import { Phone, Mail, MessageSquare, CheckCircle, LucideIcon, Eye, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -12,27 +11,28 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { UnifiedActivity } from "@/app/dashboard/activity/page";
 
 interface ActivityTableProps {
-    activities: ApiUnifiedActivity[];
-    onMarkAsDone: (activity: ApiUnifiedActivity) => void;
-    onViewDetails: (activity: ApiUnifiedActivity) => void;
+    activities: UnifiedActivity[];
+    onMarkAsDone: (activity: UnifiedActivity) => void;
+    onViewDetails: (activity: UnifiedActivity) => void;
     onViewPastActivities: (leadId: number, leadName: string) => void;
-    onEdit: (activity: ApiUnifiedActivity) => void;
-    onCancel: (activity: ApiUnifiedActivity) => void;
+    onEdit: (activity: UnifiedActivity) => void;
+    onCancel: (activity: UnifiedActivity) => void;
 }
 
 const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive" | "outline" } = {
     pending: "secondary",
-    sent: "secondary",
+    scheduled: "secondary",
     completed: "default",
-    new: "default",
+    'activity logged': "default",
     qualified: "secondary",
     unqualified: "destructive",
-    not_our_segment: "destructive",
-    "Meeting Done": "outline",
-    "Demo Done": "outline",
-    "Discussion Done": "outline",
+    canceled: "destructive",
+    overdue: "destructive",
+    "meeting done": "outline",
+    "demo done": "outline",
 };
 
 const activityTypeIcons: { [key: string]: LucideIcon } = {
@@ -63,11 +63,11 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
             </TableHeader>
             <TableBody>
                 {activities.map((activity) => {
-                    const isActionableReminder = activity.type === 'reminder' && activity.status !== 'completed';
+                    const isActionable = activity.isActionable;
 
                     return (
                         <TableRow
-                            key={`${activity.type}-${activity.id}`}
+                            key={activity.id}
                             onDoubleClick={() => onViewDetails(activity)}
                             className="cursor-pointer hover:bg-muted/50"
                         >
@@ -80,25 +80,23 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
                             </TableCell>
                             <TableCell className="max-w-[300px] truncate">{activity.details}</TableCell>
                             <TableCell>
-                                <Badge variant={activity.type === 'reminder' ? "outline" : "secondary"}>
-                                    {activity.type === 'reminder' ? 'Scheduled' : 'Logged'}
+                                <Badge variant={activity.logged_or_scheduled === 'Scheduled' ? "outline" : "secondary"}>
+                                    {activity.logged_or_scheduled}
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <Badge variant={statusVariantMap[activity.status] || "default"} className="capitalize">
+                                <Badge variant={statusVariantMap[activity.status.toLowerCase()] || "default"} className="capitalize">
                                     {activity.status.replace(/_/g, ' ')}
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                {/* --- THIS IS THE FIX --- */}
-                                {/* Consistently use formatDateTime for both types to ensure correct local time conversion */}
-                                {activity.type === 'reminder' && activity.scheduled_for
-                                    ? formatDateTime(activity.scheduled_for)
-                                    : formatDateTime(activity.created_at)}
+                                {/* --- THE DEFINITIVE FIX --- */}
+                                {/* Always use the unified 'activity.date' property for display. */}
+                                {formatDateTime(activity.date)}
                             </TableCell>
                             <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-1">
-                                    {isActionableReminder && (
+                                    {isActionable && (
                                         <Button
                                             size="sm"
                                             onClick={(e) => {
@@ -123,6 +121,10 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenuItem onClick={() => onViewDetails(activity)}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                <span>View Details</span>
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => onViewPastActivities(activity.lead_id, activity.company_name)}>
                                                 <Eye className="mr-2 h-4 w-4" />
                                                 <span>View History</span>
@@ -135,7 +137,7 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
                                             )}
                                             <DropdownMenuItem onClick={() => onCancel(activity)} className="text-destructive">
                                                 <Trash2 className="mr-2 h-4 w-4" />
-                                                <span>{activity.type === 'reminder' ? 'Cancel' : 'Delete'}</span>
+                                                <span>{activity.logged_or_scheduled === 'Scheduled' ? 'Cancel' : 'Delete'}</span>
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>

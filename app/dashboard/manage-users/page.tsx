@@ -1,4 +1,3 @@
-// frontend/app/dashboard/manage-users/page.tsx
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -15,6 +14,10 @@ import { EditUserModal } from "@/components/users/edit-user-modal"
 import { CreateUserModal } from "@/components/users/create-user-modal"
 import { DeleteUserModal } from "@/components/users/delete-user-modal"
 import { userApi, type ApiUser } from "@/lib/api"
+// --- START: FIX ---
+// The correct function to import is `formatDateTime`. There is no `formatDate`.
+import { formatDateTime } from "@/lib/date-format"
+// --- END: FIX ---
 
 interface User {
   id: string
@@ -59,7 +62,6 @@ export default function ManageUsersPage() {
       }))
 
       setUsers(transformedUsers)
-      setFilteredUsers(transformedUsers)
     } catch (err) {
       console.error("Failed to load users:", err)
       setError("Failed to load users. Please try again.")
@@ -126,37 +128,19 @@ export default function ManageUsersPage() {
     loadUsers()
   }
 
-  // --- START: CORRECTION ---
-  // This function is now the single source of truth for the delete action.
-  const handleUserDeleted = async (userId: string) => {
+  const handleUserDeleted = async (userEmail: string) => {
     try {
-      // 1. Make the single API call
-      await userApi.deleteUser(Number.parseInt(userId))
-
-      // 2. Update the local state
-      const updatedUsers = users.filter((user) => user.id !== userId)
+      await userApi.deleteUser(userEmail)
+      const updatedUsers = users.filter((user) => user.email !== userEmail)
       setUsers(updatedUsers)
-      
-      // 3. Show success message
       setSuccess("User deleted successfully!")
       setTimeout(() => setSuccess(""), 3000)
     } catch (error) {
       console.error("Failed to delete user:", error)
       setError("Failed to delete user. Please try again.")
       setTimeout(() => setError(""), 3000)
-      // Re-throw the error so the modal can catch it and display it
       throw error; 
     }
-  }
-  // --- END: CORRECTION ---
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "N/A"
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
   }
 
   if (isLoading || !currentUser) {
@@ -254,7 +238,12 @@ export default function ManageUsersPage() {
                       </TableCell>
                       <TableCell>{user.department || "N/A"}</TableCell>
                       <TableCell>{user.phone || "N/A"}</TableCell>
-                      <TableCell>{formatDate(user.createdAt)}</TableCell>
+                      {/* --- START: FIX --- */}
+                      {/* Replace `formatDate` with `formatDateTime` and extract the date part */}
+                      <TableCell>
+                        {user.createdAt ? formatDateTime(user.createdAt).split(',')[0] + ',' + formatDateTime(user.createdAt).split(',')[1] : "N/A"}
+                      </TableCell>
+                      {/* --- END: FIX --- */}
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

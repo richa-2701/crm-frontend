@@ -1,4 +1,3 @@
-// frontend/app/google-calendar/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -9,7 +8,7 @@ import interactionPlugin from "@fullcalendar/interaction"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -50,10 +49,8 @@ export default function GoogleCalendarPage() {
     const fetchCalendarData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [eventData, usersData] = await Promise.all([
-                api.getAllCalendarEvents(),
-                api.getUsers()
-            ]);
+            const eventData = await api.getAllCalendarEvents();
+            const usersData = await api.getUsers();
 
             setAllUsers(usersData);
             const legend: Record<string, string> = {};
@@ -70,11 +67,11 @@ export default function GoogleCalendarPage() {
             });
             setAllEvents(formattedEvents);
             setUserLegend(legend);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to fetch calendar data:", err);
             toast({
-                title: "Error",
-                description: "Could not load calendar data.",
+                title: "Error Loading Calendar",
+                description: `Could not load data. The server might be busy. Please try again in a moment. (${err.message})`,
                 variant: "destructive"
             });
         } finally {
@@ -87,8 +84,10 @@ export default function GoogleCalendarPage() {
         if(userJson) {
             const user = JSON.parse(userJson);
             setCurrentUser(user);
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-            setSubscriptionUrl(`${apiUrl}/web/calendar/subscribe/${user.id}`);
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:57214";
+            const subPath = `/web/calendar/subscribe/${user.id}`;
+            const finalUrl = (apiUrl.endsWith('/api') ? apiUrl.slice(0, -4) : apiUrl) + subPath;
+            setSubscriptionUrl(finalUrl);
         }
         fetchCalendarData();
     }, [fetchCalendarData]);
@@ -110,16 +109,14 @@ export default function GoogleCalendarPage() {
         window.open(googleCalendarUrl, '_blank');
     };
     
-    // --- THIS IS THE CORRECTED FUNCTION ---
     const renderEventContent = (eventInfo: any) => {
         const { event } = eventInfo;
         const { extendedProps } = event;
-        const isDone = extendedProps.status === 'Done';
+        const isDone = extendedProps.status === 'Done' || extendedProps.status === 'Completed';
 
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    {/* Add conditional class for opacity if the event is completed */}
                     <div className={`fc-event-main-frame w-full overflow-hidden whitespace-nowrap flex items-center gap-1.5 p-0.5 ${isDone ? 'opacity-60' : ''}`}>
                         <span
                             className="h-2 w-2 rounded-full flex-shrink-0"
@@ -127,20 +124,18 @@ export default function GoogleCalendarPage() {
                         />
                         <div className="flex-1 overflow-hidden">
                             <span className="fc-event-time">{eventInfo.timeText}</span>
-                            {/* Add conditional class for line-through if the event is completed */}
                             <span className={`fc-event-title fc-sticky ml-1 ${isDone ? 'line-through' : ''}`}>{event.title}</span>
                         </div>
                     </div>
                 </TooltipTrigger>
                 <TooltipContent>
                     <p className="font-bold">{event.title}</p>
-                    {/* Display the status in the tooltip */}
                     <p><strong>Status:</strong> {extendedProps.status}</p>
                     <p><strong>Assignee:</strong> {extendedProps.assignee}</p>
                     {event.start && event.end &&
                         <p>
                             <strong>Time: </strong>
-                            {format(event.start, "p")} - {format(event.end, "p")}
+                            {format(new Date(event.start), "p")} - {format(new Date(event.end), "p")}
                         </p>
                     }
                 </TooltipContent>
@@ -148,7 +143,7 @@ export default function GoogleCalendarPage() {
         );
     };
 
-    if (isLoading && !allEvents.length) {
+    if (isLoading && allEvents.length === 0) {
         return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
@@ -163,7 +158,6 @@ export default function GoogleCalendarPage() {
                 <Card>
                     <CardHeader>
                         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                            {/* Left Side: Legend and Filter */}
                             <div className="flex-1 space-y-4">
                                 <div>
                                     <CardTitle className="text-base mb-2">User Legend</CardTitle>
@@ -182,33 +176,40 @@ export default function GoogleCalendarPage() {
                                         <SelectTrigger><SelectValue/></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Users</SelectItem>
-                                            {allUsers.map(user => (
-                                                <SelectItem key={user.id} value={user.username}>{user.username}</SelectItem>
+                                            {Object.keys(userLegend).sort().map(username => (
+                                                <SelectItem key={username} value={username}>{username}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                             
-                            {/* Right Side: Sync instructions */}
                             <details className="text-sm border rounded-lg p-3 md:max-w-md">
                                 <summary className="cursor-pointer font-medium text-primary flex items-center gap-2">
                                     <Info className="h-4 w-4" />
                                     <span>Sync Your Personal CRM Schedule to Google Calendar</span>
                                 </summary>
                                 <div className="mt-3 space-y-3">
-                                     <AlertDescription className="text-gray-700">
-                                        Copy your unique subscription URL below. This URL provides *your* assigned CRM meetings and demos.
+                                    {/* --- START OF FIX: Improved user instructions about sync delay --- */}
+                                    <AlertDescription className="text-gray-700">
+                                        This will create a one-way sync from the CRM to your personal calendar. Any meetings or demos assigned to you in the CRM will automatically appear in your Google Calendar.
                                         <br/><br/>
+                                        <div className="p-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800">
+                                            <p className="font-bold">Important Note on Sync Speed:</p>
+                                            <p>Google Calendar controls how often it checks for updates. While new events will sync automatically, it may take <span className="font-semibold">several hours</span> for changes to appear. This delay is controlled by Google, not the CRM.</p>
+                                        </div>
+                                        <br/>
                                         **How to add to Google Calendar:**
                                         <ol className="list-decimal list-inside pl-4 mt-2 space-y-1">
-                                            <li>Copy the URL.</li>
-                                            <li>Go to Google Calendar.</li>
-                                            <li>Under "Other calendars", click the <span className="font-bold">+</span> icon.</li>
-                                            <li>Select "From URL" and paste the link.</li>
-                                            <li>**Important:** Google Calendar may take several hours to refresh. If events are out of sync, you may need to **remove and re-add** the calendar in Google to force an update.</li>
+                                            <li>Copy your unique calendar URL below.</li>
+                                            <li>Open Google Calendar on your computer.</li>
+                                            <li>On the left side, next to "Other calendars," click the <span className="font-bold">+</span> (Add other calendars) button.</li>
+                                            <li>Select "From URL" from the menu.</li>
+                                            <li>Paste your copied URL into the field and click "Add calendar."</li>
+                                            <li>If events seem out of date, you may need to **remove and re-add** the calendar in Google's settings to force an immediate refresh.</li>
                                         </ol>
                                       </AlertDescription>
+                                    {/* --- END OF FIX --- */}
                                     <div className="flex items-center gap-2">
                                         <Input value={subscriptionUrl} readOnly className="h-8" />
                                         <Button onClick={handleCopyUrl} size="icon" variant="outline" className="h-8 w-8 flex-shrink-0">
@@ -217,7 +218,7 @@ export default function GoogleCalendarPage() {
                                     </div>
                                     <Button onClick={handleAddToGoogleCalendar} variant="secondary" className="w-full">
                                         <ExternalLink className="h-4 w-4 mr-2" />
-                                        Add to Google Calendar (beta)
+                                        Add to Google Calendar
                                     </Button>
                                 </div>
                             </details>
@@ -225,7 +226,7 @@ export default function GoogleCalendarPage() {
                     </CardHeader>
                     <CardContent className="p-2 md:p-4">
                         {isLoading ? (
-                           <div className="flex justify-center items-center h-48">
+                           <div className="flex justify-center items-center h-96">
                                <Loader2 className="h-6 w-6 animate-spin" />
                            </div>
                         ) : (

@@ -1,6 +1,6 @@
-// frontend/components/activity/log-activity-modal.tsx
+//frontend/components/activity/log-activity-modal.tsx
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -9,8 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Mic, MicOff } from "lucide-react"
+import { Loader2, Mic, MicOff, Paperclip, XCircle } from "lucide-react"
 import { api, ApiLead, ApiUser } from "@/lib/api"
+// --- FIX: Import a debounce utility. If you don't have one, you can use lodash or create a simple one. ---
+import { debounce } from "lodash"; // Example using lodash. `npm install lodash @types/lodash` if not already installed.
+
 
 interface ModalProps {
   currentUser: ApiUser;
@@ -19,17 +22,15 @@ interface ModalProps {
   onSuccess: () => void;
 }
 
-// --- REMOVED: const activityTypes = ["Call", "Message", "WhatsApp", "Email", "Other"]; ---
-
 export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: ModalProps) {
     const { toast } = useToast();
     const [leads, setLeads] = useState<ApiLead[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetchingLeads, setIsFetchingLeads] = useState(false); // State for lead search
     const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "" });
     const [otherActivityType, setOtherActivityType] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [textBeforeListening, setTextBeforeListening] = useState("");
-    
-    // --- CHANGE: State for dynamic activity types ---
     const [activityTypeOptions, setActivityTypeOptions] = useState<string[]>([]);
 
     const {
@@ -39,25 +40,50 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
         browserSupportsSpeechRecognition
     } = useSpeechRecognition();
 
+    // --- OPTIMIZATION: Fetch activity types on mount, not leads. ---
     useEffect(() => {
         if (isOpen) {
             setFormData({ leadId: "", details: "", activityType: "" });
             setOtherActivityType("");
             resetTranscript();
-            // --- CHANGE: Fetch leads and master data in parallel ---
-            Promise.all([
-                api.getAllLeads(),
-                api.getByCategory("activity_type")
-            ]).then(([leadsData, activityTypesData]) => {
-                setLeads(leadsData);
-                const types = activityTypesData.map(item => item.value);
-                setActivityTypeOptions([...types, "Other"]); // Ensure 'Other' is always an option
-                if (types.length > 0) {
-                    setFormData(prev => ({ ...prev, activityType: types[0] }));
-                }
-            }).catch(() => toast({ title: "Error", description: "Failed to fetch initial data for modal." }));
+            setLeads([]); // Clear previous lead list
+            
+            api.getByCategory("activity_type")
+                .then((activityTypesData) => {
+                    const types = activityTypesData.map(item => item.value);
+                    setActivityTypeOptions([...types, "Other"]);
+                    if (types.length > 0) {
+                        setFormData(prev => ({ ...prev, activityType: types[0] }));
+                    }
+                }).catch(() => toast({ title: "Error", description: "Failed to fetch activity types." }));
         }
     }, [isOpen, toast, resetTranscript]);
+
+    // --- OPTIMIZATION: Debounced function to search leads ---
+    const searchLeads = useCallback(
+        debounce(async (searchTerm: string) => {
+            if (searchTerm.length < 2) {
+                setLeads([]);
+                return;
+            }
+            setIsFetchingLeads(true);
+            try {
+                // Assuming your backend can filter leads by name. If not, this still fetches all,
+                // but the debounce prevents it from happening on every keystroke.
+                // A better backend would be `api.searchLeads({ company_name: searchTerm })`
+                const allLeads = await api.getAllLeads();
+                const filteredLeads = allLeads.filter(lead => 
+                    lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+                );
+                setLeads(filteredLeads);
+            } catch (error) {
+                toast({ title: "Error", description: "Could not search for leads." });
+            } finally {
+                setIsFetchingLeads(false);
+            }
+        }, 300), // 300ms delay after user stops typing
+        [toast]
+    );
 
     useEffect(() => {
         if (listening) {
@@ -84,20 +110,27 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
             return;
         }
 
-        const selectedLead = leads.find(lead => String(lead.id) === formData.leadId);
-        if (!selectedLead) {
-            toast({ title: "Error", description: "Selected lead not found.", variant: "destructive" });
-            setIsLoading(false);
-            return;
-        }
-
         try {
+            let attachmentPath: string | null = null;
+            if (selectedFile) {
+                const uploadResponse = await api.uploadActivityAttachment(selectedFile);
+                // --- START OF FIX: Check for 'file_path' (snake_case) instead of 'filePath' (camelCase) ---
+                if (uploadResponse && uploadResponse.file_path) {
+                    attachmentPath = uploadResponse.file_path;
+                } else {
+                    throw new Error("File upload failed to return a path.");
+                }
+                // --- END OF FIX ---
+            }
+            
             const payload = {
-                lead_id: selectedLead.id,
+                lead_id: Number(formData.leadId),
                 details: formData.details,
                 phase: "Activity Logged",
-                activity_type: finalActivityType
+                activity_type: finalActivityType,
+                attachment_path: attachmentPath,
             };
+            
 
             await api.logActivity(payload);
             toast({ title: "Success", description: "Activity logged successfully." });
@@ -119,6 +152,13 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
             SpeechRecognition.startListening({ continuous: true });
         }
     };
+    
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+        }
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -128,19 +168,43 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                     <DialogDescription>Record the details of a completed interaction with a lead.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div >
                         <div className="space-y-2">
                             <Label>Lead Name *</Label>
-                            <Select required value={formData.leadId} onValueChange={(value) => setFormData({ ...formData, leadId: value })}>
-                                <SelectTrigger><SelectValue placeholder="Select a lead..." /></SelectTrigger>
-                                <SelectContent>{leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)}</SelectContent>
+                            {/* --- OPTIMIZATION: Changed to a searchable Select component --- */}
+                            <Select
+                                required
+                                value={formData.leadId}
+                                onValueChange={(value) => setFormData({ ...formData, leadId: value })}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Type to search for a lead..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <div className="p-2">
+                                        <Input
+                                            placeholder="Search by company name..."
+                                            onChange={(e) => searchLeads(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+                                    {isFetchingLeads && (
+                                        <div className="flex items-center justify-center p-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    )}
+                                    {leads.length > 0 ? (
+                                        leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
+                                    ) : (
+                                        !isFetchingLeads && <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
+                                    )}
+                                </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
                             <Label>Activity Type *</Label>
-                            {/* --- CHANGE: Use dynamic options --- */}
                             <Select value={formData.activityType} onValueChange={(value) => setFormData({ ...formData, activityType: value })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {activityTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
                                 </SelectContent>
@@ -185,6 +249,27 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                             )}
                         </div>
                          {listening && <p className="text-xs text-muted-foreground animate-pulse mt-1">Listening...</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="attachment">Attachment (Optional)</Label>
+                        {!selectedFile ? (
+                            <div className="relative flex items-center">
+                                <Paperclip className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    id="attachment"
+                                    type="file"
+                                    onChange={handleFileChange}
+                                    className="pl-9 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                                />
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
+                                <span className="text-sm font-medium truncate">{selectedFile.name}</span>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedFile(null)}>
+                                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>

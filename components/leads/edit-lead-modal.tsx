@@ -70,13 +70,11 @@ interface Lead {
   status: string
   opportunity_business?: string
   target_closing_date?: string
-  // --- START: NEW FIELDS ---
   version?: string;
   database_type?: string;
   amc?: string;
   gst?: string;
   company_pan?: string;
-  // --- END: NEW FIELDS ---
 }
 
 interface User {
@@ -94,7 +92,11 @@ interface EditLeadModalProps {
 
 const namePrefixes = ["Mr.", "Mrs.", "Ms."]
 
-const splitFullName = (fullName: string) => {
+const splitFullName = (fullName: string | null | undefined) => {
+  if (!fullName || typeof fullName !== 'string') {
+    return { prefix: "Mr.", first_name: "", last_name: "" };
+  }
+  
   const parts = fullName.trim().split(" ")
   let prefix = ""
   let firstName = ""
@@ -112,6 +114,7 @@ const splitFullName = (fullName: string) => {
   return { prefix: prefix || "Mr.", first_name: firstName, last_name: lastName }
 }
 
+// --- START OF FIX: Added 'version' to the master data options ---
 interface MasterDataOptions {
     source: string[];
     segment: string[];
@@ -119,7 +122,9 @@ interface MasterDataOptions {
     lead_type: string[];
     status: string[];
     current_system: string[];
+    version: string[];
 }
+// --- END OF FIX ---
 
 export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLeadModalProps) {
   const { toast } = useToast()
@@ -128,18 +133,18 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
     pincode: "", phone_2: "", team_size: "", turnover: "", source: "", segment: "", verticles: "", assigned_to: "",
     current_system: "", machine_specification: "", challenges: "", remark: "", lead_type: "", status: "",
     opportunity_business: "", target_closing_date: "",
-    // --- START: NEW FIELDS ---
     version: "", database_type: "", amc: "", gst: "", company_pan: "",
-    // --- END: NEW FIELDS ---
   })
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
   const [selectedState, setSelectedState] = useState<string | undefined>()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [isLoading, setIsLoading] = useState(false)
   
+  // --- START OF FIX: Initialized state to include 'version' ---
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
-      source: [], segment: [], verticles: [], lead_type: [], status: [], current_system: []
+      source: [], segment: [], verticles: [], lead_type: [], status: [], current_system: [], version: []
   });
+  // --- END OF FIX ---
 
   const countryOptions = useMemo(() => Country.getAllCountries().map(c => ({ value: c.isoCode, label: c.name })), [])
   const stateOptions = useMemo(() => selectedCountry ? State.getStatesOfCountry(selectedCountry).map(s => ({ value: s.isoCode, label: s.name })) : [], [selectedCountry])
@@ -147,14 +152,16 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
 
   useEffect(() => {
     if (isOpen) {
+        // --- START OF FIX: Fetch master data for 'version' along with other categories ---
         Promise.all([
             api.getByCategory("source"),
             api.getByCategory("segment"),
             api.getByCategory("verticles"),
             api.getByCategory("lead_type"),
             api.getByCategory("status"),
-            api.getByCategory("current_system")
-        ]).then(([sourceData, segmentData, verticlesData, leadTypeData, statusData, currentSystemData]) => {
+            api.getByCategory("current_system"),
+            api.getByCategory("version") 
+        ]).then(([sourceData, segmentData, verticlesData, leadTypeData, statusData, currentSystemData, versionData]) => {
             setMasterOptions({
                 source: sourceData.map(item => item.value),
                 segment: segmentData.map(item => item.value),
@@ -162,11 +169,13 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
                 lead_type: leadTypeData.map(item => item.value),
                 status: statusData.map(item => item.value),
                 current_system: currentSystemData.map(item => item.value),
+                version: versionData.map(item => item.value),
             });
         }).catch(err => {
             console.error("Failed to fetch master data for modal", err);
             toast({ title: "Error", description: "Could not load dropdown options.", variant: "destructive" });
         });
+        // --- END OF FIX ---
     }
   }, [isOpen, toast]);
 
@@ -176,6 +185,8 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
       const stateObj = countryObj ? State.getStatesOfCountry(countryObj.value).find(s => s.name === lead.state) : undefined
       setSelectedCountry(countryObj?.value)
       setSelectedState(stateObj?.isoCode)
+
+      // --- START OF FIX: Ensure all fields including 'gst' and 'company_pan' are populated ---
       setFormData({
         company_name: lead.company_name || "", email: lead.email || "", address: lead.address || "",
         address_2: lead.address_2 || "", country: countryObj?.value || "", state: stateObj?.isoCode || "",
@@ -187,14 +198,14 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
         status: lead.status || "",
         opportunity_business: lead.opportunity_business || "",
         target_closing_date: lead.target_closing_date ? lead.target_closing_date.split('T')[0] : "",
-        // --- START: NEW FIELDS ---
         version: lead.version || "",
         database_type: lead.database_type || "",
         amc: lead.amc || "",
         gst: lead.gst || "",
         company_pan: lead.company_pan || "",
-        // --- END: NEW FIELDS ---
       })
+      // --- END OF FIX ---
+
       if (lead.contacts && lead.contacts.length > 0) {
         setContacts(lead.contacts.map(c => ({ ...c, ...splitFullName(c.contact_name), linkedIn: c.linkedIn || null, pan: c.pan || null })))
       } else {
@@ -298,18 +309,24 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
             </div>
           </div>
           
-           {/* --- START: NEW SECTION FOR NEW FIELDS --- */}
            <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Technical & Financial Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
-                    <div className="space-y-2"><Label htmlFor="version">Version</Label><Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} /></div>
+                    {/* --- START OF FIX: Changed Version from Input to Select dropdown --- */}
+                    <div className="space-y-2">
+                        <Label htmlFor="version">Version</Label>
+                        <Select value={formData.version} onValueChange={v => handleInputChange("version", v)}>
+                            <SelectTrigger id="version"><SelectValue placeholder="Select a version" /></SelectTrigger>
+                            <SelectContent>{masterOptions.version.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+                    {/* --- END OF FIX --- */}
                     <div className="space-y-2"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
                     <div className="space-y-2"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
                     <div className="space-y-2"><Label htmlFor="gst">Company GST</Label><Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} /></div>
                     <div className="space-y-2"><Label htmlFor="company_pan">Company PAN</Label><Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} /></div>
                 </div>
             </div>
-            {/* --- END: NEW SECTION --- */}
 
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">System & Remarks</h3>

@@ -1,4 +1,3 @@
-// frontend/app/dashboard/page.tsx
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
@@ -8,8 +7,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
 import { Calendar, Clock, Users, Phone, FileText, CheckCircle, MessageSquare, User as UserIcon, Monitor, Building } from "lucide-react"
-import { formatDate, formatTime } from "@/lib/date-format"
-import { api, ApiUnifiedActivity, ApiUser, ApiMeeting, type ApiProposalSent, type ApiDemo } from "@/lib/api"
+// --- FIX: Import the robust date parser we created ---
+import { formatDateTime, parseAsUTCDate } from "@/lib/date-format"
+import { api, ApiUser, ApiMeeting, type ApiProposalSent, type ApiDemo, type ApiReminder, type ApiActivity, type ApiLead } from "@/lib/api"
 import { MarkAsDoneModal } from "@/components/activity/mark-as-done-modal"
 
 
@@ -39,12 +39,13 @@ interface Lead {
   [key: string]: any
 }
 
+// A unified interface to represent all actionable items on the dashboard
 interface UnifiedTask {
   id: string;
   numericId: number;
-  lead_id: string | null;
-  proposal_id?: string | null;
-  original_lead_id?: number; // For navigating from a proposal task
+  lead_id: number | null;
+  proposal_id?: number | null;
+  original_lead_id?: number; 
   type: 'meeting' | 'demo' | 'reminder';
   activity_type_display: string;
   title: string;
@@ -54,6 +55,7 @@ interface UnifiedTask {
   startTime: string;
   endTime: string;
   details: string;
+  raw_activity: ApiReminder | ApiMeeting | ApiDemo;
 }
 
 const BASE_CHART_CONFIG = {
@@ -82,7 +84,6 @@ const generateColorFromString = (str: string): string => {
   return `hsl(${hue}, 70%, 55%)`;
 };
 
-// --- START: NEW ANIMATED SKELETON LOADER COMPONENT ---
 function DashboardSkeleton() {
   const SkeletonCard = () => <div className="h-full w-full bg-muted rounded-lg animate-pulse"></div>;
   const SkeletonTask = () => (
@@ -98,13 +99,10 @@ function DashboardSkeleton() {
 
   return (
     <div className="space-y-6 pb-6 px-2 md:px-0">
-      {/* Header Skeleton */}
       <div className="mb-3 space-y-2">
         <div className="h-8 w-48 bg-muted rounded animate-pulse"></div>
         <div className="h-5 w-64 bg-muted rounded animate-pulse"></div>
       </div>
-
-      {/* Tasks Overview Skeleton */}
       <Card className="animate-pulse">
         <CardHeader>
           <div className="h-6 w-40 bg-muted rounded"></div>
@@ -136,8 +134,6 @@ function DashboardSkeleton() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Summary Section Skeleton */}
       <div className="grid gap-4 pt-4 grid-cols-1 lg:grid-cols-5">
         <div className="lg:col-span-2 h-[400px] bg-muted rounded-lg animate-pulse"></div>
         <div className="lg:col-span-3 grid grid-cols-2 gap-4">
@@ -150,8 +146,6 @@ function DashboardSkeleton() {
     </div>
   );
 }
-// --- END: NEW ANIMATED SKELETON LOADER COMPONENT ---
-
 
 function TaskTypeIcon({ type }: { type: string }) {
   const lowerType = type.toLowerCase();
@@ -163,9 +157,12 @@ function TaskTypeIcon({ type }: { type: string }) {
 }
 
 function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; onClick: () => void; isUpcoming?: boolean }) {
-  const timeString = task.endTime && new Date(task.startTime).getTime() !== new Date(task.endTime).getTime()
-    ? `${formatTime(task.startTime)} - ${formatTime(task.endTime)}`
-    : formatTime(task.startTime);
+  // Use formatDateTime to ensure correct time is displayed
+  const timeString = task.endTime && parseAsUTCDate(task.startTime)!.getTime() !== parseAsUTCDate(task.endTime)!.getTime()
+    ? `${formatDateTime(task.startTime).split(',')[2]} - ${formatDateTime(task.endTime).split(',')[2]}`
+    : formatDateTime(task.startTime).split(',')[2];
+  
+  const dateString = formatDateTime(task.startTime).split(',').slice(0, 2).join(',');
 
   return (
     <div
@@ -192,7 +189,7 @@ function TaskCard({ task, onClick, isUpcoming = false }: { task: UnifiedTask; on
       <div className="text-xs font-semibold text-muted-foreground text-right flex-shrink-0">
         {isUpcoming ? (
           <div className="flex flex-col items-end">
-            <span>{formatDate(task.startTime)}</span>
+            <span>{dateString}</span>
             <span className="font-normal text-gray-500 dark:text-gray-400">{timeString}</span>
           </div>
         ) : (
@@ -214,46 +211,38 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [dynamicChartConfig, setDynamicChartConfig] = useState(BASE_CHART_CONFIG);
 
-  const [activityToComplete, setActivityToComplete] = useState<ApiUnifiedActivity | null>(null);
+  const [activityToComplete, setActivityToComplete] = useState<ApiReminder | null>(null);
   const [isDoneModalOpen, setDoneModalOpen] = useState(false);
 
   const loadDashboardData = useCallback(async (currentUser: User) => {
     try {
       setLoading(true);
-      // --- START: FIX - Fetch proposals as well ---
-      const [leadsData, proposalsData, allMeetings, allDemos, allActivities] = await Promise.all([
+      const [leadsData, proposalsData, allMeetings, allDemos, allReminders] = await Promise.all([
         api.getAllLeads(),
         api.getAllProposals(),
         api.getAllMeetings(),
         api.getAllDemos(),
-        api.getAllActivities(currentUser.username)
+        api.getAllReminders() // Changed from getAllActivities
       ]);
 
-      const leadsMap = new Map<string, Lead>(leadsData.map(lead => [String(lead.id), { ...lead, id: String(lead.id), contacts: lead.contacts ?? [] }]));
-      const proposalsMap = new Map<string, ApiProposalSent>(proposalsData.map(p => [String(p.id), p]));
-      // --- END: FIX ---
+      const leadsMap = new Map<number, ApiLead>(leadsData.map(lead => [lead.id, lead]));
+      const proposalsMap = new Map<number, ApiProposalSent>(proposalsData.map(p => [p.id, p]));
 
       const filteredLeads = currentUser.role === "admin" ? leadsData : leadsData.filter(lead => lead.assigned_to === currentUser.username);
       setLeads(filteredLeads.map(lead => ({ ...lead, id: String(lead.id), contacts: lead.contacts ?? [] })));
 
-      const pendingMeetings = allMeetings.filter(e => e.phase === "Scheduled" || e.phase === "Rescheduled");
-      const pendingDemos = allDemos.filter(e => e.phase === "Scheduled" || e.phase === "Rescheduled");
-      const pendingActivities = allActivities.filter(a => a.type === 'reminder' && a.status === 'pending');
+      const pendingMeetings = allMeetings.filter(e => e.phase === "Scheduled" || e.phase === "Pending" || e.phase === "Rescheduled");
+      const pendingDemos = allDemos.filter(e => e.phase === "Scheduled" || e.phase === "Pending" || e.phase === "Rescheduled");
+      const pendingReminders = allReminders.filter(a => a.status.toLowerCase() === 'pending');
+      
       const combinedTasks: UnifiedTask[] = [];
 
-      // --- START: FIX - Handle meetings linked to leads OR proposals ---
       pendingMeetings.forEach(m => {
-        let parent: Lead | ApiProposalSent | undefined;
-        if (m.lead_id) {
-            parent = leadsMap.get(String(m.lead_id));
-        } else if (m.proposal_id) {
-            parent = proposalsMap.get(String(m.proposal_id));
-        }
-
+        const parent = m.lead_id ? leadsMap.get(m.lead_id) : m.proposal_id ? proposalsMap.get(m.proposal_id) : undefined;
         combinedTasks.push({
           id: `meeting-${m.id}`, numericId: m.id, 
-          lead_id: m.lead_id ? String(m.lead_id) : null,
-          proposal_id: m.proposal_id ? String(m.proposal_id) : null,
+          lead_id: m.lead_id,
+          proposal_id: m.proposal_id,
           original_lead_id: (parent as ApiProposalSent)?.original_lead_id,
           type: 'meeting',
           title: "Meeting",
@@ -261,22 +250,17 @@ export default function DashboardPage() {
           companyName: parent?.company_name || 'Unknown',
           contactName: parent?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: m.assigned_to, startTime: m.event_time, endTime: m.event_end_time,
-          details: `Scheduled meeting with ${parent?.contacts?.[0]?.contact_name || 'contact'} at ${parent?.company_name || 'company'}.`
+          details: `Scheduled meeting with ${parent?.contacts?.[0]?.contact_name || 'contact'} at ${parent?.company_name || 'company'}.`,
+          raw_activity: m,
         });
       });
 
       pendingDemos.forEach(d => {
-        let parent: Lead | ApiProposalSent | undefined;
-        if (d.lead_id) {
-            parent = leadsMap.get(String(d.lead_id));
-        } else if (d.proposal_id) {
-            parent = proposalsMap.get(String(d.proposal_id));
-        }
-
+        const parent = d.lead_id ? leadsMap.get(d.lead_id) : d.proposal_id ? proposalsMap.get(d.proposal_id) : undefined;
         combinedTasks.push({
           id: `demo-${d.id}`, numericId: d.id,
-          lead_id: d.lead_id ? String(d.lead_id) : null,
-          proposal_id: d.proposal_id ? String(d.proposal_id) : null,
+          lead_id: d.lead_id,
+          proposal_id: d.proposal_id,
           original_lead_id: (parent as ApiProposalSent)?.original_lead_id,
           type: 'demo',
           title: "Demo",
@@ -284,28 +268,29 @@ export default function DashboardPage() {
           companyName: parent?.company_name || 'Unknown',
           contactName: parent?.contacts?.[0]?.contact_name || 'N/A',
           assignedTo: d.assigned_to, startTime: d.start_time, endTime: d.event_end_time,
-          details: `Scheduled demo with ${parent?.contacts?.[0]?.contact_name || 'contact'} at ${parent?.company_name || 'company'}.`
+          details: `Scheduled demo with ${parent?.contacts?.[0]?.contact_name || 'contact'} at ${parent?.company_name || 'company'}.`,
+          raw_activity: d,
         });
       });
-      // --- END: FIX ---
 
-      pendingActivities.forEach(a => {
-        const lead = leadsMap.get(String(a.lead_id));
-        if (lead) { // Only process reminders for active leads
+      pendingReminders.forEach(a => {
+        const lead = leadsMap.get(a.lead_id);
+        if (lead) {
             combinedTasks.push({
-              id: `reminder-${a.id}`, numericId: a.id, lead_id: String(a.lead_id), type: 'reminder',
-              title: a.activity_type,
-              activity_type_display: a.details,
+              id: `reminder-${a.id}`, numericId: a.id, lead_id: a.lead_id, type: 'reminder',
+              title: a.activity_type || "Reminder",
+              activity_type_display: a.message,
               companyName: lead.company_name,
               contactName: lead.contacts?.[0]?.contact_name || 'N/A',
-              assignedTo: a.details.split('assigned to ')[1] || currentUser.username,
-              startTime: a.scheduled_for || new Date().toISOString(), endTime: a.scheduled_for || new Date().toISOString(),
-              details: a.details
+              assignedTo: a.assigned_to,
+              startTime: a.remind_time, endTime: a.remind_time,
+              details: a.message,
+              raw_activity: a,
             });
         }
       });
 
-      combinedTasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      combinedTasks.sort((a, b) => parseAsUTCDate(a.startTime)!.getTime() - parseAsUTCDate(b.startTime)!.getTime());
       setAllTasks(combinedTasks);
 
       setTotalMeetings(allMeetings.length);
@@ -320,19 +305,12 @@ export default function DashboardPage() {
       const finalChartConfig = { ...BASE_CHART_CONFIG };
       const chartData = Object.entries(statusCounts).map(([status, count]) => {
         let configEntry = finalChartConfig[status as keyof typeof finalChartConfig];
-
         if (!configEntry) {
           const newColor = generateColorFromString(status);
           configEntry = { label: status, color: newColor };
           finalChartConfig[status as keyof typeof finalChartConfig] = configEntry;
         }
-
-        return {
-          name: status,
-          value: count,
-          fill: configEntry.color,
-          label: configEntry.label,
-        };
+        return { name: status, value: count, fill: configEntry.color, label: configEntry.label };
       });
 
       setLeadStatusData(chartData);
@@ -363,42 +341,39 @@ export default function DashboardPage() {
   }
 
   const handleTaskClick = (task: UnifiedTask) => {
-    // --- START: FIX - Handle navigation for proposal-linked tasks ---
     const leadIdForNav = task.original_lead_id || task.lead_id;
 
-    if (task.type === 'meeting') {
+    if (task.type === 'meeting' && leadIdForNav) {
         router.push(`/dashboard/post-meeting?leadId=${leadIdForNav}&meetingId=${task.numericId}`);
-    } else if (task.type === 'demo') {
+    } else if (task.type === 'demo' && leadIdForNav) {
         router.push(`/dashboard/post-demo?leadId=${leadIdForNav}&demoId=${task.numericId}`);
-    } else if (task.type === 'reminder' && task.lead_id) { // Reminders should always have a lead_id
-        setActivityToComplete({
-            id: task.numericId, type: 'reminder', lead_id: parseInt(task.lead_id),
-            company_name: task.companyName, activity_type: task.activity_type_display,
-            details: task.details, status: 'pending', created_at: new Date().toISOString(),
-            scheduled_for: task.startTime,
-        });
+    } else if (task.type === 'reminder') {
+        setActivityToComplete(task.raw_activity as ApiReminder);
         setDoneModalOpen(true);
     }
-    // --- END: FIX ---
   };
 
-   const today = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999); // End of today
 
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
 
   const endOfNextWeek = new Date(today);
   endOfNextWeek.setDate(endOfNextWeek.getDate() + 7);
   endOfNextWeek.setHours(23, 59, 59, 999);
 
-  const todaysTasks = allTasks.filter(task =>
-    new Date(task.startTime).toDateString() === today.toDateString()
-  );
+  // --- FIX: Use robust date parsing for filtering ---
+  const todaysTasks = allTasks.filter(task => {
+    const taskDate = parseAsUTCDate(task.startTime);
+    return taskDate && taskDate >= today && taskDate <= endOfToday;
+  });
 
   const upcomingTasks = allTasks.filter(task => {
-    const taskDate = new Date(task.startTime);
-    return taskDate >= tomorrow && taskDate <= endOfNextWeek;
+    const taskDate = parseAsUTCDate(task.startTime);
+    return taskDate && taskDate >= tomorrow && taskDate <= endOfNextWeek;
   });
 
   const todaysMeetings = todaysTasks.filter(t => t.type === 'meeting');
@@ -410,12 +385,9 @@ export default function DashboardPage() {
   const upcomingActivities = upcomingTasks.filter(t => t.type === 'reminder');
 
 
-  // --- START: CHANGE - RENDER SKELETON WHILE LOADING ---
   if (loading || !user) {
-    // This now renders our attractive skeleton loader instead of just text
     return <DashboardSkeleton />;
   }
-  // --- END: CHANGE ---
 
   return (
     <>
@@ -647,7 +619,7 @@ export default function DashboardPage() {
       </div>
 
       <MarkAsDoneModal
-        activity={activityToComplete}
+        activity={activityToComplete as any}
         currentUser={user}
         isOpen={isDoneModalOpen}
         onClose={() => setDoneModalOpen(false)}
@@ -656,3 +628,4 @@ export default function DashboardPage() {
     </>
   )
 }
+

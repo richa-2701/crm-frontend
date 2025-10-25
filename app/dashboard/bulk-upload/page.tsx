@@ -2,6 +2,7 @@
 "use client"
 
 import { useState } from "react"
+import * as XLSX from "xlsx" // Import the xlsx library
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,9 +20,51 @@ export default function BulkUploadPage() {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setFile(event.target.files[0])
+      const selectedFile = event.target.files[0]
+      setFile(selectedFile)
       setUploadResult(null) // Reset result when a new file is chosen
+      validateExcelHeaders(selectedFile) // Perform client-side header validation
     }
+  }
+
+  const validateExcelHeaders = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result
+        const workbook = XLSX.read(data, { type: "array" })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const headers: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || []
+
+        const requiredColumns = ["company_name", "contact_name", "phone", "assigned_to", "source"]
+        const missingColumns = requiredColumns.filter(col => !headers.includes(col))
+
+        if (missingColumns.length > 0) {
+          toast({
+            title: "Template Warning",
+            description: `Your file might be missing required columns: ${missingColumns.join(", ")}. The upload may fail.`,
+            variant: "default", // Using default as a neutral warning
+            duration: 8000,
+          })
+        }
+      } catch (error) {
+        console.error("Failed to read or validate Excel file:", error)
+        toast({
+          title: "File Read Error",
+          description: "Could not read the selected file. Please ensure it is a valid, uncorrupted Excel file.",
+          variant: "destructive",
+        })
+      }
+    }
+    reader.onerror = () => {
+        toast({
+            title: "File Read Error",
+            description: "An error occurred while trying to read the file.",
+            variant: "destructive",
+        });
+    };
+    reader.readAsArrayBuffer(file)
   }
 
   const handleUpload = async () => {
@@ -71,7 +114,7 @@ export default function BulkUploadPage() {
         <CardHeader>
           <CardTitle>Step 1: Download and Prepare Your File</CardTitle>
           <CardDescription>
-            Download the template, fill it with your lead data, and save the file. The columns `company_name`, `contact_name`, `phone`, `assigned_to`, and `source` are required.
+            Download the template and fill it with your lead data. The columns `company_name`, `contact_name`, `phone`, `assigned_to`, and `source` are required. All other columns like GST, Version, AMC, etc., are optional.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,7 +139,7 @@ export default function BulkUploadPage() {
               id="file-input"
               type="file"
               onChange={handleFileChange}
-              accept=".xlsx, .xls"
+              accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             />
           </div>
           <Button onClick={handleUpload} disabled={isLoading || !file}>

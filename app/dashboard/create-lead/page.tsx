@@ -68,7 +68,7 @@ export default function CreateLeadPage() {
   const { toast } = useToast()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [companyUsers, setCompanyUsers] = useState<User[]>([])
+  const [companyUsers, setCompanyUsers] = useState<ApiUser[]>([])
   const [contacts, setContacts] = useState<Contact[]>([
     { prefix: "Mr.", first_name: "", last_name: "", phone: "", email: "", designation: "", linkedIn: "", pan: "" },
   ])
@@ -105,13 +105,11 @@ export default function CreateLeadPage() {
     lead_type: "",
     opportunity_business: "",
     target_closing_date: "",
-    // --- START: NEW FIELDS ---
     version: "",
     database_type: "",
     amc: "",
     gst: "",
     company_pan: "",
-    // --- END: NEW FIELDS ---
   })
 
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
@@ -125,6 +123,7 @@ export default function CreateLeadPage() {
           const parsedUser = JSON.parse(userData)
           setUser(parsedUser)
 
+          // --- START OF FIX: Changed category names to match the database schema (snake_case) ---
           const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData] = await Promise.all([
               userApi.getUsers(),
               api.getByCategory("source"),
@@ -133,55 +132,29 @@ export default function CreateLeadPage() {
               api.getByCategory("lead_type"),
               api.getByCategory("current_system")
           ]);
-
-          const sources = sourceData.map(item => item.value);
-          const segments = segmentData.map(item => item.value);
-          const verticles = verticlesData.map(item => item.value);
-          const lead_types = leadTypeData.map(item => item.value);
-          const current_systems = currentSystemData.map(item => item.value);
+          // --- END OF FIX ---
 
           setMasterOptions({
-              source: sources,
-              segment: segments,
-              verticles: verticles,
-              lead_type: lead_types,
-              current_system: current_systems,
+              source: sourceData.map(item => item.value),
+              segment: segmentData.map(item => item.value),
+              verticles: verticlesData.map(item => item.value),
+              lead_type: leadTypeData.map(item => item.value),
+              current_system: currentSystemData.map(item => item.value),
           });
 
-          const transformedUsers = usersData.map((user: ApiUser) => ({
-            id: user.id.toString(),
-            username: user.username,
-            email: user.email || `${user.username}@company.com`,
-            role: user.role || "Company User",
-          }))
+          setCompanyUsers(usersData);
 
-          const currentUserExists = transformedUsers.some(u => u.username === parsedUser.username)
-          if (!currentUserExists) {
-            transformedUsers.push({
-              id: parsedUser.id?.toString() || "current",
-              username: parsedUser.username,
-              email: parsedUser.email || "",
-              role: parsedUser.role || "Company User",
-            })
-          }
-
-          setCompanyUsers(transformedUsers)
-
+          const currentUserInList = usersData.some(u => u.username === parsedUser.username);
           setFormData(prev => ({
               ...prev,
-              assigned_to: parsedUser.username,
-              source: "",
-              segment: "",
-              verticles: "",
-              lead_type: "",
-              current_system: "",
+              assigned_to: currentUserInList ? parsedUser.username : (usersData[0]?.username || ""),
           }));
         }
       } catch (error) {
-        console.error("[v0] Failed to initialize form:", error)
+        console.error("Failed to initialize form:", error)
         toast({
           title: "Error",
-          description: "Failed to initialize form. Please refresh the page.",
+          description: "Failed to load initial data. Please refresh the page.",
           variant: "destructive",
         })
       }
@@ -196,36 +169,36 @@ export default function CreateLeadPage() {
 
   const handleInputChange = (field: string, value: string) => {
     setErrors(prev => ({...prev, [field]: undefined}));
-
-    if (field === "phone_2") {
-        const formattedPhone = value.startsWith('+') ? value : `+${value}`;
-        setFormData(prev => ({ ...prev, [field]: formattedPhone }));
-        return;
-    }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   const handleContactChange = (index: number, field: keyof Omit<Contact, "phone">, value: string) => {
-    setErrors(prev => ({
-      ...prev,
-      contacts: {
-        ...prev.contacts,
-        [index]: { ...prev.contacts?.[index], [field]: undefined }
-      }
-    }));
+    setErrors(prev => {
+        const newContactErrors = { ...(prev.contacts || {}) };
+        if (newContactErrors[index]) {
+            delete (newContactErrors[index] as any)[field];
+            if(Object.keys(newContactErrors[index]).length === 0) {
+                delete newContactErrors[index];
+            }
+        }
+        return { ...prev, contacts: newContactErrors };
+    });
     const newContacts = [...contacts]
     newContacts[index][field] = value
     setContacts(newContacts)
   }
 
   const handleContactPhoneChange = (index: number, phoneValue: string) => {
-    setErrors(prev => ({
-      ...prev,
-      contacts: {
-        ...prev.contacts,
-        [index]: { ...prev.contacts?.[index], phone: undefined }
-      }
-    }));
+    setErrors(prev => {
+        const newContactErrors = { ...(prev.contacts || {}) };
+        if (newContactErrors[index]) {
+            delete newContactErrors[index].phone;
+             if(Object.keys(newContactErrors[index]).length === 0) {
+                delete newContactErrors[index];
+            }
+        }
+        return { ...prev, contacts: newContactErrors };
+    });
     const newContacts = [...contacts]
     const formattedPhone = phoneValue.startsWith('+') ? phoneValue : `+${phoneValue}`;
     newContacts[index].phone = formattedPhone;
@@ -305,7 +278,6 @@ export default function CreateLeadPage() {
     setIsLoading(true)
 
     try {
-      const assignedUser = companyUsers.find(u => u.username === formData.assigned_to)
       const countryName = Country.getCountryByCode(formData.country)?.name
       const stateName = State.getStateByCodeAndCountry(formData.state, formData.country)?.name
 
@@ -321,31 +293,31 @@ export default function CreateLeadPage() {
       const leadData = {
         ...formData,
         target_closing_date: formData.target_closing_date || null,
-        assigned_to: assignedUser?.username || formData.assigned_to,
         country: countryName || formData.country,
         state: stateName || formData.state,
         created_by: user?.username || "unknown",
-        source: formData.source || "Manual Entry",
+        status: "New", // Default status on creation
         contacts: processedContacts,
       }
 
-      const newLead = await leadApi.createLead(leadData);
+      const response = await leadApi.createLead(leadData);
 
       toast({
         title: "Lead Created",
-        description: "The lead has been successfully created. Redirecting...",
+        description: response.message || "The lead has been successfully created.",
       })
-
-      router.push(`/dashboard/leads/${newLead.id}`);
+      
+      router.push('/dashboard/leads');
 
     } catch (error) {
-      console.error("[v0] Failed to create lead:", error)
+      console.error("Failed to create lead:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create lead. Please check your connection.",
         variant: "destructive",
       })
-      setIsLoading(false)
+    } finally {
+        setIsLoading(false)
     }
   }
 
@@ -643,7 +615,6 @@ export default function CreateLeadPage() {
                 </div>
             </div>
 
-            {/* --- START: NEW SECTION FOR NEW FIELDS --- */}
             <div className="space-y-4 rounded-md border p-4">
                 <h3 className="text-md font-semibold">Technical & Financial Details</h3>
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
@@ -669,7 +640,6 @@ export default function CreateLeadPage() {
                     </div>
                 </div>
             </div>
-            {/* --- END: NEW SECTION --- */}
 
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               <div className="space-y-1">

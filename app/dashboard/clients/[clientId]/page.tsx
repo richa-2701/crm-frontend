@@ -1,9 +1,12 @@
-// frontend/app/dashboard/clients/[clientId]/page.tsx
+//frontend/app/dashboard/clients/[clientId]/page.tsx
+
 "use client"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { api, type ApiClient, type ClientContact } from "@/lib/api"
+// --- START OF FIX: Import clientApi specifically ---
+import { clientApi, type ApiClient } from "@/lib/api"
+// --- END OF FIX ---
 import { format } from "date-fns"
 
 // MODULAR COMPONENTS
@@ -21,6 +24,7 @@ import {
 
 // Import EditClientModal
 import { EditClientModal } from "@/components/clients/edit-client-modal"
+import { parseAsUTCDate } from "@/lib/date-format"
 
 // A reusable component for displaying fields with icons.
 const IconInfoField = ({
@@ -44,7 +48,6 @@ const IconInfoField = ({
     );
 };
 
-// IMPORTANT: Ensure this URL is correct and accessible from your browser.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://4adc3d24dcb8.ngrok-free.app";
 
 export default function ClientDetailPage() {
@@ -55,18 +58,30 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<ApiClient | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showEditModal, setShowEditModal] = useState(false) // State for edit modal
+  const [showEditModal, setShowEditModal] = useState(false)
 
   useEffect(() => {
     if (clientId) {
-      // This API call fetches all client details, including contacts AND attachments,
-      // because the backend's get_client_by_id function uses `joinedload`.
-      api.getClientById(Number(clientId))
+      // --- START OF FIX: Call the correct, existing function from clientApi ---
+      clientApi.getClientById(Number(clientId))
         .then((clientData) => {
-          // When this runs, clientData should contain an `attachments` array.
-          // It might be empty for old clients.
-          console.log("Fetched Client Data:", clientData); // <-- Add this for debugging
-          setClient(clientData)
+          if (!clientData) {
+              throw new Error("Client not found.");
+          }
+          
+          // Parse nested JSON strings to prevent runtime errors
+          const parsedClientData: ApiClient = {
+              ...clientData,
+              contacts: typeof clientData.contacts === 'string' 
+                  ? JSON.parse(clientData.contacts) 
+                  : clientData.contacts || [],
+              attachments: typeof clientData.attachments === 'string' 
+                  ? JSON.parse(clientData.attachments) 
+                  : clientData.attachments || [],
+          };
+
+          console.log("Fetched and Parsed Client Data:", parsedClientData);
+          setClient(parsedClientData);
         })
         .catch((err) => {
           console.error("Failed to fetch client details:", err)
@@ -75,12 +90,13 @@ export default function ClientDetailPage() {
         .finally(() => {
           setIsLoading(false)
         })
+      // --- END OF FIX ---
     }
   }, [clientId])
 
   const handleEditComplete = (updatedClientId: string, updatedData: ApiClient) => {
     if (client && client.id.toString() === updatedClientId) {
-      setClient(updatedData); // Update with the full new client object
+      setClient(updatedData);
     }
     setShowEditModal(false);
   };
@@ -106,6 +122,8 @@ export default function ClientDetailPage() {
   }
 
   if (!client) return null
+  
+  const convertedDate = parseAsUTCDate(client.converted_date);
 
   return (
     <>
@@ -118,7 +136,7 @@ export default function ClientDetailPage() {
                   <div>
                       <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{client.company_name}</h1>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span>Client Since: <Badge>{format(new Date(client.converted_date), "MMM d, yyyy")}</Badge></span>
+                          <span>Client Since: <Badge>{convertedDate ? format(convertedDate, "MMM d, yyyy") : 'N/A'}</Badge></span>
                       </div>
                   </div>
               </div>
@@ -170,41 +188,39 @@ export default function ClientDetailPage() {
                               </CardContent>
                           </Card>
                           
-                          {/* ======================================================================= */}
-                          {/* ==== THIS IS THE CRITICAL SECTION FOR DISPLAYING ATTACHMENTS ==== */}
-                          {/* This entire <Card> will only appear if `client.attachments` is not empty. */}
-                          {/* ======================================================================= */}
                           {client.attachments && client.attachments.length > 0 && (
                             <Card>
                                 <CardHeader><CardTitle>Attachments</CardTitle></CardHeader>
                                 <CardContent>
                                     <ul className="space-y-3">
-                                        {client.attachments.map((attachment) => (
-                                            <li key={attachment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 border">
-                                                <div className="flex items-center gap-3 truncate">
-                                                    <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                                                    <div className="flex flex-col truncate">
-                                                        <a
-                                                            href={`${API_BASE_URL}/web/attachments/preview/${attachment.file_path}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-sm font-medium text-primary hover:underline truncate"
-                                                            title={attachment.original_file_name}
-                                                        >
-                                                            {attachment.original_file_name}
-                                                        </a>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Uploaded by {attachment.uploaded_by} on {format(new Date(attachment.uploaded_at), "MMM d, yyyy")}
-                                                        </p>
+                                        {client.attachments.map((attachment) => {
+                                            const uploadedAtDate = parseAsUTCDate(attachment.uploaded_at);
+                                            return (
+                                                <li key={attachment.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 border">
+                                                    <div className="flex items-center gap-3 truncate">
+                                                        <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                                                        <div className="flex flex-col truncate">
+                                                            <a
+                                                                href={`${API_BASE_URL}/web/attachments/preview/${attachment.file_path}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-sm font-medium text-primary hover:underline truncate"
+                                                                title={attachment.original_file_name}
+                                                            >
+                                                                {attachment.original_file_name}
+                                                            </a>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Uploaded by {attachment.uploaded_by} on {uploadedAtDate ? format(uploadedAtDate, "MMM d, yyyy") : 'N/A'}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </li>
-                                        ))}
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
                                 </CardContent>
                             </Card>
                           )}
-                           {/* --- END OF ATTACHMENTS SECTION --- */}
                       </div>
 
                       <div className="space-y-6">

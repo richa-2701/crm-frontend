@@ -41,10 +41,10 @@ export function UserAvailabilityCalendar({
       try {
         setLoading(true)
 
-        // --- THE FIX: Changed api.getLeads() to api.getAllLeads() ---
+        // --- THE FIX: Changed to use the correct API function names ---
         const [meetingsData, demosData, usersData, leadsData] = await Promise.all([
-          api.getScheduledMeetings(),
-          api.getScheduledDemos(),
+          api.getAllMeetings(),     // Corrected from getScheduledMeetings
+          api.getAllDemos(),        // Corrected from getScheduledDemos
           api.getUsers(),
           api.getAllLeads(), 
         ]);
@@ -94,14 +94,11 @@ export function UserAvailabilityCalendar({
   const getEventsForDate = (date: Date) => {
     const dateString = date.toDateString();
     
-    // Find the full user object for the selected user to get both username and usernumber
     const targetUser = users.find(u => u.username === selectedUser);
 
     let filteredEvents = events.filter((event) => new Date(event.start_time).toDateString() === dateString);
 
     if (targetUser) {
-        // Filter events where the assigned_to matches username (for meetings)
-        // OR the assigned_to_usernumber matches the user's number (for demos)
         filteredEvents = filteredEvents.filter((event) => 
             event.assigned_to === targetUser.username || 
             event.assigned_to_usernumber === targetUser.usernumber

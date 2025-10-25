@@ -93,9 +93,9 @@ const navigationConfig: NavItem[] = [
     children: [
       { title: "Schedule Events", href: "/dashboard/schedule", icon: Calendar },
       { title: "Events", href: "/dashboard/events", icon: FileText },
-      { title: "Activity", href: "/dashboard/activity", icon: MessageSquare },
     ]
   },
+  { type: 'link', title: "Activity", href: "/dashboard/activity", icon: MessageSquare, adminOnly: false },
   { type: 'link', title: "Reports", href: "/dashboard/reports", icon: BarChartHorizontal, adminOnly: true },
   { type: 'link', title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
   {

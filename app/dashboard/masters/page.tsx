@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Plus, Trash2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { api, type ApiMasterData } from "@/lib/api"
+// --- START OF FIX: Import 'masterDataApi' instead of the generic 'api' ---
+import { masterDataApi, type ApiMasterData } from "@/lib/api"
+// --- END OF FIX ---
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// --- CHANGE: Updated the master categories list ---
 const MASTER_CATEGORIES = [
     { key: "source", label: "Source" },
     { key: "segment", label: "Segment" },
@@ -21,7 +22,7 @@ const MASTER_CATEGORIES = [
     { key: "current_system", label: "Current System" },
     { key: "meeting_type", label: "Meeting Type" },
     { key: "activity_type", label: "Activity Type" },
-    { key: "version", label: "Version" }, // NEW: Added Version category
+    { key: "version", label: "Version" },
 ];
 
 export default function MastersPage() {
@@ -36,9 +37,10 @@ export default function MastersPage() {
     const fetchItems = useCallback(async (category: string) => {
         setIsLoading(true);
         try {
-            // Corrected API call: directly call getByCategory on the api object
-            const data = await api.getByCategory(category);
-            setItems(data);
+            // --- START OF FIX: Use the correct API object ---
+            const data = await masterDataApi.getByCategory(category);
+            // --- END OF FIX ---
+            setItems(data || []); // Ensure data is an array
         } catch (error) {
             console.error(`Failed to fetch ${category}:`, error);
             toast({
@@ -60,14 +62,16 @@ export default function MastersPage() {
         if (!newItemValue.trim()) return;
         setIsSubmitting(true);
         try {
-            // Corrected API call: directly call create on the api object
-            const newItem = await api.create({ category: activeCategory, value: newItemValue });
+            // --- START OF FIX: Use the correct API object ---
+            const newItem = await masterDataApi.create({ category: activeCategory, value: newItemValue });
+            // --- END OF FIX ---
             setItems(prev => [...prev, newItem].sort((a, b) => a.value.localeCompare(b.value)));
             setNewItemValue("");
             toast({ title: "Success", description: "New item added successfully." });
         } catch (error) {
             console.error("Failed to add item:", error);
-            toast({ title: "Error", description: "Could not add the new item.", variant: "destructive" });
+            const errorMessage = error instanceof Error ? error.message : "Could not add the new item.";
+            toast({ title: "Error", description: errorMessage, variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
@@ -76,13 +80,15 @@ export default function MastersPage() {
     const handleDeleteItem = async (itemId: number) => {
         if (!confirm("Are you sure you want to delete this item? This action cannot be undone.")) return;
         try {
-            // Corrected API call: directly call delete on the api object
-            await api.delete(itemId);
+            // --- START OF FIX: Use the correct API object ---
+            await masterDataApi.delete(itemId);
+            // --- END OF FIX ---
             setItems(prev => prev.filter(item => item.id !== itemId));
             toast({ title: "Success", description: "Item deleted successfully." });
         } catch (error) {
             console.error("Failed to delete item:", error);
-            toast({ title: "Error", description: "Could not delete the item.", variant: "destructive" });
+            const errorMessage = error instanceof Error ? error.message : "Could not delete the item.";
+            toast({ title: "Error", description: errorMessage, variant: "destructive" });
         }
     };
 

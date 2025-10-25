@@ -1,4 +1,4 @@
-// frontend/app/dashboard/proposals/page.tsx
+//frontend/app/dashboard/proposals/page.tsx
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
@@ -49,7 +49,7 @@ import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
-import { api, userApi, leadApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity, type ApiProposalSent } from "@/lib/api"
+import { api, userApi, proposalApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity, type ApiProposalSent } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
   DndContext,
@@ -75,13 +75,11 @@ import { formatDateTime } from "@/lib/date-format";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 
-// Interface definitions are identical to leads page
 interface Contact { id: number; lead_id: number; contact_name: string; phone: string; email: string | null; designation: string | null; linkedIn?: string | null; pan?: string | null; }
 interface Lead { id: string; company_name: string; contacts: Contact[]; phone_2?: string; email: string; website?: string; linkedIn?: string; address?: string; address_2?: string; city?:string; state?:string; country?:string; pincode?:string; team_size?: string; turnover?: string; source?: string; segment?: string; verticles?: string; remark?: string; machine_specification?: string; challenges?: string; assigned_to: string; current_system?: string; lead_type?: string; status: string; created_at: string; updated_at: string; last_activity?: ApiActivity | null; opportunity_business?: string; target_closing_date?: string; original_lead_id?: number; }
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
 interface CompanyUser { id: string; name: string; email: string; role: string; }
 
-// Status colors include the new status
 const statusColors = { new: "default", qualified: "secondary", unqualified: "destructive", not_our_segment: "destructive", "Meeting Done": "outline", "Demo Done": "outline", "Proposal Sent": "outline", "Won/Deal Done": "success", Lost: "destructive" } as const;
 const leadTypes = ["Hot Lead", "Cold Lead","Warm Lead"];
 interface ColumnConfig { id: string; label: string; key: keyof Lead | "actions" | "contact_name" | "phone" | "last_activity" | "designation" | "contact_email" | "contact_linkedin" | "contact_pan"; render?: (lead: Lead) => React.ReactNode; }
@@ -100,7 +98,6 @@ function SortableTableHeader({ column }: { column: ColumnConfig }) {
   )
 }
 
-// TableRowComponent is adapted to remove the "Convert to Proposal Sent" action
 function TableRowComponent({
   lead,
   columns,
@@ -221,12 +218,14 @@ function TableRowComponent({
                   <History className="mr-2 h-4 w-4" />
                   History
                 </DropdownMenuItem>
+                {/* --- START OF CHANGE: Add button to navigate to the view quotations page --- */}
                 <DropdownMenuItem asChild>
-                  <Link href={`/dashboard/view-quotations/${lead.id}`}>
+                  <Link href={`/dashboard/view-quotations/${lead.original_lead_id || lead.id}`}>
                     <QuotationIcon className="mr-2 h-4 w-4" />
                     <span>View Quotations</span>
                   </Link>
                 </DropdownMenuItem>
+                {/* --- END OF CHANGE --- */}
                 <DropdownMenuItem onClick={() => handleDownloadPdf(lead)}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Download PDF
@@ -498,69 +497,19 @@ export default function ProposalsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showPdfDialog, setShowPdfDialog] = useState(false)
   const [leadForPdf, setLeadForPdf] = useState<Lead | null>(null)
-
-  const [visibleColumns, setVisibleColumns] = useState<ColumnConfig[]>([
-    { id: "company_name", label: "Lead Name", key: "company_name" },
-    { id: "contact_name", label: "Contact Person Name", key: "contact_name" },
-    { id: "phone", label: "Contact Person Phone", key: "phone" },
-    { id: "source", label: "Source", key: "source" },
-    { id: "status", label: "Status", key: "status" },
-    { id: "last_activity", label: "Last Activity", key: "last_activity" },
-    { id: "actions", label: "Actions", key: "actions" },
-  ])
-
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
-    company_name: true,
-    contact_name: true,
-    phone: true,
-    email: false,
-    website: false,
-    linkedIn: false,
-    contact_email: false,
-    designation: false,
-    contact_linkedin: false,
-    contact_pan: false,
-    source: true,
-    address: false,
-    address_2: false,
-    city: false,
-    state: false,
-    country: false,
-    pincode: false,
-    team_size: false,
-    turnover: false,
-    segment: false,
-    verticles: false,
-    current_system: false,
-    machine_specification: false,
-    challenges: false,
-    remark: false,
-    lead_type: false,
-    assigned_to: false,
-    status: true,
-    opportunity_business: false,
-    target_closing_date: false,
-    last_activity: true,
-    actions: true,
-  });
-
+  const [visibleColumns, setVisibleColumns] = useState<ColumnConfig[]>([ { id: "company_name", label: "Lead Name", key: "company_name" }, { id: "contact_name", label: "Contact Person Name", key: "contact_name" }, { id: "phone", label: "Contact Person Phone", key: "phone" }, { id: "source", label: "Source", key: "source" }, { id: "status", label: "Status", key: "status" }, { id: "last_activity", label: "Last Activity", key: "last_activity" }, { id: "actions", label: "Actions", key: "actions" }, ])
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({ company_name: true, contact_name: true, phone: true, email: false, website: false, linkedIn: false, contact_email: false, designation: false, contact_linkedin: false, contact_pan: false, source: true, address: false, address_2: false, city: false, state: false, country: false, pincode: false, team_size: false, turnover: false, segment: false, verticles: false, current_system: false, machine_specification: false, challenges: false, remark: false, lead_type: false, assigned_to: false, status: true, opportunity_business: false, target_closing_date: false, last_activity: true, actions: true, });
   const [isExporting, setIsExporting] = useState(false);
   const statusOptions = Object.keys(statusColors);
   const [dripSequences, setDripSequences] = useState<ApiDripSequenceList[]>([]);
   const [showAssignDripModal, setShowAssignDripModal] = useState(false);
   const [showConvertLeadToClientModal, setShowConvertLeadToClientModal] = useState(false);
-
-  const [filters, setFilters] = useState<LeadsPageFilters>({
-    address: "", lead_type: "", status: "", assigned_to: "",
-    created_at_start: "", created_at_end: ""
-  });
+  const [filters, setFilters] = useState<LeadsPageFilters>({ address: "", lead_type: "", status: "", assigned_to: "", created_at_start: "", created_at_end: "" });
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(30);
-
   const [showExportOptionsModal, setShowExportOptionsModal] = useState(false);
 
-  // --- START: FIX ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -573,16 +522,26 @@ export default function ProposalsPage() {
         }
         const parsedUser = JSON.parse(userData)
         setUser(parsedUser)
+        
         const [usersData, proposalsData, dripsData] = await Promise.all([
           userApi.getUsers(),
-          leadApi.getAllProposals(), // Fetch from the correct endpoint
+          proposalApi.getAllProposals(), 
           api.getDripSequences()
         ]);
 
+        // --- START OF FIX: Add a defensive check to ensure proposalsData is an array before mapping ---
+        if (!Array.isArray(proposalsData)) {
+            console.error("API did not return an array for proposals:", proposalsData);
+            throw new Error("Received invalid data format for proposals.");
+        }
+        
         const transformedProposals: Lead[] = proposalsData.map((proposal: ApiProposalSent) => ({
+        // --- END OF FIX ---
           id: proposal.id.toString(),
           company_name: proposal.company_name,
-          contacts: proposal.contacts.map(c => ({...c, lead_id: proposal.original_lead_id })) || [],
+          // --- START OF FIX: Safely map contacts, providing an empty array as a fallback ---
+          contacts: (proposal.contacts || []).map(c => ({...c, lead_id: proposal.original_lead_id })),
+          // --- END OF FIX ---
           phone_2: proposal.phone_2,
           email: proposal.email || "",
           website: proposal.website,
@@ -607,7 +566,7 @@ export default function ProposalsPage() {
           status: proposal.status,
           created_at: proposal.created_at,
           updated_at: proposal.updated_at || proposal.created_at,
-          last_activity: null, // Proposal page might not need last_activity, adjust if necessary
+          last_activity: null,
           opportunity_business: proposal.opportunity_business,
           target_closing_date: proposal.target_closing_date,
           original_lead_id: proposal.original_lead_id,
@@ -634,7 +593,6 @@ export default function ProposalsPage() {
     };
     fetchData();
   }, []);
-  // --- END: FIX ---
 
   useEffect(() => {
     const newVisibleColumns = ALL_COLUMNS.filter(col => columnVisibility[col.id]);
@@ -703,7 +661,6 @@ export default function ProposalsPage() {
     return foundUser ? foundUser.name : userId
   }
   const handleViewDetails = (lead: Lead) => { 
-    // Use original_lead_id if available, otherwise fall back to id
     const leadIdToView = lead.original_lead_id || lead.id;
     router.push(`/dashboard/leads/${leadIdToView}`) 
   }
@@ -762,42 +719,17 @@ export default function ProposalsPage() {
           let value: string | number | null | undefined;
 
           switch (key) {
-            case 'contact_name':
-              value = primaryContact?.contact_name;
-              break;
-            case 'phone':
-              const phoneNumber = primaryContact?.phone;
-              value = phoneNumber ? `="${phoneNumber}"` : "";
-              break;
-            case 'designation':
-              value = primaryContact?.designation;
-              break;
-            case 'contact_email':
-              value = primaryContact?.email;
-              break;
-            case 'linkedIn':
-              value = lead.linkedIn;
-              break;
-            case 'website':
-              value = lead.website;
-              break;
-            case 'contact_linkedin':
-              value = primaryContact?.linkedIn;
-              break;
-            case 'contact_pan':
-              value = primaryContact?.pan;
-              break;
-            case 'last_activity':
-              value = lead.last_activity
-                ? `${formatDateTime(lead.last_activity.created_at)}: ${lead.last_activity.details}`
-                : "N/A";
-              break;
-            case 'target_closing_date':
-                value = lead.target_closing_date ? lead.target_closing_date.split('T')[0] : '';
-                break;
-            default:
-              value = (lead as any)[key as keyof Lead];
-              break;
+            case 'contact_name': value = primaryContact?.contact_name; break;
+            case 'phone': const phoneNumber = primaryContact?.phone; value = phoneNumber ? `="${phoneNumber}"` : ""; break;
+            case 'designation': value = primaryContact?.designation; break;
+            case 'contact_email': value = primaryContact?.email; break;
+            case 'linkedIn': value = lead.linkedIn; break;
+            case 'website': value = lead.website; break;
+            case 'contact_linkedin': value = primaryContact?.linkedIn; break;
+            case 'contact_pan': value = primaryContact?.pan; break;
+            case 'last_activity': value = lead.last_activity ? `${formatDateTime(lead.last_activity.created_at)}: ${lead.last_activity.details}` : "N/A"; break;
+            case 'target_closing_date': value = lead.target_closing_date ? lead.target_closing_date.split('T')[0] : ''; break;
+            default: value = (lead as any)[key as keyof Lead]; break;
           }
           return escapeCsvValue(value);
         }).join(',');
@@ -825,98 +757,21 @@ export default function ProposalsPage() {
   };
 
   const handleViewHistory = (lead: Lead) => { setSelectedLead(lead); setShowHistoryModal(true); }
-
-  const handleReassignComplete = async (leadId: string, newUserId: string) => {
-    const newUser = companyUsers.find((u) => u.id === newUserId)
-    if (!newUser) {
-      toast({ title: "Error", description: "Selected user not found.", variant: "destructive" });
-      return;
-    }
-    try {
-      await api.updateLead(Number(leadId), { assigned_to: newUser.name });
-      const updatedAllLeads = allLeads.map((lead) =>
-        lead.id === leadId ? { ...lead, assigned_to: newUser.name, updated_at: new Date().toISOString() } : lead,
-      );
-      setAllLeads(updatedAllLeads);
-      toast({ title: "Success!", description: `Proposal has been reassigned to ${newUser.name}.` });
-    } catch (error) {
-      toast({ title: "Reassignment Failed", variant: "destructive" });
-    } finally {
-      setShowReassignModal(false);
-    }
-  }
-
-  const handleEditComplete = async (leadId: string, updatedData: Partial<Lead>) => {
-    try {
-      await api.updateLead(Number(leadId), updatedData);
-      const updatedAllLeads = allLeads.map((lead) =>
-        lead.id === leadId ? { ...lead, ...updatedData, updated_at: new Date().toISOString() } : lead
-      );
-      setAllLeads(updatedAllLeads);
-      toast({ title: "Success", description: "Proposal details have been updated." });
-    } catch (error) {
-      toast({ title: "Update Failed", variant: "destructive" });
-    } finally {
-      setShowEditModal(false);
-    }
-  };
-
-  const handleFilterChange = (key: keyof LeadsPageFilters, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value === "all" ? "" : value }));
-    setCurrentPage(1);
-  };
-  const clearFilters = () => {
-    setFilters({ address: "", lead_type: "", status: "", assigned_to: "", created_at_start: "", created_at_end: "" });
-    setCurrentPage(1);
-  };
+  const handleReassignComplete = async (leadId: string, newUserId: string) => { const newUser = companyUsers.find((u) => u.id === newUserId); if (!newUser) { toast({ title: "Error", description: "Selected user not found.", variant: "destructive" }); return; } try { await api.updateLead(Number(leadId), { assigned_to: newUser.name }); const updatedAllLeads = allLeads.map((lead) => lead.id === leadId ? { ...lead, assigned_to: newUser.name, updated_at: new Date().toISOString() } : lead, ); setAllLeads(updatedAllLeads); toast({ title: "Success!", description: `Proposal has been reassigned to ${newUser.name}.` }); } catch (error) { toast({ title: "Reassignment Failed", variant: "destructive" }); } finally { setShowReassignModal(false); } }
+  const handleEditComplete = async (leadId: string, updatedData: Partial<Lead>) => { try { await api.updateLead(Number(leadId), updatedData); const updatedAllLeads = allLeads.map((lead) => lead.id === leadId ? { ...lead, ...updatedData, updated_at: new Date().toISOString() } : lead ); setAllLeads(updatedAllLeads); toast({ title: "Success", description: "Proposal details have been updated." }); } catch (error) { toast({ title: "Update Failed", variant: "destructive" }); } finally { setShowEditModal(false); } };
+  const handleFilterChange = (key: keyof LeadsPageFilters, value: string) => { setFilters(prev => ({ ...prev, [key]: value === "all" ? "" : value })); setCurrentPage(1); };
+  const clearFilters = () => { setFilters({ address: "", lead_type: "", status: "", assigned_to: "", created_at_start: "", created_at_end: "" }); setCurrentPage(1); };
   const removeFilter = (key: keyof LeadsPageFilters) => { handleFilterChange(key, ""); };
   const activeFilterCount = Object.values(filters).filter(val => val && val !== "").length;
-
-  const handleColumnFilterChange = (key: string, value: string) => {
-    setColumnFilters(prev => ({...prev, [key]: value}));
-    setCurrentPage(1);
-  };
-
+  const handleColumnFilterChange = (key: string, value: string) => { setColumnFilters(prev => ({...prev, [key]: value})); setCurrentPage(1); };
   const handleAssignDrip = (lead: Lead) => { setSelectedLead(lead); setShowAssignDripModal(true); };
-
-  const handleConvertLeadToClient = (lead: Lead) => {
-    setSelectedLead(lead);
-    setShowConvertLeadToClientModal(true);
-  };
-  
-  const handleConversionSuccess = (convertedLeadId: string) => {
-    setAllLeads(prevLeads => prevLeads.filter(lead => lead.id !== convertedLeadId));
-    toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." });
-    setShowConvertLeadToClientModal(false);
-    router.push('/dashboard/clients');
-  };
-
+  const handleConvertLeadToClient = (lead: Lead) => { setSelectedLead(lead); setShowConvertLeadToClientModal(true); };
+  const handleConversionSuccess = (convertedLeadId: string) => { setAllLeads(prevLeads => prevLeads.filter(lead => lead.id !== convertedLeadId)); toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." }); setShowConvertLeadToClientModal(false); router.push('/dashboard/clients'); };
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, }));
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over) return;
-    if (active.id !== over.id) {
-      setVisibleColumns((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id)
-        const newIndex = items.findIndex((item) => item.id === over.id)
-        return arrayMove(items, oldIndex, newIndex)
-      })
-    }
-  }
-
+  function handleDragEnd(event: DragEndEvent) { const { active, over } = event; if (!over) return; if (active.id !== over.id) { setVisibleColumns((items) => { const oldIndex = items.findIndex((item) => item.id === active.id); const newIndex = items.findIndex((item) => item.id === over.id); return arrayMove(items, oldIndex, newIndex); }); } }
   const handleDownloadPdf = (lead: Lead) => { setLeadForPdf(lead); setShowPdfDialog(true); }
-
-  const downloadLeadAsPdf = (lead: Lead, includeRemark: boolean) => {
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text(`Proposal Details: ${lead.company_name}`, 14, 22);
-    // ... (rest of the PDF generation logic, same as leads page)
-    doc.save(`Proposal_${lead.company_name.replace(/\s/g, "_")}.pdf`);
-    setShowPdfDialog(false);
-    setLeadForPdf(null);
-  }
-
+  const downloadLeadAsPdf = (lead: Lead, includeRemark: boolean) => { const doc = new jsPDF(); doc.setFontSize(20); doc.text(`Proposal Details: ${lead.company_name}`, 14, 22); doc.save(`Proposal_${lead.company_name.replace(/\s/g, "_")}.pdf`); setShowPdfDialog(false); setLeadForPdf(null); }
+  
   if (isLoading) { return ( <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-2">Loading proposals...</span></div> )}
   if (error) { return ( <div className="flex items-center justify-center h-64"><div className="text-center"><p className="text-red-500 mb-4">{error}</p><Button onClick={() => window.location.reload()}>Retry</Button></div></div> )}
   if (!user) { return <div>Loading...</div> }

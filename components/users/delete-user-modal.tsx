@@ -5,9 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle, AlertCircle } from "lucide-react"
-// --- START: CORRECTION - REMOVED UNUSED IMPORT ---
-// import { userApi } from "@/lib/api"
-// --- END: CORRECTION ---
 
 interface User {
   id: string
@@ -20,12 +17,13 @@ interface User {
   company_name: string;
 }
 
-
 interface DeleteUserModalProps {
   user: User | null
   isOpen: boolean
   onClose: () => void
-  onUserDeleted: (userId: string) => void
+  // --- START OF FIX: Change the prop to expect the user's email ---
+  onUserDeleted: (userEmail: string) => Promise<void>
+  // --- END OF FIX ---
 }
 
 export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: DeleteUserModalProps) {
@@ -39,11 +37,9 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
     setError("")
 
     try {
-      // --- START: CORRECTION ---
-      // The API call is removed from the modal.
-      // We now ONLY call the prop function, letting the parent component handle the logic.
-      await onUserDeleted(user.id)
-      // --- END: CORRECTION ---
+      // --- START OF FIX: Pass the user's email to the parent's handler function ---
+      await onUserDeleted(user.email)
+      // --- END OF FIX ---
       
       onClose() // Close the modal on success
     } catch (err: any) {
@@ -70,7 +66,7 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
             Delete User
           </DialogTitle>
           <DialogDescription>
-            This action cannot be undone. This will permanently delete the user account and remove all associated data.
+            This action will mark the user as inactive. It can be recovered later from the database.
           </DialogDescription>
         </DialogHeader>
 
@@ -105,8 +101,7 @@ export function DeleteUserModal({ user, isOpen, onClose, onUserDeleted }: Delete
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Warning:</strong> Deleting this user will permanently remove their account and all associated
-              data. This action cannot be undone.
+              <strong>Warning:</strong> Are you sure you want to delete this user?
             </AlertDescription>
           </Alert>
 

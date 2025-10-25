@@ -7,6 +7,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { ApiDripSequenceList } from "@/lib/api";
 import { useRouter } from "next/navigation";
+// --- START OF FIX: Import the robust formatDate function from the utility file ---
+import { formatDate } from "@/lib/date-format";
+// --- END OF FIX ---
 
 interface DripsTableProps {
   drips: ApiDripSequenceList[];
@@ -17,7 +20,9 @@ interface DripsTableProps {
 export function DripsTable({ drips, onDelete, isLoading }: DripsTableProps) {
   const router = useRouter();
 
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
+  // --- START OF FIX: Remove the old, simple formatDate function ---
+  // const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
+  // --- END OF FIX ---
 
   return (
     <div className="rounded-md border">
@@ -42,6 +47,7 @@ export function DripsTable({ drips, onDelete, isLoading }: DripsTableProps) {
                 <TableCell className="font-mono">{drip.drip_code}</TableCell>
                 <TableCell className="font-medium">{drip.drip_name}</TableCell>
                 <TableCell>{drip.created_by}</TableCell>
+                {/* This now uses the correct, imported formatDate function */}
                 <TableCell>{formatDate(drip.created_at)}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>

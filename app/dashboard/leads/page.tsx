@@ -52,7 +52,7 @@ import {
   Columns,
   Handshake,
   FileText,
-  Trash2, // <-- NEW: Import Trash icon
+  Trash2,
 } from "lucide-react"
 import Link from "next/link"
 import { ReassignLeadModal } from "@/components/leads/reassign-lead-modal"
@@ -61,9 +61,7 @@ import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
-// --- START: FIX ---
 import { ConvertToProposalModal } from "@/components/leads/convert-to-proposal-modal";
-// --- END: FIX ---
 import { api, userApi, leadApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -91,7 +89,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox"
 
 interface Contact { id: number; lead_id: number; contact_name: string; phone: string; email: string | null; designation: string | null; linkedIn?: string | null; pan?: string | null; }
-interface Lead { id: string; company_name: string; contacts: Contact[]; phone_2?: string; email: string; website?: string; linkedIn?: string; address?: string; address_2?: string; city?:string; state?:string; country?:string; pincode?:string; team_size?: string; turnover?: string; source?: string; segment?: string; verticles?: string; remark?: string; machine_specification?: string; challenges?: string; assigned_to: string; current_system?: string; lead_type?: string; status: string; created_at: string; updated_at: string; last_activity?: ApiActivity | null; opportunity_business?: string; target_closing_date?: string;}
+interface Lead extends ApiLead { id: string; last_activity?: ApiActivity | null }
 
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
 interface CompanyUser { id: string; name: string; email: string; role: string; }
@@ -128,7 +126,7 @@ function TableRowComponent({
   handleAssignDrip,
   handleConvertToProposalSent,
   handleConvertLeadToClient,
-  handleDeleteLead, // <-- NEW: Pass delete handler
+  handleDeleteLead,
   canManageAllLeads: canManage,
 }: {
   lead: Lead
@@ -143,7 +141,7 @@ function TableRowComponent({
   handleAssignDrip: (lead: Lead) => void
   handleConvertToProposalSent: (lead: Lead) => void;
   handleConvertLeadToClient: (lead: Lead) => void
-  handleDeleteLead: (lead: Lead) => void; // <-- NEW
+  handleDeleteLead: (lead: Lead) => void;
   canManageAllLeads: boolean
 }) {
 
@@ -208,13 +206,14 @@ function TableRowComponent({
       case "assigned_to":
         return <TableCell>{getUserName(lead.assigned_to)}</TableCell>
       case "status":
+        const statusKey = lead.status as keyof typeof statusColors;
         return (
           <TableCell>
             <Badge
-              variant={statusColors[lead.status as keyof typeof statusColors] || "default"}
+              variant={statusColors[statusKey] || "default"}
               className={lead.status === "Won/Deal Done" ? "bg-green-600 text-white font-semibold" : ""}
             >
-              {lead.status === "Won/Deal Done" ? "Won" : capitalize(lead.status)}
+              {lead.status === "Won/Deal Done" ? "Won" : capitalize(lead.status || '')}
             </Badge>
           </TableCell>
         )
@@ -275,13 +274,11 @@ function TableRowComponent({
                   <Edit className="mr-2 h-4 w-4" />
                   Edit/Update Lead
                 </DropdownMenuItem>
-                {/* --- START: NEW DELETE OPTION --- */}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => handleDeleteLead(lead)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete Lead
                 </DropdownMenuItem>
-                {/* --- END: NEW DELETE OPTION --- */}
               </DropdownMenuContent>
             </DropdownMenu>
           </TableCell>
@@ -654,7 +651,7 @@ export default function LeadsPage() {
       : allLeads;
 
     leadsToProcess = leadsToProcess.filter(
-        lead => lead.status !== "Proposal Sent" && lead.status !== "Won/Deal Done"
+        lead => lead.status !== "Won/Deal Done"
     );
 
     if (filters.address) { leadsToProcess = leadsToProcess.filter(lead => lead.address?.toLowerCase().includes(filters.address.toLowerCase())); }

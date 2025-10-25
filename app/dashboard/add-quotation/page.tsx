@@ -60,6 +60,7 @@ export default function AddQuotationPage() {
     try {
       const activityDetails = `Quotation Added: ${details.trim()}`;
       
+      // This call now works correctly due to the changes in `api.ts`
       await api.addActivityWithAttachment(Number(selectedLeadId), activityDetails, file);
 
       toast({

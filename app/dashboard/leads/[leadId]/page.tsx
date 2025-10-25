@@ -1,12 +1,9 @@
-// frontend/app/dashboard/leads/[leadId]/page.tsx
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { api, userApi, leadApi, type ApiLead, type ApiUser, LeadAttachment } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
-
-// MODULAR COMPONENTS
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,22 +26,20 @@ import { EditLeadModal } from "@/components/leads/edit-lead-modal"
 import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { useToast } from "@/hooks/use-toast"
 
-import { 
-    Loader2, ArrowLeft, Edit, Activity, Mail, Phone, User, Building, Globe, MapPin, 
-    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare, CalendarCheck, 
+import {
+    Loader2, ArrowLeft, Edit, Activity, Mail, Phone, User, Building, Globe, MapPin,
+    Tag, Users, TrendingUp, FileText, Briefcase, History, MessageSquare, CalendarCheck,
     DollarSign, Upload, File, Trash2, Download, Database
 } from "lucide-react"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-const IconInfoField = ({ 
-    label, 
-    value, 
-    icon: Icon 
-}: { 
-    label: string; 
+const IconInfoField = ({
+    label,
+    value,
+    icon: Icon
+}: {
+    label: string;
     value?: string | number | null;
-    icon: React.ElementType 
+    icon: React.ElementType
 }) => {
     if (!value) return null;
     return (
@@ -76,6 +71,7 @@ export default function LeadDetailPage() {
   const [showActivitiesModal, setShowActivitiesModal] = useState(false)
   const [isUploading, setIsUploading] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState<LeadAttachment | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null); // State to track which file is downloading
 
   const fetchLeadData = useCallback(() => {
     if (leadId) {
@@ -117,15 +113,15 @@ export default function LeadDetailPage() {
     if (!lead || !currentUser) return;
     setIsUploading(true);
     try {
-      const newAttachment = await leadApi.uploadLeadAttachment(lead.id, file, currentUser.username);
-      setLead(prevLead => prevLead ? { ...prevLead, attachments: [...prevLead.attachments, newAttachment] } : null);
+      await leadApi.uploadLeadAttachment(lead.id, file);
       toast({ title: "Success", description: "File uploaded successfully." });
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to upload file.", variant: "destructive" });
+      fetchLeadData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to upload file.", variant: "destructive" });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -145,6 +141,34 @@ export default function LeadDetailPage() {
         setAttachmentToDelete(null);
     }
   };
+
+  // --- START OF FIX: Create a handler for authenticated downloads ---
+  const handleDownloadAttachment = async (attachment: LeadAttachment) => {
+    setDownloadingId(attachment.id); // Set loading state for this specific button
+    try {
+        const fileBlob = await leadApi.downloadLeadAttachment(attachment.id);
+        
+        // Create a temporary URL for the blob
+        const url = window.URL.createObjectURL(fileBlob);
+        
+        // Create a temporary link element to trigger the download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = attachment.original_file_name; // Use the original filename
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up by removing the link and revoking the URL
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message || "Could not download file.", variant: "destructive" });
+    } finally {
+        setDownloadingId(null); // Clear loading state
+    }
+  };
+  // --- END OF FIX ---
 
 
   if (isLoading) {
@@ -229,7 +253,6 @@ export default function LeadDetailPage() {
                                 <IconInfoField label="Pincode" value={lead.pincode} icon={MapPin} />
                               </CardContent>
                           </Card>
-                          {/* --- START: NEW ATTACHMENTS CARD --- */}
                            <Card>
                                 <CardHeader>
                                     <CardTitle>Attachments</CardTitle>
@@ -245,16 +268,28 @@ export default function LeadDetailPage() {
                                             </Button>
                                         </div>
                                         {lead.attachments && lead.attachments.length > 0 ? (
-                                            <ul className="space-y-2">
+                                            <ul className="space-y-3 pt-2">
                                                 {lead.attachments.map(att => (
-                                                    <li key={att.id} className="flex items-center justify-between text-sm p-2 rounded-md border bg-muted/50">
-                                                        <a href={`${API_BASE_URL}/web/attachments/preview/${att.file_path}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline truncate">
-                                                            <File className="h-4 w-4 flex-shrink-0" />
-                                                            <span className="truncate">{att.original_file_name}</span>
-                                                        </a>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs text-muted-foreground">by {att.uploaded_by}</span>
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAttachmentToDelete(att)}>
+                                                    <li key={att.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm p-3 rounded-md border bg-muted/50">
+                                                        <div className="flex items-center gap-3 truncate">
+                                                            <File className="h-5 w-5 flex-shrink-0 text-primary" />
+                                                            <div className="truncate">
+                                                                <p className="font-medium truncate" title={att.original_file_name}>{att.original_file_name}</p>
+                                                                {/* --- START OF FIX: Conditionally render the uploader's name --- */}
+                                                                {att.uploaded_by && (
+                                                                    <p className="text-xs text-muted-foreground">Uploaded by {att.uploaded_by}</p>
+                                                                )}
+                                                                {/* --- END OF FIX --- */}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 self-end sm:self-center">
+                                                            {/* --- START OF FIX: Use a Button with an onClick handler --- */}
+                                                            <Button variant="outline" size="sm" onClick={() => handleDownloadAttachment(att)} disabled={downloadingId === att.id}>
+                                                                {downloadingId === att.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />}
+                                                                Download
+                                                            </Button>
+                                                            {/* --- END OF FIX --- */}
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAttachmentToDelete(att)}>
                                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                                             </Button>
                                                         </div>
@@ -267,7 +302,6 @@ export default function LeadDetailPage() {
                                     </div>
                                 </CardContent>
                             </Card>
-                          {/* --- END: NEW ATTACHMENTS CARD --- */}
                       </div>
 
                       <div className="space-y-6">
@@ -290,7 +324,6 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Remarks" value={lead.remark} icon={MessageSquare} />
                               </CardContent>
                           </Card>
-                           {/* --- START: NEW CARD FOR NEW FIELDS --- */}
                           <Card>
                               <CardHeader><CardTitle>Technical & Financial Details</CardTitle></CardHeader>
                               <CardContent className="space-y-5">
@@ -301,7 +334,6 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Company PAN" value={lead.company_pan} icon={FileText} />
                               </CardContent>
                           </Card>
-                          {/* --- END: NEW CARD --- */}
                       </div>
                   </div>
               </TabsContent>

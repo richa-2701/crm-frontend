@@ -1,7 +1,83 @@
-// frontend/lib/api.ts
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://4adc3d24dcb8.ngrok-free.app";
+// ======================================================
+// FILE: frontend/lib/api.ts
+// PURPOSE: Unified API layer with Basic Auth + Error Handling
+// ======================================================
+
+import { AlertDialog } from "@radix-ui/react-alert-dialog";
+import { Dialog } from "@radix-ui/react-dialog";
+import { toast } from "sonner";
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:57214").replace(/\/api$/, "") + "/api";
+
+// 🧠 Helper: Get saved company credentials
+function getCompanyAuthHeader(): string | null {
+  if (typeof window === "undefined") return null;
+  const creds = localStorage.getItem("companyAuth");
+  return creds ? `Basic ${creds}` : null;
+}
+
+// 🧠 Helper: Save company credentials
+function saveCompanyCredentials(companyName: string, companyPassword: string) {
+  const encoded = btoa(`${companyName}:${companyPassword}`);
+  localStorage.setItem("companyAuth", encoded);
+  localStorage.setItem("companyName", companyName);
+  localStorage.setItem("companyPassword", companyPassword);
+}
+
+// 🧠 Helper: Convert snake_case object keys to PascalCase for C# backend
+const toPascalCase = (str: string) => str.replace(/_([a-z])/g, g => g[1].toUpperCase()).replace(/^(.)/, (match) => match.toUpperCase());
+
+const mapKeysToPascalCase = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(v => mapKeysToPascalCase(v));
+    } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
+        return Object.keys(obj).reduce((result, key) => {
+            const newKey = toPascalCase(key);
+            result[newKey] = mapKeysToPascalCase(obj[key]);
+            return result;
+        }, {} as any);
+    }
+    return obj;
+};
+
+// 🧠 Helper: Convert PascalCase keys from C# to snake_case for frontend
+const toSnakeCase = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, '');
+
+const mapKeysToSnakeCase = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(v => mapKeysToSnakeCase(v));
+    } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
+        return Object.keys(obj).reduce((result, key) => {
+            const newKey = toSnakeCase(key);
+            result[newKey] = mapKeysToSnakeCase(obj[key]);
+            return result;
+        }, {} as any);
+    }
+    return obj;
+};
+
+function parseMicrosoftDate(dateString: string | null | undefined): Date | null {
+    if (!dateString) {
+        return null;
+    }
+    // Check if it's the Microsoft format
+    const msDateMatch = dateString.match(/\/Date\((\d+)\)\//);
+    if (msDateMatch && msDateMatch[1]) {
+        const timestamp = parseInt(msDateMatch[1], 10);
+        return new Date(timestamp);
+    }
+    // Otherwise, try to parse it as a standard ISO string
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+}
 
 
+// --------------------------------------------------------------
+// INTERFACES
+// --------------------------------------------------------------
 export interface ApiMasterData {
   id: number;
   category: string;
@@ -87,62 +163,59 @@ export interface ApiLead {
   company_pan?: string;
   isActive: boolean;
   attachments: LeadAttachment[];
+  verticles?: string | null;
 }
 
-// --- START: NEW PROPOSAL INTERFACES ---
 export interface ProposalSentContact {
-    id: number;
-    proposal_id: number;
-    contact_name: string;
-    phone: string;
-    email: string | null;
-    designation: string | null;
-    linkedIn: string | null;
-    pan: string | null;
+  id: number;
+  proposal_id: number;
+  contact_name: string;
+  phone: string;
+  email: string | null;
+  designation: string | null;
+  linkedIn: string | null;
+  pan: string | null;
 }
 
-export interface ApiProposalSent extends Omit<ApiLead, 'id' | 'contacts' | 'isActive' | 'attachments'> {
-    id: number;
-    original_lead_id: number;
-    converted_at: string;
-    contacts: ProposalSentContact[];
-    gst: string; // Is mandatory on proposal
+export interface ApiProposalSent
+  extends Omit<ApiLead, "id" | "contacts" | "isActive" | "attachments"> {
+  id: number;
+  original_lead_id: number;
+  converted_at: string;
+  contacts: ProposalSentContact[];
+  gst: string;
 }
 
 export interface ConvertToProposalPayload {
-    company_name?: string;
-    email?: string;
-    gst: string;
-    company_pan?: string;
-    version?: string;
-    database_type?: string;
-    amc?: string;
-    contacts: Omit<Contact, 'id' | 'lead_id'>[];
-    // --- START: FIX - Added all editable fields ---
-    website?: string;
-    linkedIn?: string;
-    address?: string;
-    address_2?: string;
-    city?: string;
-    state?: string;
-    pincode?: string;
-    country?: string;
-    source?: string;
-    segment?: string;
-    team_size?: string;
-    remark?: string;
-    phone_2?: string;
-    turnover?: string;
-    current_system?: string;
-    machine_specification?: string;
-    challenges?: string;
-    lead_type?: string;
-    opportunity_business?: string;
-    target_closing_date?: string;
-    // --- END: FIX ---
+  company_name?: string;
+  email?: string;
+  gst: string;
+  company_pan?: string;
+  version?: string;
+  database_type?: string;
+  amc?: string;
+  contacts: Omit<Contact, "id" | "lead_id">[];
+  website?: string;
+  linkedIn?: string;
+  address?: string;
+  address_2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  source?: string;
+  segment?: string;
+  team_size?: string;
+  remark?: string;
+  phone_2?: string;
+  turnover?: string;
+  current_system?: string;
+  machine_specification?: string;
+  challenges?: string;
+  lead_type?: string;
+  opportunity_business?: string;
+  target_closing_date?: string;
 }
-// --- END: NEW PROPOSAL INTERFACES ---
-
 
 export interface ApiClient {
   id: number;
@@ -172,9 +245,7 @@ export interface ApiClient {
   created_at: string;
   updated_at?: string | null;
   contacts?: ClientContact[];
-  // --- START: FIX ---
   attachments?: LeadAttachment[];
-  // --- END: FIX ---
 }
 
 export interface ApiReportKpiSummary {
@@ -186,6 +257,12 @@ export interface ApiReportKpiSummary {
   conversion_rate: number;
 }
 
+interface ReportDetailItem {
+  id: number;
+  company_name: string;
+}
+
+
 export interface ApiReportData {
   kpi_summary: ApiReportKpiSummary;
   visualizations: {
@@ -194,13 +271,21 @@ export interface ApiReportData {
   };
   tables: {
     deals_won: {
-      client_name: string;
+      client_id: number;
+      company_name: string;
       converted_date: string;
       source: string;
       time_to_close: number;
     }[];
   };
+  details: {
+    new_leads_assigned: ReportDetailItem[];
+    meetings_completed: ReportDetailItem[];
+    demos_completed: ReportDetailItem[];
+    activities_logged: ReportDetailItem[];
+  }
 }
+
 
 export interface ApiClientUpdatePayload {
   company_name?: string;
@@ -230,67 +315,73 @@ export interface ApiClientUpdatePayload {
 }
 
 export interface ApiUnifiedActivity {
-    id: number;
-    type: 'log' | 'reminder';
-    lead_id: number;
-    company_name: string;
-    activity_type: string;
-    details: string;
-    status: string;
-    created_at: string;
-    scheduled_for?: string;
+  id: number;
+  type: "log" | "reminder";
+  lead_id: number;
+  company_name: string;
+  activity_type: string;
+  details: string;
+  status: string;
+  created_at: string;
+  scheduled_for?: string;
 }
 
 export interface ApiActivityLogCreatePayload {
-    lead_id: number;
-    details: string;
-    phase: string;
+  LeadId: number;
+  Details: string;
+  Phase: string;
 }
 
 export interface ApiEventReschedulePayload {
-    start_time: string;
-    end_time: string;
-    updated_by: string;
+  start_time: string;
+  end_time: string;
+  updated_by: string;
 }
 
 export interface ApiEventReassignPayload {
-    assigned_to_user_id: number;
-    updated_by: string;
+  assigned_to_user_id: number;
+  updated_by: string;
 }
 
 export interface ApiEventCancelPayload {
-    reason: string;
-    updated_by: string;
+  reason: string;
+  updated_by: string;
 }
 
 export interface ApiEventNotesUpdatePayload {
-    notes: string;
-    updated_by: string;
+  notes: string;
+  updated_by: string;
 }
 
 export interface ApiActivityUpdatePayload {
-    details: string;
-    activity_type?: string;
+  details: string;
+  activity_type?: string;
 }
 
 export interface ApiActivity {
   id: number;
   lead_id: number;
+  company_name: string;
   details: string;
   phase: string;
   created_at: string;
+  created_by: string;
   attachment_path?: string;
+  activity_type: string;
 }
 
 export interface ApiMeeting {
   id: number;
   lead_id: number;
+  proposal_id?: number;
+  client_id?: number;
   assigned_to: string;
   event_type: string;
   meeting_type?: string;
   event_time: string;
   event_end_time: string;
   created_by: string;
+  phase: string;
   remark?: string;
   created_at: string;
 }
@@ -298,6 +389,8 @@ export interface ApiMeeting {
 export interface ApiDemo {
   id: number;
   lead_id: number;
+  proposal_id?: number;
+  client_id?: number;
   scheduled_by: string;
   assigned_to: string;
   start_time: string;
@@ -313,7 +406,7 @@ export interface ApiMessageMaster {
   message_code: string;
   message_name: string;
   message_content: string | null;
-  message_type: 'text' | 'media' | 'document';
+  message_type: "text" | "media" | "document";
   attachment_path: string | null;
   created_at: string;
   created_by: string;
@@ -322,14 +415,14 @@ export interface ApiMessageMaster {
 export interface ApiMessageMasterCreatePayload {
   message_name: string;
   message_content?: string;
-  message_type: 'text' | 'media' | 'document';
+  message_type: "text" | "media" | "document";
   created_by: string;
 }
 
 export interface ApiMessageMasterUpdatePayload {
   message_name: string;
   message_content?: string | null;
-  message_type: 'text' | 'media' | 'document';
+  message_type: "text" | "media" | "document";
   existing_attachment_path?: string | null;
 }
 
@@ -371,14 +464,15 @@ export interface ApiDripSequenceCreatePayload {
 }
 
 export interface ApiReminder {
-    id: number;
-    lead_id: number;
-    remind_time: string;
-    message: string;
-    assigned_to: string;
-    status: string;
-    created_at: string;
-    is_hidden_from_activity_log: boolean;
+  id: number;
+  lead_id: number;
+  remind_time: string;
+  message: string;
+  assigned_to: string;
+  status: string;
+  created_at: string;
+  is_hidden_from_activity_log: boolean;
+  activity_type?: string;
 }
 
 export interface ApiBulkUploadResponse {
@@ -388,11 +482,24 @@ export interface ApiBulkUploadResponse {
 }
 
 export interface ApiScheduleActivityPayload {
-    lead_id?: number;
-    proposal_id?: number;
-    details: string;
-    activity_type: string;
-    created_by_user_id: number;
+  lead_id?: number;
+  proposal_id?: number;
+  details: string;
+  activity_type: string;
+  created_by_user_id: number;
+}
+
+export interface ApiExcelSummaryRow {
+  "User": string;
+  "New Leads Assigned": number;
+  "Meetings Scheduled": number;
+  "Demos Scheduled": number;
+  "Meetings Completed": number;
+  "Demos Completed": number;
+  "Activities Logged": number;
+  "Deals Won": number;
+  "Leads Lost": number;
+  "Conversion Rate (%)": number;
 }
 
 export interface ConvertLeadToClientPayload {
@@ -422,318 +529,574 @@ export interface ConvertLeadToClientPayload {
   contacts?: ClientContact[];
 }
 
+// --------------------------------------------------------------
+// FETCHERS
+// --------------------------------------------------------------
 async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
-  if (!API_BASE_URL) {
-    throw new Error("NEXT_PUBLIC_API_URL is not defined in your .env.local file.");
-  }
-
   const defaultHeaders: Record<string, string> = {
     "ngrok-skip-browser-warning": "true",
   };
 
-  if (options.body && !(options.body instanceof FormData)) {
-    defaultHeaders["Content-Type"] = "application/json";
-  }
+  const authHeader = getCompanyAuthHeader();
+  if (authHeader) defaultHeaders["Authorization"] = authHeader;
 
-  if (typeof window !== "undefined") {
-    const userString = localStorage.getItem("user");
-    if (userString) {
-      try {
-        const user: ApiUser = JSON.parse(userString);
-        if (user && user.company_name) {
-          defaultHeaders["X-Company-Name"] = user.company_name;
-        }
-      } catch (e) {
-        console.error("Failed to parse user from localStorage", e);
-      }
-    }
-  }
+  if (options.body && !(options.body instanceof FormData))
+    defaultHeaders["Content-Type"] = "application/json";
 
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const fullUrl = `${API_BASE_URL}/${url}`;
+    
+    const response = await fetch(fullUrl, {
       ...options,
       headers: { ...defaultHeaders, ...options.headers },
     });
 
+    // --- START OF FIX: This block now correctly throws an error for any non-ok response ---
     if (!response.ok) {
-      let errorDetail = "An unknown error occurred.";
-      try {
-        const errorData = await response.json();
-        errorDetail = errorData.detail || JSON.stringify(errorData);
-      } catch (e) {
-        errorDetail = await response.text();
+      const text = await response.text();
+      // Use console.warn for 409, but still throw the error so the UI can catch it.
+      if (response.status === 409) {
+        console.warn(`[API Conflict]`, response.status, text);
+      } else {
+        console.error("[API Error]", response.status, text);
       }
-      throw new Error(`API request failed: ${response.status} - ${errorDetail}`);
+      // Always throw the error to be handled by the calling function's catch block.
+      throw new Error(`API ${response.status}: ${text}`);
     }
-
-    if (response.status === 204) {
-      return null as T;
-    }
+    // --- END OF FIX ---
 
     const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
-      return response.blob() as Promise<T>;
-    }
+    const disposition = response.headers.get("content-disposition");
 
-    return response.json();
-  } catch (error) {
-    console.error(`Fetch failed for URL: ${url}`, error);
+    if ((disposition && disposition.includes('attachment')) || contentType?.includes('application/octet-stream') || contentType?.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+        return response.blob() as Promise<T>;
+    }
+    
+    if (contentType?.includes("application/json")) {
+        const jsonText = await response.text();
+        if (!jsonText) return null as T;
+
+        try {
+            const parsedJson = JSON.parse(jsonText);
+            if (typeof parsedJson === 'string') {
+                try {
+                    return mapKeysToSnakeCase(JSON.parse(parsedJson));
+                } catch {
+                    return { message: parsedJson } as T;
+                }
+            }
+            return mapKeysToSnakeCase(parsedJson) as T;
+        } catch (e) {
+            console.warn("Failed to parse JSON response, checking for plain text success. Response:", jsonText);
+            if (jsonText.toLowerCase().includes("success")) {
+                return { message: jsonText } as T;
+            }
+            throw new Error("Invalid JSON response from server.");
+        }
+    }
+    
+    return response.text() as unknown as T;
+  } catch (error: any) {
+    // --- START OF FIX: This ensures any error, including the one we throw above, is propagated ---
+    if (error && error.message && error.message.includes("409")) {
+        console.warn("[Network Fetch Conflict]", url, error.message);
+    } else {
+        console.error("[Network Fetch Failed]", url, error);
+    }
+    // Re-throw the error so the component's try/catch block can handle it.
     throw error;
+    // --- END OF FIX ---
   }
 }
 
-async function authFetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
-    if (!API_BASE_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL is not defined.");
-    }
-
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "ngrok-skip-browser-warning": "true",
-        ...options.headers,
-    };
-
-    try {
-        const response = await fetch(`${API_BASE_URL}${url}`, {
-            ...options,
-            headers,
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Authentication request failed");
-        }
-        return response.json();
-    } catch (error) {
-        console.error(`Auth fetch failed for URL: ${url}`, error);
-        throw error;
-    }
-}
-
+// --------------------------------------------------------------
+// MAIN UNIFIED API WRAPPER
+// --------------------------------------------------------------
 const unifiedApi = {
-  login: (username: string, password: string, company_name: string): Promise<ApiUser> => {
-    return authFetcher(`/login`, {
+  // 🔐 Authentication
+  companyAuthenticate: (companyName: string, companyPassword: string): Promise<{ message: string }> => {
+    const authHeader = "Basic " + btoa(`${companyName}:${companyPassword}`);
+    return fetcher(`companyauthenticate`, {
       method: "POST",
-      body: JSON.stringify({ username, password, company_name }),
-    });
-  },
-  register: (userData: Omit<ApiUser, 'id' | 'created_at' | 'updated_at'> & { password?: string }): Promise<ApiUser> => {
-    return authFetcher(`/register`, {
-      method: "POST",
-      body: JSON.stringify(userData),
-    });
-  },
-  changePassword: (data: { username: string, old_password: string, new_password: string }) => {
-    return fetcher(`/change-password`, { method: 'POST', body: JSON.stringify(data) });
-  },
-
-  getUsers: (): Promise<ApiUser[]> => fetcher('/users'),
-  updateUser: (userId: number, userData: Partial<ApiUser>): Promise<ApiUser> => {
-    return fetcher(`/web/users/${userId}`, { method: 'PUT', body: JSON.stringify(userData) });
-  },
-  deleteUser: (userId: number): Promise<void> => fetcher(`/web/users/${userId}`, { method: 'DELETE' }),
-
-  getAllLeads: (): Promise<ApiLead[]> => fetcher('/web/leads'),
-  getLeadsByUser: (userId: string): Promise<ApiLead[]> => fetcher(`/leads/${userId}`),
-  getLeadById: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}`),
-  createLead: (leadData: Partial<ApiLead>): Promise<ApiLead> => {
-    return fetcher('/web/leads', { method: 'POST', body: JSON.stringify(leadData) });
-  },
-  updateLead: (leadId: number, leadData: Partial<ApiLead> & { activity_type?: string; activity_details?: string; }): Promise<ApiLead> => {
-    return fetcher(`/web/leads/${leadId}`, { method: 'PUT', body: JSON.stringify(leadData) });
-  },
-  softDeleteLead: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}`, { method: 'DELETE' }),
-  getDeletedLeads: (): Promise<ApiLead[]> => fetcher('/web/leads/deleted'),
-  restoreLead: (leadId: number): Promise<ApiLead> => fetcher(`/web/leads/${leadId}/restore`, { method: 'PUT' }),
-  uploadLeadAttachment: (leadId: number, file: File, uploadedBy: string): Promise<LeadAttachment> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('uploaded_by', uploadedBy);
-    return fetcher(`/web/leads/${leadId}/attachments`, { method: 'POST', body: formData });
-  },
-  deleteLeadAttachment: (attachmentId: number): Promise<void> => fetcher(`/web/attachments/${attachmentId}`, { method: 'DELETE' }),
-  // --- START: NEW PROPOSAL FUNCTIONS ---
-  convertLeadToProposal: (leadId: number, payload: ConvertToProposalPayload): Promise<ApiProposalSent> => {
-    return fetcher(`/web/leads/${leadId}/convert-to-proposal`, { method: 'POST', body: JSON.stringify(payload) });
-  },
-  getAllProposals: (): Promise<ApiProposalSent[]> => fetcher('/web/proposals'),
-  // --- END: NEW PROPOSAL FUNCTIONS ---
-  convertToClient: (leadId: number, payload: ConvertLeadToClientPayload): Promise<ApiClient> => {
-    return fetcher(`/web/leads/${leadId}/convert-to-client`, { method: "POST", body: JSON.stringify(payload) });
-  },
-  getUserPerformanceReport: (userId: number, startDate: string, endDate: string): Promise<ApiReportData> => {
-    return fetcher('/web/reports/user-performance', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        start_date: startDate,
-        end_date: endDate
-      }),
-    });
-  },
-  exportSummaryReport: (startDate: string, endDate: string): Promise<Blob> => {
-    return fetcher('/web/reports/export-summary-excel', {
-      method: 'POST',
-      body: JSON.stringify({
-        start_date: startDate,
-        end_date: endDate,
-      }),
-    });
-  },
-  exportLeads: async (leadIds: number[]): Promise<Blob> => {
-    const userString = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-    const companyName = userString ? JSON.parse(userString).company_name : '';
-    const response = await fetch(`${API_BASE_URL}/web/leads/export-excel`, {
-      method: "POST",
-      headers: { 
-        'Content-Type': 'application/json', 
-        'X-Company-Name': companyName, 
-        "ngrok-skip-browser-warning": "true" 
+      headers: {
+        "Authorization": authHeader,
       },
-      body: JSON.stringify(leadIds),
+      body: JSON.stringify({ company_name: companyName, company_password: companyPassword }),
+    }).then((res: any) => {
+      if (res.message === "Success") {
+        saveCompanyCredentials(companyName, companyPassword);
+      }
+      return res;
     });
-    if (!response.ok) throw new Error("Failed to export leads.");
-    return response.blob();
   },
+
+  userAuthenticate: async (username: string, password: string, companyName: string): Promise<ApiUser> => {
+    const userDetails = await fetcher<Omit<ApiUser, 'company_name'>>(`userauthenticate`, {
+      method: "POST",
+      headers: { "X-Company-Name": companyName },
+      body: JSON.stringify({ Username: username, Password: password }),
+    });
+
+    return {
+      ...userDetails,
+      company_name: companyName,
+    };
+  },
+  
+  // 👥 Users
+  getUsers: async (): Promise<ApiUser[]> => {
+      const response: any = await fetcher("GetCRMUserMasterList", { method: "GET" });
+      if (response && response.data && typeof response.data === 'string') {
+        const parsedData = JSON.parse(response.data);
+        return mapKeysToSnakeCase(parsedData);
+      }
+      return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
+  },
+  createUser: (userData: Partial<ApiUser>): Promise<{status: string, message: string}> =>
+    fetcher(`CreateCrmUser`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase(userData))}),
+  updateUser: (email: string, userData: Partial<ApiUser>): Promise<{status: string, message: string}> =>
+    fetcher(`UpdateCrmUser`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase({ ...userData, Email: email })) }),
+  deleteUser: (email: string): Promise<{status: string, message: string}> => 
+    fetcher(`DeleteCrmUser`, { method: "POST", body: JSON.stringify({ Email: email }) }),
+
+  // 📊 Leads
+  getAllLeads: async (): Promise<ApiLead[]> => {
+    const response: any = await fetcher("Leads/GetAll", { method: "POST", body: JSON.stringify({}) });
+    if (response && response.data && typeof response.data === 'string') {
+        const parsedData = JSON.parse(response.data);
+        return mapKeysToSnakeCase(parsedData);
+    }
+    return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
+  },
+  
+  getLeadById: (leadId: number): Promise<ApiLead> => {
+      return fetcher("Leads/GetLeadDetails", {
+          method: "POST",
+          body: JSON.stringify({ LeadId: leadId }),
+      });
+  },
+  createLead: (leadData: Partial<ApiLead>): Promise<{message: string; id: number}> =>
+    fetcher("Leads/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(leadData)) }),
+  updateLead: (leadId: number, leadData: Partial<ApiLead>): Promise<{message: string}> =>
+    fetcher("Leads/Update", { method: "POST", body: JSON.stringify(mapKeysToPascalCase({ id: leadId, ...leadData })) }),
+  softDeleteLead: (leadId: number): Promise<{message: string}> =>
+    fetcher("Leads/Delete", { method: "POST", body: JSON.stringify({ LeadId: leadId }) }),
+  getDeletedLeads: (): Promise<ApiLead[]> => fetcher("Leads/GetDeletedLeads", { method: "POST", body: JSON.stringify({}) }),
+  restoreLead: (leadId: number): Promise<{message: string}> =>
+    fetcher("Leads/RestoreLead", { method: "POST", body: JSON.stringify({ LeadId: leadId }) }),
+  
+  uploadLeadAttachment: (leadId: number, file: File): Promise<{ message: string; attachment: LeadAttachment }> => {
+    const formData = new FormData();
+    formData.append("leadId", leadId.toString());
+    formData.append("file", file);
+    return fetcher("Leads/UploadAttachment", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  deleteLeadAttachment: (attachmentId: number): Promise<{message: string}> =>
+    fetcher(`Leads/DeleteAttachment`, { method: "POST", body: JSON.stringify({ AttachmentId: attachmentId }) }),
+
+  downloadLeadAttachment: (attachmentId: number): Promise<Blob> => {
+    return fetcher(`Leads/DownloadAttachment/${attachmentId}`, { method: 'GET' });
+  },
+  
+  // 💼 Proposals
+  convertLeadToProposal: (leadId: number, payload: ConvertToProposalPayload): Promise<{message: string}> => 
+    fetcher(`ProposalSent/Convert`, { 
+      method: "POST", 
+      body: JSON.stringify({ 
+        LeadId: leadId, 
+        ...mapKeysToPascalCase(payload) 
+      }) 
+    }),
+  getAllProposals: (): Promise<ApiProposalSent[]> => fetcher("ProposalSent/GetAll", { method: "POST", body: JSON.stringify({}) }),
+  updateProposal: (proposalId: number, proposalData: any, contactsData: any[]): Promise<{message: string}> => fetcher("ProposalSent/Update", { method: "POST", body: JSON.stringify({ Id: proposalId, Proposal: proposalData, Contacts: contactsData }) }),
+
+  // 🧾 Clients
+  convertToClient: (leadId: number | null, proposalId: number | null, payload: ConvertLeadToClientPayload): Promise<{ message: string }> => {
+    const body = {
+        LeadId: leadId,
+        ProposalId: proposalId,
+        ...mapKeysToPascalCase(payload)
+    };
+    return fetcher(`Client/Convert`, { method: "POST", body: JSON.stringify(body) });
+  },
+  getAllClients: (): Promise<ApiClient[]> => fetcher("Client/GetAll", { method: "GET" }),
+  
+  getClientById: (clientId: number): Promise<ApiClient> =>
+    fetcher(`Client/GetById`, { method: "POST", body: JSON.stringify({ ClientId: clientId }) })
+    .then(data => (Array.isArray(data) ? data[0] : data)),
+  
+  updateClient: (clientId: number, clientData: ApiClientUpdatePayload): Promise<ApiClient> =>
+    fetcher(`Client/Update`, { method: "POST", body: JSON.stringify({ Id: clientId, Client: mapKeysToPascalCase(clientData), Contacts: mapKeysToPascalCase(clientData.contacts) }) }),
+
+  // 📁 Bulk Upload (Requires backend implementation for FormData)
   uploadBulkLeads: (file: File): Promise<ApiBulkUploadResponse> => {
     const formData = new FormData();
     formData.append("file", file);
-    return fetcher('/web/leads/upload-bulk', { method: 'POST', body: formData });
-  },
-  assignDripToLead: (leadId: number, dripSequenceId: number): Promise<any> => {
-    return fetcher('/web/leads/assign-drip', { method: 'POST', body: JSON.stringify({ lead_id: leadId, drip_sequence_id: dripSequenceId }) });
-  },
-
-  getAllClients: (): Promise<ApiClient[]> => fetcher("/web/clients"),
-  getClientById: (clientId: number): Promise<ApiClient> => fetcher(`/web/clients/${clientId}`),
-  updateClient: (clientId: number, clientData: ApiClientUpdatePayload): Promise<ApiClient> => {
-    return fetcher(`/web/clients/${clientId}`, { method: "PUT", body: JSON.stringify(clientData) });
+    return fetcher("Leads/BulkUpload", { method: "POST", body: formData });
   },
   
-  getActivities: (leadId: number): Promise<ApiActivity[]> => fetcher(`/activities/${leadId}`),
-  getHistory: (leadId: number): Promise<any> => fetcher(`/history/${leadId}`),
-  addActivityWithAttachment: (leadId: number, details: string, file?: File): Promise<ApiActivity> => {
+  // 🕓 Activities & Reminders
+  getAllActivities: (): Promise<ApiActivity[]> =>
+    fetcher("Activity/GetAllActivities", { method: "POST", body: JSON.stringify({}) }),
+  
+  getActivitiesByLead: (leadId: number): Promise<ApiActivity[]> =>
+    fetcher("Activity/GetByLead", { method: "POST", body: JSON.stringify({ LeadId: leadId })}),
+  
+  logActivity: (payload: { 
+    lead_id: number; 
+    details: string; 
+    phase: string; 
+    activity_type: string; 
+    attachment_path?: string | null; 
+  }): Promise<{message: string}> =>
+    fetcher("Activity/AddManualActivity", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+
+  deleteLoggedActivity: (activityId: number, reason: string): Promise<{message: string}> => 
+    fetcher(`Activity/Delete`, { method: "POST", body: JSON.stringify({ ActivityId: activityId, Reason: reason }) }),
+  
+  getAllReminders: (): Promise<ApiReminder[]> => 
+    fetcher("Reminders/GetAll", { method: "POST", body: JSON.stringify({})}),
+  getUpcomingReminders: (): Promise<ApiReminder[]> =>
+    fetcher("Reminders/GetUpcoming", {method: 'POST', body: JSON.stringify({})}),
+  scheduleReminder: (payload: any): Promise<{message: string}> =>
+    fetcher("Reminders/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  markReminderDone: (reminderId: number): Promise<{ message: string }> =>
+    fetcher(`Reminders/UpdateStatus`, { method: "POST", body: JSON.stringify({ ReminderId: reminderId, Status: "Completed" }) }),
+  completeAndLogReminder: (reminderId: number, outcomeNotes: string, completedBy: string): Promise<{ message: string }> => 
+    fetcher(`Reminders/CompleteAndLog`, { 
+        method: "POST", 
+        body: JSON.stringify({ ReminderId: reminderId, OutcomeNotes: outcomeNotes, CompletedBy: completedBy }) 
+    }),
+  cancelReminder: (reminderId: number): Promise<{message: string}> => 
+    fetcher(`Reminders/Delete`, { method: "POST", body: JSON.stringify({ ReminderId: reminderId }) }),
+  
+  uploadActivityAttachment: (file: File): Promise<{ file_path: string }> => {
     const formData = new FormData();
-    formData.append("details", details);
-    if (file) formData.append("file", file);
-    return fetcher(`/web/leads/${leadId}/activity`, { method: "POST", body: formData });
-  },
-  getAllActivities: (username: string): Promise<ApiUnifiedActivity[]> => fetcher(`/web/activities/all/${username}`),
-  getPendingActivities: (): Promise<ApiReminder[]> => fetcher("/web/activities/pending"),
-  logActivity: (payload: ApiActivityLogCreatePayload): Promise<ApiActivity> => fetcher("/web/activities/log", { method: "POST", body: JSON.stringify(payload) }),
-  scheduleActivity: (payload: ApiScheduleActivityPayload): Promise<ApiReminder> => fetcher("/web/activities/schedule", { method: "POST", body: JSON.stringify(payload) }),
-  markActivityDone: (reminderId: number, notes: string, updatedBy: string): Promise<{ status: string; message: string }> => {
-    return fetcher(`/web/activities/scheduled/${reminderId}/complete`, { method: "POST", body: JSON.stringify({ notes, updated_by: updatedBy }) });
-  },
-  updateActivity: (activityId: number, payload: ApiActivityUpdatePayload): Promise<ApiActivity> => fetcher(`/web/activities/log/${activityId}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  deleteLoggedActivity: (activityId: number): Promise<void> => fetcher(`/web/activities/log/${activityId}`, { method: 'DELETE' }),
-  cancelScheduledActivity: (reminderId: number): Promise<void> => fetcher(`/web/activities/scheduled/${reminderId}`, { method: 'DELETE' }),
-
-  scheduleMeeting: (payload: any): Promise<ApiMeeting> => fetcher('/web/meetings/schedule', { method: 'POST', body: JSON.stringify(payload) }),
-  scheduleDemo: (payload: any): Promise<ApiDemo> => fetcher('/web/demos/schedule', { method: 'POST', body: JSON.stringify(payload) }),
-  getScheduledMeetings: (): Promise<ApiMeeting[]> => fetcher("/web/meetings"),
-  getAllMeetings: (): Promise<ApiMeeting[]> => fetcher("/web/meetings/all"),
-  getScheduledDemos: (): Promise<ApiDemo[]> => fetcher("/web/demos"),
-  getAllDemos: (): Promise<ApiDemo[]> => fetcher("/web/demos/all"),
-  getAllCalendarEvents: (): Promise<any[]> => fetcher("/web/calendar/events/all"),
-  rescheduleEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReschedulePayload): Promise<ApiMeeting | ApiDemo> => fetcher(`/web/${type}s/${id}/reschedule`, { method: "PUT", body: JSON.stringify(payload) }),
-  reassignEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReassignPayload): Promise<ApiMeeting | ApiDemo> => fetcher(`/web/${type}s/${id}/reassign`, { method: "PUT", body: JSON.stringify(payload) }),
-  cancelEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventCancelPayload): Promise<ApiMeeting | ApiDemo> => fetcher(`/web/${type}s/${id}/cancel`, { method: "POST", body: JSON.stringify(payload) }),
-  updateEventNotes: (type: 'meeting' | 'demo', id: number, payload: ApiEventNotesUpdatePayload): Promise<ApiMeeting | ApiDemo> => fetcher(`/web/${type}s/${id}/notes`, { method: "PUT", body: JSON.stringify(payload) }),
-  completeMeeting: (payload: { meeting_id: number, notes: string, updated_by: string }): Promise<{ status: string; message: string }> => {
-    return fetcher('/web/meetings/complete', { method: 'POST', body: JSON.stringify(payload) });
-  },
-  completeDemo: (payload: { demo_id: number, notes: string, updated_by: string }): Promise<{ status: string; message: string }> => {
-    return fetcher('/web/demos/complete', { method: 'POST', body: JSON.stringify(payload) });
+    formData.append("file", file);
+    return fetcher("Activity/UploadAttachment", {
+      method: "POST",
+      body: formData,
+    });
   },
 
-  getMasterData: (category: string): Promise<ApiMasterData[]> => fetcher(`/web/master-data/${category}`),
-  getByCategory: (category: string): Promise<ApiMasterData[]> => fetcher(`/web/master-data/${category}`),
-  createMasterData: (item: { category: string; value: string }): Promise<ApiMasterData> => fetcher("/web/master-data", { method: "POST", body: JSON.stringify(item) }),
-  create: (item: { category: string; value: string }): Promise<ApiMasterData> => fetcher("/web/master-data", { method: "POST", body: JSON.stringify(item) }),
-  deleteMasterData: (itemId: number): Promise<void> => fetcher(`/web/master-data/${itemId}`, { method: "DELETE" }),
+  addActivityWithAttachment: async (leadId: number, details: string, file: File): Promise<{ message: string }> => {
+    const uploadResponse = await unifiedApi.uploadActivityAttachment(file);
+    const attachmentPath = uploadResponse.file_path;
+
+    if (!attachmentPath) {
+      throw new Error("File upload was successful but did not return a valid path.");
+    }
+
+    return unifiedApi.logActivity({
+      lead_id: leadId,
+      details: details,
+      phase: 'Quotation',
+      activity_type: 'Quotation',
+      attachment_path: attachmentPath,
+    });
+  },
+
+
+  // 🗓️ Meetings / Demos
+  scheduleMeeting: (payload: any): Promise<ApiMeeting> =>
+    fetcher("Meetings/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  scheduleDemo: (payload: any): Promise<ApiDemo> =>
+    fetcher("Demos/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  getAllMeetings: async (): Promise<ApiMeeting[]> => {
+    const response: any = await fetcher("Meetings/GetAll", { method: "POST", body: JSON.stringify({}) });
+    if (response && typeof response === 'string') {
+        const parsedData = JSON.parse(response);
+        return mapKeysToSnakeCase(parsedData);
+    }
+    return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
+  },
+  getAllDemos: async (): Promise<ApiDemo[]> => {
+    const response: any = await fetcher("Demos/GetAll", { method: "POST", body: JSON.stringify({}) });
+     if (response && typeof response === 'string') {
+        const parsedData = JSON.parse(response);
+        return mapKeysToSnakeCase(parsedData);
+    }
+    return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
+  },
+  completeMeeting: (payload: { MeetingId: number; Remark: string }): Promise<{ message: string }> =>
+    fetcher("Meetings/Complete", { method: "POST", body: JSON.stringify(payload) }),
+  completeDemo: (payload: { DemoId: number; Remark: string }): Promise<{ message: string }> =>
+    fetcher("Demos/Complete", { method: "POST", body: JSON.stringify(payload) }),
+  rescheduleMeeting: (meetingId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> =>
+    fetcher(`Meetings/Reschedule`, {
+      method: "POST",
+      body: JSON.stringify({
+        MeetingId: meetingId,
+        EventTime: payload.start_time,
+        EventEndTime: payload.end_time,
+      }),
+    }),
+  rescheduleDemo: (demoId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> => {
+      console.warn("api.rescheduleDemo is a placeholder.");
+      return Promise.reject(new Error("Rescheduling demos is not yet implemented on the backend."));
+  },
+  rescheduleEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> => {
+    if (type === 'meeting') {
+      return unifiedApi.rescheduleMeeting(id, payload);
+    } else {
+      return unifiedApi.rescheduleDemo(id, payload);
+    }
+  },
+  reassignEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReassignPayload): Promise<{ message: string }> => {
+    console.warn("api.reassignEvent is a placeholder.");
+    return Promise.reject(new Error("Reassigning events is not yet implemented on the backend."));
+  },
+  cancelEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventCancelPayload): Promise<{ message: string }> => {
+    console.warn("api.cancelEvent is a placeholder.");
+    return Promise.reject(new Error("Canceling events is not yet implemented on the backend."));
+  },
+  updateEventNotes: (type: 'meeting' | 'demo', id: number, payload: ApiEventNotesUpdatePayload): Promise<{ message: string }> => {
+    const endpoint = type === 'meeting' ? 'Meetings/UpdateNotes' : 'Demos/UpdateNotes';
+    const body = {
+        Id: id,
+        Notes: payload.notes,
+        UpdatedBy: payload.updated_by
+    };
+    return fetcher(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(body)
+    });
+  },
+
+  getAllCalendarEvents: async (): Promise<any[]> => {
+    try {
+        const users = await unifiedApi.getUsers();
+        const leads = await unifiedApi.getAllLeads();
+        const meetings = await unifiedApi.getAllMeetings();
+        const demos = await unifiedApi.getAllDemos();
+
+        const leadMap = new Map((leads || []).map(lead => [lead.id, lead.company_name]));
+        const userMap = new Map((users || []).map(user => [user.usernumber, user.username]));
+        const calendarEvents: any[] = [];
+        const statusesToShow = ['Scheduled', 'Rescheduled', 'Done', 'Completed'];
+
+        (meetings || []).filter(m => statusesToShow.includes(m.phase)).forEach(meeting => {
+            const startTime = parseMicrosoftDate(meeting.event_time);
+            if (!meeting.lead_id || !startTime) {
+                 return;
+            }
+           
+            let endTime = parseMicrosoftDate(meeting.event_end_time);
+            if (!endTime) {
+                endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Default to 1 hour
+            }
+
+            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                console.warn(`Skipping invalid meeting event:`, meeting);
+                return;
+            }
+
+            calendarEvents.push({
+                id: `meeting-${meeting.id}`,
+                title: `Meeting: ${leadMap.get(meeting.lead_id) || 'Unknown Lead'}`,
+                start: startTime,
+                end: endTime,
+                extendedProps: {
+                    type: 'Meeting',
+                    status: meeting.phase,
+                    assignee: meeting.assigned_to,
+                    details: meeting.remark || 'No remarks.'
+                }
+            });
+        });
+
+        (demos || []).filter(d => statusesToShow.includes(d.phase)).forEach(demo => {
+            const startTime = parseMicrosoftDate(demo.start_time);
+            if (!demo.lead_id || !startTime) {
+                 return;
+            }
+            
+            let endTime = parseMicrosoftDate(demo.event_end_time);
+            if (!endTime) {
+                endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Default to 1 hour
+            }
+            
+            if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                console.warn(`Skipping invalid demo event:`, demo);
+                return;
+            }
+            
+            const assigneeName = userMap.get(demo.assigned_to) || demo.scheduled_by || 'Unknown User';
+            calendarEvents.push({
+                id: `demo-${demo.id}`,
+                title: `Demo: ${leadMap.get(demo.lead_id) || 'Unknown Lead'}`,
+                start: startTime,
+                end: endTime,
+                extendedProps: {
+                    type: 'Demo',
+                    status: demo.phase,
+                    assignee: assigneeName,
+                    details: demo.remark || 'No remarks.'
+                }
+            });
+        });
+        
+        console.log(`Consolidated ${calendarEvents.length} valid calendar events.`);
+        return calendarEvents;
+    } catch (error) {
+        console.error("Error consolidating calendar events:", error);
+        throw error; 
+    }
+  },
+
+  // 🧠 Master Data
+  getByCategory: (category: string): Promise<ApiMasterData[]> => fetcher(`MasterData/GetByCategory`, { method: "POST", body: JSON.stringify({ Category: category }) }),
+  createMasterData: (item: { category: string; value: string }): Promise<ApiMasterData> =>
+    fetcher("MasterData/Create", { method: "POST", body: JSON.stringify({ ...item, IsActive: true }) }),
+  deleteMasterData: (itemId: number): Promise<{message: string}> =>
+    fetcher(`MasterData/Delete`, { method: "POST", body: JSON.stringify({ Id: itemId }) }),
+
+  // ✉️ Message Master
+  getMessages: (): Promise<ApiMessageMaster[]> => 
+    fetcher("MessageMaster/GetAll", { method: 'GET' }),
   
-  getMessages: (): Promise<ApiMessageMaster[]> => fetcher("/web/messages"),
-  createMessage: (data: ApiMessageMasterCreatePayload, file?: File | null): Promise<ApiMessageMaster> => {
-      const formData = new FormData();
-      formData.append('message_name', data.message_name);
-      formData.append('message_content', data.message_content || '');
-      formData.append('message_type', data.message_type);
-      formData.append('created_by', data.created_by);
-      if (file) formData.append('file', file);
-      return fetcher('/web/messages', { method: 'POST', body: formData });
+  createMessage: (payload: ApiMessageMasterCreatePayload, file: File | null): Promise<ApiMessageMaster> => {
+    const formData = new FormData();
+    formData.append('message_name', payload.message_name);
+    formData.append('message_content', payload.message_content || '');
+    formData.append('message_type', payload.message_type);
+    formData.append('created_by', payload.created_by);
+    if (file) {
+      formData.append('file', file);
+    }
+    return fetcher("MessageMaster/Create", { method: "POST", body: formData });
   },
-  updateMessage: (id: number, data: ApiMessageMasterUpdatePayload, file?: File | null): Promise<ApiMessageMaster> => {
-      const formData = new FormData();
-      formData.append('message_name', data.message_name);
-      formData.append('message_content', data.message_content || '');
-      formData.append('message_type', data.message_type);
-      if (data.existing_attachment_path) formData.append('existing_attachment_path', data.existing_attachment_path);
-      if (file) formData.append('file', file);
-      return fetcher(`/web/messages/${id}`, { method: 'PUT', body: formData });
-  },
-  deleteMessage: (id: number): Promise<void> => fetcher(`/web/messages/${id}`, { method: 'DELETE' }),
 
-  getDripSequences: (): Promise<ApiDripSequenceList[]> => fetcher("/web/drip-sequences"),
-  getDripSequenceById: (id: number): Promise<ApiDripSequence> => fetcher(`/web/drip-sequences/${id}`),
-  createDripSequence: (data: ApiDripSequenceCreatePayload): Promise<ApiDripSequence> => fetcher("/web/drip-sequences", { method: "POST", body: JSON.stringify(data) }),
-  updateDripSequence: (id: number, data: ApiDripSequenceCreatePayload): Promise<ApiDripSequence> => fetcher(`/web/drip-sequences/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteDripSequence: (id: number): Promise<void> => fetcher(`/web/drip-sequences/${id}`, { method: 'DELETE' }),
-  
-  sendMessage: (message: string, userPhone: string): Promise<{ status: string; reply: string }> => {
-      return fetcher('/app', { method: 'POST', body: JSON.stringify({ user_phone: userPhone, message }) });
+  updateMessage: (id: number, payload: ApiMessageMasterUpdatePayload, file: File | null): Promise<{message: string}> => {
+    const formData = new FormData();
+    formData.append('message_name', payload.message_name);
+    formData.append('message_content', payload.message_content || '');
+    formData.append('message_type', payload.message_type);
+    formData.append('existing_attachment_path', payload.existing_attachment_path || '');
+    if (file) {
+      formData.append('file', file);
+    }
+    return fetcher(`MessageMaster/Update/${id}`, { method: "POST", body: formData });
   },
-  getUserTasks: (username: string): Promise<any> => fetcher(`/tasks/${username}`),
+
+  deleteMessage: (id: number): Promise<{message: string}> => 
+    fetcher(`MessageMaster/Delete/${id}`, { method: "POST" }),
+    
+
+  // 💧 Drip Sequences
+  getDripSequences: (): Promise<ApiDripSequenceList[]> => 
+    fetcher("DripSequence/GetAll", { method: 'GET' }), 
+
+  getDripSequenceById: (id: number): Promise<ApiDripSequence> =>
+    fetcher(`DripSequence/GetById/${id}`, { method: 'GET' }),
+
+  createDripSequence: (payload: ApiDripSequenceCreatePayload): Promise<{message: string}> =>
+    fetcher("DripSequence/Create", { method: "POST", body: JSON.stringify(payload) }),
+
+  updateDripSequence: (id: number, payload: ApiDripSequenceCreatePayload): Promise<{message: string}> =>
+    fetcher(`DripSequence/Update/${id}`, { method: "POST", body: JSON.stringify(payload) }),
+
+  deleteDripSequence: (id: number): Promise<{message: string}> =>
+    fetcher(`DripSequence/Delete/${id}`, { method: "POST" }),
+
+  assignDripToLead: (leadId: number, dripSequenceId: number): Promise<{message: string}> =>
+    fetcher("DripSequence/AssignToLead", { method: "POST", body: JSON.stringify({ LeadId: leadId, DripSequenceId: dripSequenceId, StartDate: new Date().toISOString(), IsActive: true }) }),
+
+
+  
+  // 📈 Reports
+  getUserPerformanceReport: (userId: number, startDate: string, endDate: string): Promise<ApiReportData> => 
+    fetcher(`Reports/GetUserPerformance`, { 
+      method: "POST", 
+      body: JSON.stringify({ UserId: userId, StartDate: startDate, EndDate: endDate }) 
+    }),
+    
+  exportSummaryReport: (startDate: string, endDate: string): Promise<any> => 
+    fetcher(`Reports/ExportSummary`, { 
+      method: "POST", 
+      body: JSON.stringify({ StartDate: startDate, EndDate: endDate }) 
+    }),
 };
 
+// --------------------------------------------------------------
+// EXPORTED API GROUPS
+// --------------------------------------------------------------
 export const api = unifiedApi;
 
+
+
 export const masterDataApi = {
-    getByCategory: unifiedApi.getByCategory,
-    create: unifiedApi.create,
-    delete: unifiedApi.deleteMasterData,
+  getByCategory: unifiedApi.getByCategory,
+  create: unifiedApi.createMasterData,
+  delete: unifiedApi.deleteMasterData,
 };
 
 export const authApi = {
-  login: unifiedApi.login,
-  register: unifiedApi.register,
-  changePassword: unifiedApi.changePassword,
+  companyAuthenticate: unifiedApi.companyAuthenticate,
+  userAuthenticate: unifiedApi.userAuthenticate,
 };
 
-export const userApi = {
-  getUsers: unifiedApi.getUsers,
-  updateUser: unifiedApi.updateUser,
-  deleteUser: unifiedApi.deleteUser,
+export const userApi = { 
+    getUsers: unifiedApi.getUsers,
+    createUser: unifiedApi.createUser,
+    updateUser: unifiedApi.updateUser,
+    deleteUser: unifiedApi.deleteUser
 };
 
 export const leadApi = {
   getAllLeads: unifiedApi.getAllLeads,
-  getLeadsByUser: unifiedApi.getLeadsByUser,
   getLeadById: unifiedApi.getLeadById,
   createLead: unifiedApi.createLead,
   updateLead: unifiedApi.updateLead,
-  exportLeads: unifiedApi.exportLeads,
-  getActivities: unifiedApi.getActivities,
-  getHistory: unifiedApi.getHistory,
-  addActivityWithAttachment: unifiedApi.addActivityWithAttachment,
-  uploadBulkLeads: unifiedApi.uploadBulkLeads,
-  assignDripToLead: unifiedApi.assignDripToLead,
-  convertToClient: unifiedApi.convertToClient,
   softDeleteLead: unifiedApi.softDeleteLead,
   getDeletedLeads: unifiedApi.getDeletedLeads,
   restoreLead: unifiedApi.restoreLead,
   uploadLeadAttachment: unifiedApi.uploadLeadAttachment,
   deleteLeadAttachment: unifiedApi.deleteLeadAttachment,
-  // --- START: NEW EXPORTS ---
-  convertLeadToProposal: unifiedApi.convertLeadToProposal,
+  assignDripToLead: unifiedApi.assignDripToLead,
+  uploadBulkLeads: unifiedApi.uploadBulkLeads,
+  downloadLeadAttachment: unifiedApi.downloadLeadAttachment,
+};
+
+export const proposalApi = {
   getAllProposals: unifiedApi.getAllProposals,
-  // --- END: NEW EXPORTS ---
+  updateProposal: unifiedApi.updateProposal,
+  convertLeadToProposal: unifiedApi.convertLeadToProposal,
 };
 
 export const clientApi = {
   getAllClients: unifiedApi.getAllClients,
   getClientById: unifiedApi.getClientById,
   updateClient: unifiedApi.updateClient,
+  convertToClient: unifiedApi.convertToClient,
+};
+
+export const activityApi = {
+  getAllActivities: unifiedApi.getAllActivities,
+  getActivitiesByLead: unifiedApi.getActivitiesByLead,
+  logActivity: unifiedApi.logActivity,
+  addActivityWithAttachment: unifiedApi.addActivityWithAttachment,
+  deleteLoggedActivity: unifiedApi.deleteLoggedActivity,
+  getAllReminders: unifiedApi.getAllReminders,
+  getUpcomingReminders: unifiedApi.getUpcomingReminders,
+  scheduleReminder: unifiedApi.scheduleReminder,
+  markReminderDone: unifiedApi.markReminderDone,
+  cancelReminder: unifiedApi.cancelReminder,
+};
+
+export const meetingsApi = {
+  scheduleMeeting: unifiedApi.scheduleMeeting,
+  getAllMeetings: unifiedApi.getAllMeetings,
+  completeMeeting: unifiedApi.completeMeeting,
+};
+
+export const demosApi = {
+  scheduleDemo: unifiedApi.scheduleDemo,
+  getAllDemos: unifiedApi.getAllDemos,
+  completeDemo: unifiedApi.completeDemo,
 };
 
 export const messageMasterApi = {
@@ -743,50 +1106,31 @@ export const messageMasterApi = {
   deleteMessage: unifiedApi.deleteMessage,
 };
 
-export const activityApi = {
-  getActivities: unifiedApi.getActivities,
-  getAllActivities: unifiedApi.getAllActivities,
-  getPendingActivities: unifiedApi.getPendingActivities,
-  logActivity: unifiedApi.logActivity,
-  scheduleActivity: unifiedApi.scheduleActivity,
-  markActivityDone: unifiedApi.markActivityDone,
-  updateActivity: unifiedApi.updateActivity,
-  deleteLoggedActivity: unifiedApi.deleteLoggedActivity,
-  cancelScheduledActivity: unifiedApi.cancelScheduledActivity,
-  addActivityWithAttachment: unifiedApi.addActivityWithAttachment,
-};
-
 export const dripSequenceApi = {
   getDripSequences: unifiedApi.getDripSequences,
   getDripSequenceById: unifiedApi.getDripSequenceById,
   createDripSequence: unifiedApi.createDripSequence,
   updateDripSequence: unifiedApi.updateDripSequence,
   deleteDripSequence: unifiedApi.deleteDripSequence,
+  assignDripToLead: unifiedApi.assignDripToLead,
+};
+
+// Placeholder exports for features not fully implemented in the provided C# code
+export const reportApi = {
+  getUserPerformanceReport: unifiedApi.getUserPerformanceReport,
+  exportSummaryReport: unifiedApi.exportSummaryReport,
 };
 
 export const chatApi = {
-  sendMessage: unifiedApi.sendMessage,
+  sendMessage: (message: string, userPhone: string): Promise<{ status: string; reply: string }> => {
+    console.warn("chatApi.sendMessage is a placeholder.");
+    return Promise.reject("Not Implemented");
+  }
 };
 
 export const taskApi = {
-  getUserTasks: unifiedApi.getUserTasks,
-};
-
-export const meetingsApi = {
-  scheduleMeeting: unifiedApi.scheduleMeeting,
-  scheduleDemo: unifiedApi.scheduleDemo,
-  getScheduledMeetings: unifiedApi.getScheduledMeetings,
-  getAllMeetings: unifiedApi.getAllMeetings,
-  getScheduledDemos: unifiedApi.getScheduledDemos,
-  getAllDemos: unifiedApi.getAllDemos,
-  completeMeeting: unifiedApi.completeMeeting,
-};
-
-export const demosApi = {
-    completeDemo: unifiedApi.completeDemo,
-};
-
-export const reportApi = {
-    getUserPerformanceReport: unifiedApi.getUserPerformanceReport,
-    exportSummaryReport: unifiedApi.exportSummaryReport,
+  getUserTasks: (username: string): Promise<any> => {
+    console.warn("taskApi.getUserTasks is a placeholder.");
+    return Promise.reject("Not Implemented");
+  }
 };

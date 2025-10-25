@@ -1,7 +1,8 @@
-// frontend/components/leads/convert-to-proposal-modal.tsx
+//components/leads/convert-to-proposal-modal.tsx
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { leadApi, type ApiLead } from "@/lib/api"
+import { api, proposalApi, type ApiLead } from "@/lib/api"
 import { Loader2, PlusCircle, Trash2 } from "lucide-react"
 import PhoneInput from "react-phone-input-2"
 import "react-phone-input-2/lib/style.css"
@@ -42,7 +43,11 @@ interface ConvertToProposalModalProps {
 
 const namePrefixes = ["Mr.", "Mrs.", "Ms."];
 
-const splitFullName = (fullName: string) => {
+const splitFullName = (fullName: string | null | undefined) => {
+  if (!fullName || typeof fullName !== 'string') {
+    return { prefix: "Mr.", first_name: "", last_name: "" };
+  }
+  
   const parts = fullName.trim().split(" ")
   let prefix = ""
   let firstName = ""
@@ -62,6 +67,7 @@ const splitFullName = (fullName: string) => {
 
 export function ConvertToProposalModal({ lead, isOpen, onClose, onSuccess }: ConvertToProposalModalProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const [formData, setFormData] = useState({
     company_name: "",
     email: "",
@@ -94,6 +100,23 @@ export function ConvertToProposalModal({ lead, isOpen, onClose, onSuccess }: Con
   const [contacts, setContacts] = useState<Contact[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<{ gst?: string }>({});
+  
+  const [versionOptions, setVersionOptions] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (isOpen) {
+        const fetchMasterData = async () => {
+            try {
+                const versionData = await api.getByCategory("version");
+                setVersionOptions(versionData.map(item => item.value));
+            } catch (err) {
+                console.error("Failed to fetch version master data:", err);
+                toast({ title: "Error", description: "Could not load version options.", variant: "destructive" });
+            }
+        };
+        fetchMasterData();
+    }
+  }, [isOpen, toast]);
 
   useEffect(() => {
     if (lead) {
@@ -190,13 +213,35 @@ export function ConvertToProposalModal({ lead, isOpen, onClose, onSuccess }: Con
     const payload = { ...formData, contacts: processedContacts };
 
     try {
-      await leadApi.convertLeadToProposal(lead.id, payload);
+      await proposalApi.convertLeadToProposal(lead.id, payload);
       toast({ title: "Conversion Successful", description: `${lead.company_name} has been moved to Proposals.` });
       onSuccess(lead.id);
       onClose();
-    } catch (error) {
-      console.error("Failed to convert lead to proposal:", error);
-      toast({ title: "Error", description: error instanceof Error ? error.message : "Conversion failed.", variant: "destructive" });
+    } catch (error: any) {
+      if (error.message && error.message.includes("409")) {
+        let message = "This lead has already been converted.";
+        try {
+            // Extract the JSON part of the message for a more specific error
+            const jsonString = error.message.substring(error.message.indexOf('{'));
+            const parsed = JSON.parse(jsonString);
+            message = parsed.Message || message;
+        } catch (e) {
+            // Could not parse, use default or a simplified message from the API response
+            const simpleMessage = error.message.split(':').slice(1).join(':').trim();
+            message = simpleMessage || message;
+        }
+        toast({ title: "Already Converted", description: message, variant: "default" });
+        
+        // Redirect based on the conflict message
+        if (message.includes("Client")) {
+            router.push('/dashboard/clients');
+        } else {
+            router.push('/dashboard/proposals');
+        }
+        onClose();
+      } else {
+        toast({ title: "Error", description: error instanceof Error ? error.message : "Conversion failed.", variant: "destructive" });
+      }
     } finally {
         setIsLoading(false);
     }
@@ -213,7 +258,6 @@ export function ConvertToProposalModal({ lead, isOpen, onClose, onSuccess }: Con
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-            {/* --- START: FORM EXPANSION --- */}
             <div className="space-y-4 rounded-md border p-4">
                 <h3 className="text-md font-semibold">Company Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -288,14 +332,24 @@ export function ConvertToProposalModal({ lead, isOpen, onClose, onSuccess }: Con
                         {errors.gst && <p className="text-sm text-red-500 mt-1">{errors.gst}</p>}
                     </div>
                     <div className="space-y-1"><Label htmlFor="company_pan">Company PAN</Label><Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} /></div>
-                    <div className="space-y-1"><Label htmlFor="version">Version</Label><Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} /></div>
+                    
+                    
+
                     <div className="space-y-1"><Label htmlFor="database_type">Database Type</Label><Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} /></div>
                     <div className="space-y-1"><Label htmlFor="amc">AMC</Label><Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} /></div>
+                    <div className="space-y-1">
+                        <Label htmlFor="version">Version</Label>
+                        <Select value={formData.version} onValueChange={v => handleInputChange("version", v)}>
+                            <SelectTrigger id="version">
+                                <SelectValue placeholder="Select version..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {versionOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
             </div>
-            {/* --- END: FORM EXPANSION --- */}
-
-            
         </div>
         
         <DialogFooter className="pt-6">

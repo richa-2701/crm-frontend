@@ -1,10 +1,9 @@
-// frontend/app/dashboard/schedule/page.tsx
 "use client"
 
 import type React from "react"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { UserAvailabilityCalendar } from "@/components/ui/user-availability-calendar"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react" // Import useCallback
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -13,23 +12,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, Calendar, Monitor } from "lucide-react"
-import { Autocomplete } from "@/components/ui/autocomplete"
-import { api, ApiLead, ApiUser, ApiMeeting, ApiDemo } from "@/lib/api" // Import types as well
+import { AlertTriangle, Calendar, Monitor, Loader2 } from "lucide-react" // Import Loader2
+import { api, ApiLead, ApiUser, ApiMeeting, ApiDemo } from "@/lib/api"
 import { format } from 'date-fns';
+import { debounce } from "lodash"; // Import debounce
 
-// Use the imported types instead of redefining them
 interface Lead extends ApiLead {}
 interface User extends ApiUser {}
-// --- START: FIX ---
 interface Meeting extends Omit<ApiMeeting, 'type' | 'lead_id'> {
     type: "meeting" | "demo";
-    lead_id: string | null; // Allow lead_id to be null
+    lead_id: string | null;
     start_time: string;
     end_time: string;
 }
-// --- END: FIX ---
-
 
 export default function SchedulePage() {
   const router = useRouter()
@@ -39,6 +34,7 @@ export default function SchedulePage() {
   const [users, setUsers] = useState<User[]>([])
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isFetchingLeads, setIsFetchingLeads] = useState(false) // State for lead search
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
   const [showCalendar, setShowCalendar] = useState(false)
   const [busySlots, setBusySlots] = useState<{ start: string; end: string }[]>([])
@@ -51,7 +47,7 @@ export default function SchedulePage() {
 
   const [formData, setFormData] = useState({
     lead_id: "",
-    assigned_to: "", // This will store the username for display/check
+    assigned_to: "",
     start_time: "",
     duration: "60",
     meeting_type: "Discussion",
@@ -78,6 +74,7 @@ export default function SchedulePage() {
     }
   }, [router]);
 
+  // --- OPTIMIZATION: Fetch data without all leads initially ---
   useEffect(() => {
     if (!currentUser) {
       return;
@@ -86,15 +83,13 @@ export default function SchedulePage() {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [leadsData, usersData, meetingsData, demosData, meetingTypesData] = await Promise.all([
-            api.getAllLeads(), 
+        const [usersData, meetingsData, demosData, meetingTypesData] = await Promise.all([
             api.getUsers(),
-            api.getScheduledMeetings(),
-            api.getScheduledDemos(),
+            api.getAllMeetings(),
+            api.getAllDemos(),
             api.getByCategory("meeting_type")
         ]);
 
-        setLeads(leadsData.map((lead: any) => ({ ...lead, id: lead.id.toString() })));
         setUsers(usersData.map((user: any) => ({ ...user, id: user.id.toString() })));
         
         const meetingTypes = meetingTypesData.map(item => item.value);
@@ -108,13 +103,11 @@ export default function SchedulePage() {
           ...demosData.map(d => ({...d, start_time: d.start_time, end_time: d.event_end_time, type: 'demo' as const}))
         ];
         
-        // --- START: FIX ---
         setMeetings(allEvents.map(e => ({
           ...e,
           id: e.id.toString(),
-          lead_id: e.lead_id ? e.lead_id.toString() : null, // Safely handle null lead_id
+          lead_id: e.lead_id ? e.lead_id.toString() : null,
         })));
-        // --- END: FIX ---
 
       } catch (error) {
         console.error("Failed to fetch initial data:", error);
@@ -131,6 +124,29 @@ export default function SchedulePage() {
     fetchData();
   }, [currentUser, toast]);
 
+  // --- OPTIMIZATION: Debounced function to search for leads ---
+  const searchLeads = useCallback(
+      debounce(async (searchTerm: string) => {
+          if (searchTerm.length < 2) {
+              setLeads([]);
+              return;
+          }
+          setIsFetchingLeads(true);
+          try {
+              const allLeads = await api.getAllLeads();
+              const filteredLeads = allLeads.filter(lead => 
+                  lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+              );
+              setLeads(filteredLeads.map(lead => ({ ...lead, id: lead.id.toString() })));
+          } catch (error) {
+              toast({ title: "Error", description: "Could not search for leads." });
+          } finally {
+              setIsFetchingLeads(false);
+          }
+      }, 300),
+      [toast]
+  );
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     setAvailabilityError(null)
@@ -139,37 +155,29 @@ export default function SchedulePage() {
 
   const checkAvailability = (assignedToUsername: string, startTime: string, endTime: string): boolean => {
     if (!startTime || !endTime) return true;
-
     const start = new Date(startTime);
     const end = new Date(endTime);
-    
     const assignedUser = users.find(u => u.username === assignedToUsername);
     if (!assignedUser) {
         console.warn("Could not find user to check availability.");
         return true;
     }
-
     const conflicts = meetings.filter((meeting) => {
       const isAssigned = meeting.assigned_to === assignedUser.username || meeting.assigned_to === assignedUser.usernumber;
       if (!isAssigned) return false;
-      
       const meetingStart = new Date(meeting.start_time);
       const meetingEnd = new Date(meeting.end_time);
-
       return start < meetingEnd && end > meetingStart;
     });
-
     if (conflicts.length > 0) {
       setBusySlots(conflicts.map(m => ({ start: m.start_time, end: m.end_time })));
       return false;
     }
-
     return true;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!calculatedEndTime) {
         toast({ title: "Error", description: "Invalid start time or duration.", variant: "destructive" });
         return;
@@ -200,13 +208,11 @@ export default function SchedulePage() {
         created_by_user_id: currentUser.id,
       };
 
-      // --- START OF FIX: Use the unified api object for scheduling ---
       if (scheduleType === "meeting") {
         await api.scheduleMeeting({ ...payload, meeting_type: formData.meeting_type });
       } else {
         await api.scheduleDemo(payload);
       }
-      // --- END OF FIX ---
       
       const selectedLead = leads.find(l => l.id === formData.lead_id);
       setConfirmationMessage(`${scheduleType === "meeting" ? "Meeting" : "Demo"} has been scheduled successfully for ${selectedLead?.company_name}.`);
@@ -235,11 +241,6 @@ export default function SchedulePage() {
     setShowConfirmation(false)
     router.push("/dashboard/events");
   }
-  
-  const leadOptions = leads.map((lead) => ({
-    value: lead.id,
-    label: `${lead.company_name} ${lead.contacts && lead.contacts.length > 0 ? `(${lead.contacts[0].contact_name})` : ''}`,
-  }))
 
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -251,21 +252,11 @@ export default function SchedulePage() {
           <Card className="border-0 sm:border shadow-none sm:shadow-sm">
             <CardContent className="px-3 sm:px-6 pt-6">
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={scheduleType === "meeting" ? "default" : "outline"}
-                  onClick={() => setScheduleType("meeting")}
-                  className="flex-1 h-9 text-sm"
-                >
+                <Button type="button" variant={scheduleType === "meeting" ? "default" : "outline"} onClick={() => setScheduleType("meeting")} className="flex-1 h-9 text-sm">
                   <Calendar className="h-4 w-4 mr-2" />
                   Schedule Meeting
                 </Button>
-                <Button
-                  type="button"
-                  variant={scheduleType === "demo" ? "default" : "outline"}
-                  onClick={() => setScheduleType("demo")}
-                  className="flex-1 h-9 text-sm"
-                >
+                <Button type="button" variant={scheduleType === "demo" ? "default" : "outline"} onClick={() => setScheduleType("demo")} className="flex-1 h-9 text-sm">
                   <Monitor className="h-4 w-4 mr-2" />
                   Schedule Demo
                 </Button>
@@ -285,7 +276,34 @@ export default function SchedulePage() {
                   <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
                     <div className="space-y-1">
                       <Label htmlFor="lead_id" className="text-xs sm:text-sm">Lead Name *</Label>
-                      <Autocomplete options={leadOptions} value={formData.lead_id} onValueChange={(value) => handleInputChange("lead_id", value)} placeholder="Search and select a lead..." searchPlaceholder="Type to search leads..." emptyMessage="No leads found." className="h-8 sm:h-10 text-sm w-full min-w-0 overflow-hidden" />
+                      {/* --- OPTIMIZATION: Replaced Autocomplete with searchable Select --- */}
+                      <Select
+                          value={formData.lead_id}
+                          onValueChange={(value) => handleInputChange("lead_id", value)}
+                      >
+                          <SelectTrigger className="h-8 sm:h-10 text-sm w-full min-w-0 overflow-hidden">
+                              <SelectValue placeholder="Type to search for a lead..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                              <div className="p-2">
+                                  <Input
+                                      placeholder="Search by company name..."
+                                      onChange={(e) => searchLeads(e.target.value)}
+                                      autoFocus
+                                  />
+                              </div>
+                              {isFetchingLeads && (
+                                  <div className="flex items-center justify-center p-2">
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                  </div>
+                              )}
+                              {leads.length > 0 ? (
+                                  leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
+                              ) : (
+                                  !isFetchingLeads && <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
+                              )}
+                          </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="grid gap-3 grid-cols-2">

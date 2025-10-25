@@ -2,7 +2,6 @@
 "use client"
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-// --- CHANGE 1: Import from dnd-kit instead of react-beautiful-dnd ---
 import {
     DndContext,
     closestCenter,
@@ -20,7 +19,6 @@ import {
     useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-// --- END CHANGE 1 ---
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +39,6 @@ interface DripStep extends Omit<ApiDripSequenceCreatePayload['steps'][0], 'messa
     message: ApiMessageMaster;
 }
 
-// --- NEW COMPONENT: Sortable Table Row for dnd-kit ---
 function SortableStepRow({ step, index, onRemove }: { step: DripStep, index: number, onRemove: (id: string) => void }) {
     const {
         attributes,
@@ -128,7 +125,6 @@ export function CreateDripForm({ currentUser, existingDrip = null }: CreateDripF
         setSteps(newSteps);
     };
 
-    // --- CHANGE 2: Update the drag end handler for dnd-kit ---
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (over && active.id !== over.id) {
@@ -136,7 +132,6 @@ export function CreateDripForm({ currentUser, existingDrip = null }: CreateDripF
                 const oldIndex = items.findIndex((item) => item.localId === active.id);
                 const newIndex = items.findIndex((item) => item.localId === over.id);
                 const reorderedItems = arrayMove(items, oldIndex, newIndex);
-                // Re-assign the sequence order after reordering
                 return reorderedItems.map((item, index) => ({ ...item, sequence_order: index }));
             });
         }
@@ -165,7 +160,6 @@ export function CreateDripForm({ currentUser, existingDrip = null }: CreateDripF
         };
 
          try {
-            // --- CHANGE 3: Call update or create based on mode ---
             if (isEditMode && existingDrip) {
                 await api.updateDripSequence(existingDrip.id, payload);
                 toast({ title: "Success", description: "Drip sequence updated successfully." });
@@ -210,7 +204,6 @@ export function CreateDripForm({ currentUser, existingDrip = null }: CreateDripF
             <Card>
                 <CardHeader><CardTitle>2. Sequence Steps</CardTitle></CardHeader>
                 <CardContent>
-                    {/* --- CHANGE 3: Replace DragDropContext with DndContext --- */}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                         <Table>
                             <TableHeader><TableRow><TableHead className="w-12"></TableHead><TableHead>Order</TableHead><TableHead>Day</TableHead><TableHead>Time</TableHead><TableHead>Message Name</TableHead><TableHead className="w-12"></TableHead></TableRow></TableHeader>

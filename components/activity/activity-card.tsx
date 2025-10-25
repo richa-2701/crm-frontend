@@ -3,9 +3,6 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ApiUnifiedActivity } from "@/lib/api";
-// --- THIS IS THE CRITICAL IMPORT ---
-// We must use formatDateTime for both scheduled and logged activities to ensure correct timezone conversion.
 import { formatDateTime } from "@/lib/date-format"; 
 import { Clock, CheckCircle, Phone, Mail, MessageSquare, Eye, LucideIcon, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import {
@@ -14,14 +11,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { UnifiedActivity } from "@/app/dashboard/activity/page";
 
 interface ActivityCardProps {
-    activity: ApiUnifiedActivity;
-    onMarkAsDone: (activity: ApiUnifiedActivity) => void;
-    onViewDetails: (activity: ApiUnifiedActivity) => void;
+    activity: UnifiedActivity;
+    onMarkAsDone: (activity: UnifiedActivity) => void;
+    onViewDetails: (activity: UnifiedActivity) => void;
     onViewPastActivities: (leadId: number, leadName: string) => void;
-    onEdit: (activity: ApiUnifiedActivity) => void;
-    onCancel: (activity: ApiUnifiedActivity) => void;
+    onEdit: (activity: UnifiedActivity) => void;
+    onCancel: (activity: UnifiedActivity) => void;
 }
 
 const activityTypeIcons: { [key: string]: LucideIcon } = {
@@ -41,13 +39,14 @@ const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive"
     unqualified: "destructive",
     Canceled: "destructive",
     not_our_segment: "destructive",
+    Overdue: "destructive",
     "Meeting Done": "outline",
     "Demo Done": "outline",
     "Discussion Done": "outline",
 };
 
 export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPastActivities, onEdit, onCancel }: ActivityCardProps) {
-    const isActionableReminder = activity.type === 'reminder' && activity.status !== 'completed';
+    const isActionable = activity.isActionable;
     const Icon = activityTypeIcons[activity.activity_type as keyof typeof activityTypeIcons] || activityTypeIcons.default;
 
     return (
@@ -89,19 +88,17 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
             </div>
 
             <CardFooter className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 py-2.5 px-4 border-t">
-                {/* --- THIS IS THE DEFINITIVE FIX --- */}
-                {/* This logic now correctly chooses which date to display and then formats it */}
-                {/* using the function that handles UTC-to-local conversion. */}
+                {/* --- DEFINITIVE FIX --- */}
+                {/* This logic now correctly uses the unified 'date' property and checks 'logged_or_scheduled' to pick the right icon. */}
                 <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                     {(() => {
-                        const isReminder = activity.type === 'reminder' && activity.scheduled_for;
-                        const dateToFormat = isReminder ? activity.scheduled_for : activity.created_at;
-                        const IconToUse = isReminder ? Clock : CheckCircle;
+                        const isScheduled = activity.logged_or_scheduled === 'Scheduled';
+                        const IconToUse = isScheduled ? Clock : CheckCircle;
 
                         return (
                             <>
                                 <IconToUse className="h-3.5 w-3.5" />
-                                <span>{formatDateTime(dateToFormat)}</span>
+                                <span>{formatDateTime(activity.date)}</span>
                             </>
                         );
                     })()}
@@ -109,7 +106,7 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
                 {/* --- END FIX --- */}
 
                 <div className="flex items-center gap-1">
-                    {isActionableReminder ? (
+                    {isActionable ? (
                         <Button size="sm" onClick={() => onMarkAsDone(activity)} className="h-8 text-xs px-3">
                             <CheckCircle className="mr-2 h-4 w-4" />
                             Mark as Done
@@ -143,7 +140,7 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
                             )}
                             <DropdownMenuItem onClick={() => onCancel(activity)} className="text-destructive">
                                 <Trash2 className="mr-2 h-4 w-4" />
-                                <span>{activity.type === 'reminder' ? 'Cancel' : 'Delete'}</span>
+                                <span>{activity.logged_or_scheduled === 'Scheduled' ? 'Cancel' : 'Delete'}</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

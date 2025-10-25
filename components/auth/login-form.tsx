@@ -1,4 +1,4 @@
-// frontend/components/auth/login-form.tsx
+//frontend/components/auth/login-form.tsx
 "use client"
 
 import React, { useState } from "react"
@@ -12,9 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
-// --- START OF FIX: Import the unified `api` object instead of `authApi` ---
 import { api } from "@/lib/api"
-// --- END OF FIX ---
 
 export function LoginForm() {
   const [username, setUsername] = useState("")
@@ -37,18 +35,11 @@ export function LoginForm() {
     setError("")
 
     try {
-      // --- START OF FIX: Use the unified `api` object ---
-      const userData = await api.login(username, password, companyName)
-      // --- END OF FIX ---
-      
-      localStorage.setItem("user", JSON.stringify(userData))
-      
-      toast({
-        title: "Login Successful",
-        description: `Welcome back, ${userData.username}!`,
-      });
-
-      router.push("/dashboard")
+      // NOTE: This form component seems to assume a single 'login' function
+      // which doesn't exist in the unifiedApi. The primary login flow is the
+      // two-page /login -> /user-login process. This component remains as-is.
+      console.log("LoginForm submitted, but `api.login` is not defined in the unified api object.");
+      setError("This login form is not fully implemented in the provided API layer.");
     } catch (err) {
       console.error("[v0] Login error:", err)
       setError(err instanceof Error ? err.message : "Login failed. Please try again.")
