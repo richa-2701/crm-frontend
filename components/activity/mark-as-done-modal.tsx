@@ -1,4 +1,3 @@
-// frontend/components/activity/mark-as-done-modal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -14,15 +13,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-// --- FIX: Import the full 'api' object and ApiReminder type ---
 import { api, ApiReminder, ApiUser } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input"; // Import Input component
 
 interface MarkAsDoneModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  // --- FIX: The activity prop is a Reminder, not a generic UnifiedActivity ---
   activity: ApiReminder | null;
   currentUser: ApiUser | null;
 }
@@ -35,31 +33,44 @@ export function MarkAsDoneModal({
   currentUser,
 }: MarkAsDoneModalProps) {
   const [notes, setNotes] = useState("");
+  // --- START OF CHANGE: Add duration state ---
+  const [duration, setDuration] = useState("");
+  // --- END OF CHANGE ---
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (!isOpen) {
       setNotes("");
+      // --- START OF CHANGE: Reset duration on close ---
+      setDuration("");
+      // --- END OF CHANGE ---
     }
   }, [isOpen]);
 
   const handleSubmit = async () => {
-    if (!activity || !currentUser || !notes) {
+    // --- START OF CHANGE: Add duration to validation ---
+    if (!activity || !currentUser || !notes || !duration) {
       toast({
         title: "Missing Information",
-        description: "Please provide outcome notes before completing the task.",
+        description: "Please provide outcome notes and the activity duration.",
         variant: "destructive",
       });
       return;
     }
+    // --- END OF CHANGE ---
+
+    const durationMinutes = parseInt(duration, 10);
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+        toast({ title: "Invalid Duration", description: "Please enter a valid, positive number for the duration.", variant: "destructive" });
+        return;
+    }
 
     setIsLoading(true);
     try {
-      // --- START OF FIX: Call the new, correct API endpoint ---
-      // This will update the reminder AND create a new activity log in one step.
-      await api.completeAndLogReminder(activity.id, notes, currentUser.username);
-      // --- END OF FIX ---
+      // --- START OF CHANGE: Pass durationMinutes to the API call ---
+      await api.completeAndLogReminder(activity.id, notes, currentUser.username, durationMinutes);
+      // --- END OF CHANGE ---
       
       toast({
         title: "Success!",
@@ -81,9 +92,7 @@ export function MarkAsDoneModal({
   if (!isOpen || !activity) {
     return null;
   }
-
-  // Find the lead name from the activity object if it exists (it might not if fetched from reminders list)
-  // In a real app, the activity object would ideally contain the company name.
+  
   const companyName = (activity as any).company_name || "the lead";
 
   return (
@@ -103,9 +112,24 @@ export function MarkAsDoneModal({
               id="original-task"
               className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md border min-h-[60px]"
             >
-              {activity.message} {/* Use 'message' for reminders */}
+              {activity.message}
             </div>
           </div>
+          
+          {/* --- START OF CHANGE: Add duration input field --- */}
+          <div className="space-y-2">
+            <Label htmlFor="duration_minutes">Time Taken (minutes) *</Label>
+            <Input 
+                id="duration_minutes"
+                type="number"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="e.g., 15"
+                required
+                min="1"
+            />
+          </div>
+          {/* --- END OF CHANGE --- */}
 
           <div className="space-y-2">
             <Label htmlFor="outcome-notes">Outcome / Notes *</Label>
@@ -124,7 +148,7 @@ export function MarkAsDoneModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading || !notes}>
+          <Button onClick={handleSubmit} disabled={isLoading || !notes || !duration}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Mark as Done & Log
           </Button>

@@ -21,12 +21,28 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Users, Calendar, Search, AlertCircle, Loader2, Check, LayoutGrid, List, User, Clock, FileText, MoreHorizontal, Edit, Calendar as CalendarIcon, XCircle, FileEdit } from "lucide-react"
+import { Users, Calendar, Search, AlertCircle, Loader2, Check, LayoutGrid, List, User, Clock, FileText, MoreHorizontal, Edit, Calendar as CalendarIcon, XCircle, FileEdit, Timer } from "lucide-react"
 import { api, type ApiLead, type ApiMeeting, type ApiDemo, type ApiUser, type ApiEventReschedulePayload } from "@/lib/api"
 import { formatDateTime, parseAsUTCDate } from "@/lib/date-format" 
 import { useToast } from "@/hooks/use-toast"
 
-// --- INTERFACES AND TYPE DEFINITIONS ---
+const convertLocalStringToUtcIso = (localString: string): string => {
+    if (!localString) return "";
+    
+    const [datePart, timePart] = localString.split('T');
+    if (!datePart || !timePart) {
+        console.warn("Invalid datetime-local string format:", localString);
+        return new Date(localString).toISOString(); 
+    }
+
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    
+    const localDate = new Date(year, month - 1, day, hour, minute);
+    
+    return localDate.toISOString();
+};
+
 
 const getStatusBadgeVariant = (status: EnhancedEvent['status']) => {
   switch (status) {
@@ -53,6 +69,8 @@ interface EnhancedEvent {
   createdAt: string;
   createdBy: string;
   remark?: string;
+  attendees: string[];
+  duration_minutes?: number;
 }
 
 type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue' | 'canceled' | 'rescheduled';
@@ -99,13 +117,16 @@ function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { i
         }
         setIsLoading(true);
         
-        const start = new Date(startTime);
-        const end = new Date(start.getTime() + parseInt(duration, 10) * 60000);
+        const startUtc = convertLocalStringToUtcIso(startTime);
+        
+        const end = new Date(startTime);
+        end.setMinutes(end.getMinutes() + parseInt(duration, 10));
+        const endUtc = end.toISOString();
 
         try {
             await api.rescheduleEvent(event.type, event.numericId, {
-                start_time: start.toISOString(),
-                end_time: end.toISOString(),
+                start_time: startUtc,
+                end_time: endUtc,
                 updated_by: currentUser.username,
             });
 
@@ -273,12 +294,10 @@ function EditNotesModal({ isOpen, onClose, event, onSuccess, currentUser }: { is
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader><DialogTitle>Edit Notes for Completed {event.type}</DialogTitle></DialogHeader>
-        {/* --- START OF FIX: Added scrollable container and increased textarea size --- */}
         <div className="py-4 max-h-[60vh] overflow-y-auto pr-4">
           <Label htmlFor="notes">Post-Event Notes</Label>
           <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={10} />
         </div>
-        {/* --- END OF FIX --- */}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={isLoading}>
@@ -326,45 +345,42 @@ export default function EventsPage() {
       const userNumberToNameMap = new Map<string, string>(
         usersData.map(user => [user.usernumber, user.username])
       );
+      
+      const mapApiEventToEnhancedEvent = (event: (ApiMeeting | ApiDemo) & { phase?: string; attendees?: string }, type: 'meeting' | 'demo'): EnhancedEvent => {
+          const isMeeting = type === 'meeting';
+          const meeting = event as ApiMeeting;
+          const demo = event as ApiDemo;
+
+          const startTime = isMeeting ? meeting.event_time : demo.start_time;
+          
+          const attendeesString = (event.attendees || "").toString();
+          const attendees = attendeesString ? attendeesString.split(',').filter(name => name.trim() !== '') : [];
+
+          return {
+              id: `${type}-${event.id}`,
+              numericId: event.id,
+              type: type,
+              meeting_type: isMeeting ? meeting.meeting_type : undefined,
+              lead_id: String(event.lead_id),
+              company_name: leadsMap.get(String(event.lead_id))?.company_name || 'Unknown Lead',
+              contact_name: leadsMap.get(String(event.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
+              assigned_to: isMeeting ? meeting.assigned_to : userNumberToNameMap.get(demo.assigned_to) || demo.assigned_to,
+              start_time: startTime,
+              end_time: isMeeting ? meeting.event_end_time : demo.event_end_time,
+              status: getEventStatus({ start_time: startTime, phase: event.phase }),
+              createdAt: event.created_at,
+              createdBy: isMeeting ? meeting.created_by : demo.scheduled_by,
+              remark: event.remark,
+              attendees: attendees,
+              duration_minutes: event.duration_minutes,
+          };
+      };
 
       const combinedEvents: EnhancedEvent[] = [
-        ...meetingsData
-          .filter(meeting => meeting && meeting.id)
-          .map((meeting: ApiMeeting & { phase?: string }) => ({
-            id: `meeting-${meeting.id}`,
-            numericId: meeting.id,
-            type: 'meeting' as const,
-            meeting_type: meeting.meeting_type,
-            lead_id: String(meeting.lead_id),
-            company_name: leadsMap.get(String(meeting.lead_id))?.company_name || 'Unknown Lead',
-            contact_name: leadsMap.get(String(meeting.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
-            assigned_to: meeting.assigned_to, 
-            start_time: meeting.event_time,
-            end_time: meeting.event_end_time,
-            status: getEventStatus({ start_time: meeting.event_time, phase: meeting.phase }),
-            createdAt: meeting.created_at,
-            createdBy: meeting.created_by,
-            remark: meeting.remark,
-          })),
-        ...demosData
-          .filter(demo => demo && demo.id)
-          .map((demo: ApiDemo & { phase?: string }) => ({
-            id: `demo-${demo.id}`,
-            numericId: demo.id,
-            type: 'demo' as const,
-            lead_id: String(demo.lead_id),
-            company_name: leadsMap.get(String(demo.lead_id))?.company_name || 'Unknown Lead',
-            contact_name: leadsMap.get(String(demo.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
-            assigned_to: userNumberToNameMap.get(demo.assigned_to) || demo.assigned_to,
-            start_time: demo.start_time,
-            end_time: demo.event_end_time,
-            status: getEventStatus({ start_time: demo.start_time, phase: demo.phase }),
-            createdAt: demo.created_at,
-            createdBy: demo.scheduled_by,
-            remark: demo.remark,
-          }))
+        ...meetingsData.filter(m => m && m.id).map(m => mapApiEventToEnhancedEvent(m, 'meeting')),
+        ...demosData.filter(d => d && d.id).map(d => mapApiEventToEnhancedEvent(d, 'demo')),
       ];
-
+      
       combinedEvents.sort((a, b) => {
         const dateA = parseAsUTCDate(a.start_time) ?? new Date(0);
         const dateB = parseAsUTCDate(b.start_time) ?? new Date(0);
@@ -526,41 +542,36 @@ export default function EventsPage() {
                     const isActionable = ['Pending', 'Rescheduled', 'Overdue'].includes(event.status);
 
                     return (
+                      // --- START OF FIX: Redesigned Card for better space efficiency ---
                       <Card key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-shadow">
                         <div className="flex-grow">
-                          <CardHeader>
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
-                                {event.type === 'meeting' ? <Users className="h-5 w-5 text-primary" /> : <Calendar className="h-5 w-5 text-primary" />}
-                                <div>
-                                  <CardTitle className="text-lg capitalize leading-tight">
-                                      {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
-                                  </CardTitle>
-                                  <Badge variant={getStatusBadgeVariant(event.status)} className="mt-1">{event.status}</Badge>
-                                </div>
+                          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+                              <div>
+                                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                                    {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
+                                  </p>
+                                  <CardTitle className="text-lg pt-1">{event.company_name}</CardTitle>
                               </div>
-                              {isActionable && renderActionMenu(event)}
-                              {event.status === 'Completed' && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0" onClick={e => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                                    <DropdownMenuItem onClick={() => handleAction(event, 'editNotes')}><FileEdit className="mr-2 h-4 w-4" /> Edit Notes</DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
-                            </div>
-                            <div className="pt-2">
-                              <p className="font-semibold">{event.company_name}</p>
-                              <p className="text-sm text-muted-foreground">{event.contact_name}</p>
-                            </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge>
+                                {(isActionable || event.status === 'Completed') && renderActionMenu(event)}
+                              </div>
                           </CardHeader>
-                          <CardContent className="text-sm">
-                            <div className="space-y-2">
-                              <div><p className="font-medium">Assigned To:</p><p className="text-muted-foreground">{event.assigned_to}</p></div>
-                              <div><p className="font-medium">Date & Time:</p>
-                                <p className="text-muted-foreground">{formatDateTime(event.start_time)}</p>
+                          <CardContent className="text-sm space-y-3">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                  <User className="h-4 w-4" />
+                                  <span>{event.assigned_to}</span>
                               </div>
-                            </div>
+                               <div className="flex items-center gap-2 text-muted-foreground">
+                                  <CalendarIcon className="h-4 w-4" />
+                                  <span>{formatDateTime(event.start_time)}</span>
+                              </div>
+                              {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 && (
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                      <Timer className="h-4 w-4" />
+                                      <span>{event.duration_minutes} minutes</span>
+                                  </div>
+                              )}
                           </CardContent>
                         </div>
                         {isActionable && (
@@ -569,6 +580,7 @@ export default function EventsPage() {
                           </CardFooter>
                         )}
                       </Card>
+                      // --- END OF FIX ---
                     );
                   })}
                 </div>
@@ -578,16 +590,15 @@ export default function EventsPage() {
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
-                      {/* --- START OF FIX: Updated table headers --- */}
                       <TableRow>
                         <TableHead>Lead</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Assigned To</TableHead>
                         <TableHead>Date & Time</TableHead>
+                        <TableHead>Time Taken</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
-                      {/* --- END OF FIX --- */}
                     </TableHeader>
                     <TableBody>
                       {paginatedEvents.map(event => {
@@ -597,7 +608,6 @@ export default function EventsPage() {
                         const isActionable = ['Pending', 'Rescheduled', 'Overdue'].includes(event.status);
                         return (
                           <TableRow key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="cursor-pointer hover:bg-muted/50">
-                            {/* --- START OF FIX: Updated table cells --- */}
                             <TableCell>
                               <div className="font-medium">{event.company_name}</div>
                               <div className="text-sm text-muted-foreground">{event.contact_name}</div>
@@ -605,9 +615,18 @@ export default function EventsPage() {
                             <TableCell>
                               <div className="capitalize">{event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}</div>
                             </TableCell>
-                            {/* --- END OF FIX --- */}
                             <TableCell>{event.assigned_to}</TableCell>
                             <TableCell>{formatDateTime(event.start_time)}</TableCell>
+                             <TableCell>
+                                {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 ? (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Timer className="h-4 w-4 text-muted-foreground" />
+                                        <span>{event.duration_minutes} min</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-muted-foreground text-center block">—</span>
+                                )}
+                            </TableCell>
                             <TableCell><Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end items-center gap-2">
@@ -719,6 +738,8 @@ interface EventDetailModalProps {
 const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => {
   if (!event) return null;
 
+  const allParticipants = Array.from(new Set([event.assigned_to, ...event.attendees]));
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg">
@@ -728,9 +749,7 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             For {event.company_name}
           </DialogDescription>
         </DialogHeader>
-        {/* --- START OF FIX: Added scrollable container --- */}
         <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-        {/* --- END OF FIX --- */}
           <div className="grid grid-cols-3 items-center gap-4">
             <Label className="text-right font-semibold">Status</Label>
             <div className="col-span-2">
@@ -745,18 +764,25 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
               <p id="meeting-type" className="col-span-2">{event.meeting_type}</p>
             </div>
           )}
+          
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="scheduled-by" className="text-right font-semibold flex items-center justify-end gap-2">
               <User className="h-4 w-4" /> Scheduled By
             </Label>
             <p id="scheduled-by" className="col-span-2">{event.createdBy}</p>
           </div>
-          <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="assigned-to" className="text-right font-semibold flex items-center justify-end gap-2">
-              <Users className="h-4 w-4" /> Assigned To
+         
+           <div className="grid grid-cols-3 items-start gap-4">
+            <Label htmlFor="attendees" className="text-right font-semibold flex items-start justify-end gap-2 pt-1">
+              <Users className="h-4 w-4" /> Attendees
             </Label>
-            <p id="assigned-to" className="col-span-2">{event.assigned_to}</p>
+            <div id="attendees" className="col-span-2 flex flex-wrap gap-1">
+              {allParticipants.map(attendee => (
+                <Badge key={attendee} variant="secondary" className="font-normal">{attendee}</Badge>
+              ))}
+            </div>
           </div>
+
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="created-at" className="text-right font-semibold flex items-center justify-end gap-2">
               <Clock className="h-4 w-4" /> Scheduled On
@@ -769,6 +795,15 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             </Label>
             <p id="event-time" className="col-span-2">{formatDateTime(event.start_time)}</p>
           </div>
+
+          {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 && (
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="duration" className="text-right font-semibold flex items-center justify-end gap-2">
+                <Timer className="h-4 w-4" /> Time Taken
+              </Label>
+              <p id="duration" className="col-span-2">{event.duration_minutes} minutes</p>
+            </div>
+          )}
 
           {event.status === 'Completed' && event.remark && (
             <div className="grid grid-cols-3 items-start gap-4 pt-4 border-t">
@@ -790,5 +825,5 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

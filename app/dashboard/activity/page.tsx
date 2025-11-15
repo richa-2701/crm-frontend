@@ -1,3 +1,4 @@
+//frontend/app/dashboard/activity/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -38,9 +39,6 @@ import { ActivityDetailModal } from "@/components/activity/activity-detail-modal
 import { formatDateTime, parseAsUTCDate } from "@/lib/date-format";
 
 
-// --- START OF FIX: Updated the UnifiedActivity interface ---
-// Added `creation_date` for sorting purposes.
-// `date` will now specifically be used for displaying the scheduled date.
 export interface UnifiedActivity {
     id: string; 
     type: 'log' | 'reminder' | 'meeting' | 'demo';
@@ -50,16 +48,12 @@ export interface UnifiedActivity {
     details: string;
     logged_or_scheduled: 'Logged' | 'Scheduled';
     status: string;
-    date: string; // The date to DISPLAY (e.g., scheduled time)
-    creation_date: string; // The date to SORT BY (creation time)
+    date: string;
+    creation_date: string;
     isActionable: boolean; 
     raw_activity: ApiActivity | ApiReminder | ApiMeeting | ApiDemo;
+    duration_minutes?: number;
 }
-// --- END OF FIX ---
-
-
-type ViewMode = 'card' | 'grid';
-type FilterType = 'all' | 'today' | 'scheduled' | 'completed' | 'canceled' | 'overdue';
 
 function EditActivityModal({
     isOpen,
@@ -83,18 +77,25 @@ function EditActivityModal({
     }, [activity]);
 
     const handleSubmit = async () => {
-        if (!activity || !details) {
+        if (!activity || !details.trim()) {
             toast({ title: "Error", description: "Details cannot be empty.", variant: "destructive" });
             return;
         }
+
+        if (activity.type !== 'log') {
+            toast({ title: "Action Not Supported", description: "Only logged activities can be edited." });
+            return;
+        }
+        
         setIsLoading(true);
         try {
-            console.warn("Update activity functionality is not implemented in the backend.");
-            toast({ title: "Feature Not Available", description: "Updating logged activities is not supported." });
+            await api.updateLoggedActivity((activity.raw_activity as ApiActivity).id, { details });
+            toast({ title: "Success", description: "Activity has been updated." });
             onSuccess();
         } catch (error) {
             console.error("Failed to update activity:", error);
-            toast({ title: "Error", description: "Could not update the activity.", variant: "destructive" });
+            const errorMessage = error instanceof Error ? error.message : "Could not update the activity.";
+            toast({ title: "Error", description: errorMessage, variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
@@ -102,24 +103,37 @@ function EditActivityModal({
 
     if (!isOpen || !activity) return null;
 
+    const canBeEdited = activity.type === 'log';
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Edit Activity</DialogTitle>
-                    <DialogDescription>Update the details for the activity with {activity.company_name}.</DialogDescription>
+                    <DialogDescription>
+                        {canBeEdited 
+                            ? `Update the details for the activity with ${activity.company_name}.`
+                            : `This activity type (${activity.type}) cannot be edited directly.`}
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label htmlFor="activity-details">Activity Details</Label>
-                        <Textarea id="activity-details" value={details} onChange={(e) => setDetails(e.target.value)} rows={5} placeholder="Enter the updated activity notes..." />
+                        <Textarea 
+                            id="activity-details" 
+                            value={details} 
+                            onChange={(e) => setDetails(e.target.value)} 
+                            rows={5} 
+                            placeholder="Enter the updated activity notes..."
+                            disabled={!canBeEdited}
+                        />
                     </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isLoading || true}>
+                    <Button onClick={handleSubmit} disabled={isLoading || !canBeEdited}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Changes (Disabled)
+                        Save Changes
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -206,8 +220,8 @@ export default function ActivityPage() {
     const [isScheduleModalOpen, setScheduleModalOpen] = useState(false);
     const [isDoneModalOpen, setDoneModalOpen] = useState(false);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('grid');
-    const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+    const [viewMode, setViewMode] = useState<'list' | 'card'>('list'); 
+    const [activeFilter, setActiveFilter] = useState<"all" | "today" | "scheduled" | "completed" | "overdue" | "canceled">('all');
     const [searchTerm, setSearchTerm] = useState("");
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
     const router = useRouter();
@@ -236,8 +250,12 @@ export default function ActivityPage() {
             const now = new Date();
             const unifiedList: UnifiedActivity[] = [];
 
-            // 1. Map Logged Activities (from activity_logs table)
             (loggedActivitiesData || []).forEach((log: ApiActivity) => {
+                // --- START OF FIX: Skip auto-generated activities ---
+                if (log.activity_type === 'auto-schedule' || log.activity_type === 'auto-complete') {
+                    return; // Do not add this activity to the list
+                }
+                // --- END OF FIX ---
                 if (!log.created_at) return;
                 unifiedList.push({
                     id: `log-${log.id}`,
@@ -249,13 +267,13 @@ export default function ActivityPage() {
                     logged_or_scheduled: 'Logged',
                     status: log.phase || 'Activity Logged',
                     date: log.created_at,
-                    creation_date: log.created_at, // Sort by creation date
+                    creation_date: log.created_at,
                     isActionable: false,
                     raw_activity: log,
+                    duration_minutes: log.duration_minutes,
                 });
             });
 
-            // 2. Map Scheduled Reminders
             (remindersData || []).forEach((rem: ApiReminder) => {
                 if (rem.is_hidden_from_activity_log) {
                     return; 
@@ -264,12 +282,12 @@ export default function ActivityPage() {
                 const scheduledDate = parseAsUTCDate(rem.remind_time);
                 if (!scheduledDate || !rem.created_at) return;
                 
-                // --- START OF FIX: Reworked logic for status and actionability ---
                 let displayStatus = rem.status;
                 let isNowActionable = false;
                 const statusLower = rem.status.toLowerCase();
+                const pendingStatuses = ['pending', 'sent', 'failed'];
 
-                if (statusLower === 'pending') {
+                if (pendingStatuses.includes(statusLower)) {
                     if (scheduledDate < now) {
                         displayStatus = 'Overdue';
                     } else {
@@ -277,11 +295,9 @@ export default function ActivityPage() {
                     }
                 }
 
-                // A reminder is actionable as long as it's not completed or canceled.
                 if (statusLower !== 'completed' && statusLower !== 'canceled') {
                     isNowActionable = true;
                 }
-                // --- END OF FIX ---
 
                 unifiedList.push({
                     id: `reminder-${rem.id}`,
@@ -292,27 +308,21 @@ export default function ActivityPage() {
                     details: rem.message,
                     logged_or_scheduled: 'Scheduled',
                     status: displayStatus,
-                    date: rem.remind_time, // Display the scheduled date
-                    creation_date: rem.created_at, // Sort by the creation date
+                    date: rem.remind_time,
+                    creation_date: rem.created_at,
                     isActionable: isNowActionable,
                     raw_activity: rem,
                 });
             });
 
-            // --- START OF FIX: Sort by creation date in descending order ---
             unifiedList.sort((a, b) => parseAsUTCDate(b.creation_date)!.getTime() - parseAsUTCDate(a.creation_date)!.getTime());
-            // --- END OF FIX ---
 
             setAllActivities(unifiedList);
 
         } catch (error) {
             console.error("Detailed Fetch Error:", error);
             const errorMessage = error instanceof Error ? error.message : "Could not retrieve activities.";
-            toast({
-                title: "Error Fetching Data",
-                description: errorMessage,
-                variant: "destructive"
-            });
+            toast({ title: "Error Fetching Data", description: errorMessage, variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
@@ -375,10 +385,7 @@ export default function ActivityPage() {
             setActivityToComplete(activity.raw_activity as ApiReminder);
             setDoneModalOpen(true);
         } else {
-            toast({
-                title: "Action Not Applicable",
-                description: "This type of activity cannot be marked as done from here.",
-            });
+            toast({ title: "Action Not Applicable", description: "This type of activity cannot be marked as done from here." });
         }
     };
 
@@ -391,13 +398,18 @@ export default function ActivityPage() {
         setSelectedLeadForHistory({ id: leadId, name: leadName });
         setPastActivitiesModalOpen(true);
     };
-
+    
     const handleEditClick = (activity: UnifiedActivity) => {
-        toast({
-            title: "Action Not Available",
-            description: "Editing activities is not supported.",
-            variant: "default"
-        });
+        if (activity.type !== 'log') {
+            toast({
+                title: "Action Not Available",
+                description: "Only logged activities can be edited. Scheduled activities must be rescheduled or canceled.",
+                variant: "default"
+            });
+            return;
+        }
+        setActivityToEdit(activity);
+        setEditModalOpen(true);
     };
 
     const handleCancelClick = (activity: UnifiedActivity) => {
@@ -445,7 +457,7 @@ export default function ActivityPage() {
                             </div>
 
                             <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
-                                <RadioGroup value={activeFilter} onValueChange={(value) => setActiveFilter(value as FilterType)} className="flex items-center gap-4">
+                                <RadioGroup value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="flex items-center gap-4">
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="all" id="all-desktop" /><Label htmlFor="all-desktop">All</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="today" id="today-desktop" /><Label htmlFor="today-desktop">Today</Label></div>
                                     <div className="flex items-center space-x-2"><RadioGroupItem value="scheduled" id="scheduled-desktop" /><Label htmlFor="scheduled-desktop">Scheduled</Label></div>
@@ -454,7 +466,7 @@ export default function ActivityPage() {
                                 </RadioGroup>
                                 <div className="flex items-center gap-2">
                                     <Button variant={viewMode === 'card' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('card')}><LayoutGrid className="h-4 w-4" /></Button>
-                                    <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('grid')}><List className="h-4 w-4" /></Button>
+                                    <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('list')}><List className="h-4 w-4" /></Button>
                                 </div>
                             </div>
 
@@ -467,7 +479,7 @@ export default function ActivityPage() {
                                         <div className="grid gap-4">
                                             <div className="space-y-2">
                                                 <h4 className="font-medium leading-none">Status</h4>
-                                                <RadioGroup value={activeFilter} onValueChange={(value) => setActiveFilter(value as FilterType)} className="flex flex-col space-y-2">
+                                                <RadioGroup value={activeFilter} onValueChange={(value) => setActiveFilter(value as any)} className="flex flex-col space-y-2">
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="all" id="all-mobile" /><Label htmlFor="all-mobile">All</Label></div>
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="today" id="today-mobile" /><Label htmlFor="today-mobile">Today</Label></div>
                                                     <div className="flex items-center space-x-2"><RadioGroupItem value="scheduled" id="scheduled-mobile" /><Label htmlFor="scheduled-mobile">Scheduled</Label></div>
@@ -479,7 +491,7 @@ export default function ActivityPage() {
                                                 <h4 className="font-medium leading-none">View</h4>
                                                 <div className="flex items-center gap-2">
                                                     <Button className="flex-1" variant={viewMode === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('card')}><LayoutGrid className="mr-2 h-4 w-4" />Card</Button>
-                                                    <Button className="flex-1" variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')}><List className="mr-2 h-4 w-4" />List</Button>
+                                                    <Button className="flex-1" variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')}><List className="mr-2 h-4 w-4" />List</Button>
                                                 </div>
                                             </div>
                                         </div>
@@ -493,7 +505,7 @@ export default function ActivityPage() {
                             <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>
                         ) : filteredActivities.length === 0 ? (
                             <div className="text-center py-16 text-muted-foreground">No activities match your current filters.</div>
-                        ) : viewMode === 'grid' ? (
+                        ) : viewMode === 'list' ? (
                             <div className="overflow-x-auto">
                                 <ActivityTable
                                     activities={paginatedActivities}
@@ -565,6 +577,12 @@ export default function ActivityPage() {
                         onClose={() => setPastActivitiesModalOpen(false)}
                         leadId={selectedLeadForHistory?.id ?? null}
                         leadName={selectedLeadForHistory?.name ?? null}
+                    />
+                    <EditActivityModal
+                        isOpen={isEditModalOpen}
+                        onClose={() => setEditModalOpen(false)}
+                        activity={activityToEdit}
+                        onSuccess={handleSuccess}
                     />
                     <CancelActivityModal
                         isOpen={isCancelModalOpen}

@@ -1,4 +1,3 @@
-//frontend/components/activity/activity-modal.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { api, ApiLead, ApiUser } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input"; // Import Input
 
 interface ModalProps {
   currentUser: ApiUser;
@@ -21,46 +21,46 @@ export function ActivityModal({ currentUser, isOpen, onClose, onSuccess }: Modal
     const { toast } = useToast();
     const [leads, setLeads] = useState<ApiLead[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [formData, setFormData] = useState({ leadId: "", details: "" });
+    const [formData, setFormData] = useState({ leadId: "", details: "", duration_minutes: "" });
 
     useEffect(() => {
         if (isOpen) {
-            api.getLeads().then(setLeads).catch(() => toast({ title: "Error", description: "Failed to fetch leads." }));
+            api.getAllLeads().then(setLeads).catch(() => toast({ title: "Error", description: "Failed to fetch leads." }));
         }
     }, [isOpen, toast]);
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.leadId || !formData.details.trim()) {
-            toast({ title: "Error", description: "Please select a lead and provide details.", variant: "destructive" });
+        // --- START OF CHANGE: Add duration to validation ---
+        const isLogAction = !formData.details.toLowerCase().includes(" on ") && !formData.details.toLowerCase().includes(" at ");
+        if (!formData.leadId || !formData.details.trim() || (isLogAction && !formData.duration_minutes)) {
+            toast({ title: "Error", description: "Please provide all required fields, including duration for logged activities.", variant: "destructive" });
             return;
         }
+        // --- END OF CHANGE ---
         setIsLoading(true);
 
         const selectedLead = leads.find(lead => String(lead.id) === formData.leadId);
         if (!selectedLead) { setIsLoading(false); return; }
-
-        // Determine if it's a schedule or a log based on keywords
-        const detailsLower = formData.details.toLowerCase();
-        const hasTimeKeyword = detailsLower.includes(" on ") || detailsLower.includes(" at ");
         
         let message = "";
-        if (hasTimeKeyword) {
+        if (!isLogAction) {
             // It's a SCHEDULE command
             const detailsParts = formData.details.split(/( on | at )/i);
             const action = detailsParts[0].trim();
             const timeInfo = formData.details.substring(action.length).trim();
             message = `Remind me to ${action} for ${selectedLead.company_name} ${timeInfo}`;
         } else {
-            // It's a LOG command
-            message = `add activity for ${selectedLead.company_name}, ${formData.details}`;
+            // It's a LOG command - append the duration
+            // NOTE: Your Python backend must be updated to parse this!
+            message = `add activity for ${selectedLead.company_name}, ${formData.details}, took ${formData.duration_minutes} minutes`;
         }
 
         try {
             const response = await api.sendMessage(message, currentUser.usernumber);
             if (response.reply.startsWith("✅") || response.reply.startsWith("👍")) {
                 toast({ title: "Success", description: response.reply });
-                setFormData({ leadId: "", details: "" });
+                setFormData({ leadId: "", details: "", duration_minutes: "" });
                 onSuccess();
                 onClose();
             } else {
@@ -72,6 +72,8 @@ export function ActivityModal({ currentUser, isOpen, onClose, onSuccess }: Modal
             setIsLoading(false);
         }
     };
+    
+    const isLogAction = !formData.details.toLowerCase().includes(" on ") && !formData.details.toLowerCase().includes(" at ");
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -88,6 +90,18 @@ export function ActivityModal({ currentUser, isOpen, onClose, onSuccess }: Modal
                             <SelectContent>{leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
+                     {isLogAction && (
+                        <div className="space-y-2">
+                            <Label>Time Taken (minutes) *</Label>
+                            <Input
+                                type="number"
+                                placeholder="e.g., 30"
+                                value={formData.duration_minutes}
+                                onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
+                                required
+                            />
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label>Activity Details *</Label>
                         <Textarea placeholder="e.g., Called the client... OR Follow up on tomorrow at 3pm." rows={4} required value={formData.details} onChange={(e) => setFormData({ ...formData, details: e.target.value })} />

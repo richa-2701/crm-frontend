@@ -1,4 +1,3 @@
-// frontend/components/activity/past-activities-modal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -10,7 +9,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { api, type ApiActivity } from "@/lib/api";
-import { Loader2, Calendar } from "lucide-react";
+// --- START OF CHANGE: Import Timer icon ---
+import { Loader2, Calendar, Timer } from "lucide-react";
+// --- END OF CHANGE ---
 import { formatDateTime } from "@/lib/date-format";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,20 +27,14 @@ export function PastActivitiesModal({ isOpen, onClose, leadId, leadName }: PastA
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch activities only when the modal is open and a valid leadId is provided
     if (isOpen && leadId) {
       setIsLoading(true);
-      // --- START: FIX ---
-      // The function name was incorrect. It should be `getActivitiesByLead`.
       api.getActivitiesByLead(leadId)
-      // --- END: FIX ---
         .then((data) => {
-          // The API returns activities; we'll sort them to show the most recent first
           setActivities(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         })
         .catch((error) => {
           console.error("Failed to fetch past activities:", error);
-          // You can add a toast notification here for the error if desired
         })
         .finally(() => {
           setIsLoading(false);
@@ -65,14 +60,24 @@ export function PastActivitiesModal({ isOpen, onClose, leadId, leadName }: PastA
             <div className="space-y-4">
               {activities.map((activity) => (
                 <div key={activity.id} className="p-4 rounded-lg border bg-muted/50">
-                  <div className="flex justify-between items-center mb-2">
-                    <Badge variant="secondary" className="font-semibold text-sm capitalize">{activity.phase}</Badge>
+                  <div className="flex justify-between items-start flex-wrap gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="font-semibold text-sm capitalize">{activity.activity_type || activity.phase}</Badge>
+                      {/* --- START OF CHANGE: Conditionally display duration --- */}
+                      {activity.duration_minutes && activity.duration_minutes > 0 && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Timer className="h-3.5 w-3.5" />
+                            <span>{activity.duration_minutes} min</span>
+                          </div>
+                      )}
+                      {/* --- END OF CHANGE --- */}
+                    </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
                       <Calendar className="h-3 w-3" />
-                      {formatDateTime(activity.created_at)}
+                      <span>{formatDateTime(activity.created_at)} by {activity.created_by}</span>
                     </div>
                   </div>
-                  <p className="resize-y break-all pr-10">{activity.details}</p>
+                  <p className="text-sm text-gray-800 dark:text-gray-300">{activity.details}</p>
                 </div>
               ))}
             </div>

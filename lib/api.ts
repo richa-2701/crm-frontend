@@ -7,13 +7,19 @@ import { AlertDialog } from "@radix-ui/react-alert-dialog";
 import { Dialog } from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:57214").replace(/\/api$/, "") + "/api";
+const CSHARP_API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:57214").replace(/\/api$/, "") + "/api";
+const PYTHON_API_BASE_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL?.replace(/\/$/, "");
 
 // 🧠 Helper: Get saved company credentials
 function getCompanyAuthHeader(): string | null {
   if (typeof window === "undefined") return null;
   const creds = localStorage.getItem("companyAuth");
   return creds ? `Basic ${creds}` : null;
+}
+
+function getCompanyAuthName(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("companyName");
 }
 
 // 🧠 Helper: Save company credentials
@@ -60,13 +66,11 @@ function parseMicrosoftDate(dateString: string | null | undefined): Date | null 
     if (!dateString) {
         return null;
     }
-    // Check if it's the Microsoft format
     const msDateMatch = dateString.match(/\/Date\((\d+)\)\//);
     if (msDateMatch && msDateMatch[1]) {
         const timestamp = parseInt(msDateMatch[1], 10);
         return new Date(timestamp);
     }
-    // Otherwise, try to parse it as a standard ISO string
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
         return date;
@@ -124,6 +128,13 @@ export interface LeadAttachment {
   original_file_name: string;
   uploaded_by: string;
   uploaded_at: string;
+}
+
+export interface ApiActivityFilterPayload {
+  lead_id: number;
+  activity_type?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface ApiLead {
@@ -248,13 +259,83 @@ export interface ApiClient {
   attachments?: LeadAttachment[];
 }
 
+
+
 export interface ApiReportKpiSummary {
   new_leads_assigned: number;
   meetings_completed: number;
   demos_completed: number;
   activities_logged: number;
   deals_won: number;
+  tasks_created: number;
+  tasks_completed: number;
   conversion_rate: number;
+  total_meeting_duration: number;
+  total_demo_duration: number;
+  total_activity_duration: number;
+  total_task_duration: number;
+}
+
+
+export interface ReportNewLeadDetail {
+    id: number;
+    company_name: string;
+    source: string;
+    status: string;
+    created_at: string;
+    contact_name: string | null;
+    contact_phone: string | null;
+}
+
+export interface ReportMeetingDetail {
+    id: number;
+    company_name: string;
+    meeting_type: string;
+    event_time: string;
+    remark: string;
+    duration_minutes?: number;
+}
+
+export interface ReportDemoDetail {
+    id: number;
+    company_name: string;
+    start_time: string;
+    remark: string;
+    duration_minutes?: number;
+}
+
+export interface ReportActivityDetail {
+    id: number;
+    company_name: string;
+    activity_type: string;
+    details: string;
+    created_at: string;
+    duration_minutes?: number;
+}
+
+export interface ReportTaskDetail {
+    id: number;
+    title: string;
+    details: string;
+    company_names: string | null;
+    status: string;
+    completed_at: string;
+    duration_minutes?: number;
+    created_at: string;
+    due_date: string;
+}
+
+export interface ReportDealsWonDetail {
+    client_id: number;
+    company_name: string;
+    source: string;
+    converted_date: string;
+    time_to_close: number;
+}
+
+export interface ApiLeadSearchResult {
+  id: number;
+  company_name: string;
 }
 
 interface ReportDetailItem {
@@ -268,21 +349,17 @@ export interface ApiReportData {
   visualizations: {
     activity_volume: { name: string; value: number }[];
     lead_outcome: { name: string; value: number }[];
+    time_allocation: { name: string; value: number }[];
   };
   tables: {
-    deals_won: {
-      client_id: number;
-      company_name: string;
-      converted_date: string;
-      source: string;
-      time_to_close: number;
-    }[];
+    deals_won: ReportDealsWonDetail[];
   };
   details: {
-    new_leads_assigned: ReportDetailItem[];
-    meetings_completed: ReportDetailItem[];
-    demos_completed: ReportDetailItem[];
-    activities_logged: ReportDetailItem[];
+    new_leads_assigned: ReportNewLeadDetail[];
+    meetings_completed: ReportMeetingDetail[];
+    demos_completed: ReportDemoDetail[];
+    activities_logged: ReportActivityDetail[];
+    tasks_completed: ReportTaskDetail[];
   }
 }
 
@@ -367,6 +444,7 @@ export interface ApiActivity {
   created_at: string;
   created_by: string;
   attachment_path?: string;
+  duration_minutes?: number;
   activity_type: string;
 }
 
@@ -384,6 +462,8 @@ export interface ApiMeeting {
   phase: string;
   remark?: string;
   created_at: string;
+  attendees?: string[];
+  duration_minutes?: number;
 }
 
 export interface ApiDemo {
@@ -399,7 +479,10 @@ export interface ApiDemo {
   remark?: string;
   created_at: string;
   updated_at: string;
+  attendees?: string[];
+  duration_minutes?: number;
 }
+
 
 export interface ApiMessageMaster {
   id: number;
@@ -529,41 +612,82 @@ export interface ConvertLeadToClientPayload {
   contacts?: ClientContact[];
 }
 
+// --- NEW: Task Interfaces ---
+export interface ApiTask {
+  id: number;
+  title: string;
+  details?: string;
+  lead_ids?: string; 
+  company_names?: string; 
+  assigned_to_user_id: number;
+  assigned_to_username: string;
+  created_by_user_id: number;
+  created_by_username: string;
+  due_date: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  started_at?: string;
+  duration_minutes?: number;
+}
+
+export interface ApiTaskCreatePayload {
+  title: string;
+  details?: string;
+  lead_ids?: number[]; 
+  created_by_user_id: number;
+  assigned_to_user_id: number;
+  due_date: string; 
+}
+
+export interface ApiTaskCompletePayload {
+  task_id: number;
+  activity_ids?: number[];
+}
+
 // --------------------------------------------------------------
 // FETCHERS
 // --------------------------------------------------------------
-async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
+async function fetcher<T>(
+  url: string,
+  options: RequestInit = {},
+  target: 'csharp' | 'python' = 'csharp'
+): Promise<T> {
+  const baseUrl = target === 'csharp' ? CSHARP_API_BASE_URL : PYTHON_API_BASE_URL;
+  if (!baseUrl) {
+    throw new Error(`API base URL for '${target}' is not configured.`);
+  }
+
   const defaultHeaders: Record<string, string> = {
     "ngrok-skip-browser-warning": "true",
   };
 
-  const authHeader = getCompanyAuthHeader();
-  if (authHeader) defaultHeaders["Authorization"] = authHeader;
+  if (target === 'csharp') {
+      const authHeader = getCompanyAuthHeader();
+      if (authHeader) defaultHeaders["Authorization"] = authHeader;
+  }
 
   if (options.body && !(options.body instanceof FormData))
     defaultHeaders["Content-Type"] = "application/json";
 
   try {
-    const fullUrl = `${API_BASE_URL}/${url}`;
+    const fullUrl = `${baseUrl}/${url}`;
     
     const response = await fetch(fullUrl, {
       ...options,
       headers: { ...defaultHeaders, ...options.headers },
     });
 
-    // --- START OF FIX: This block now correctly throws an error for any non-ok response ---
     if (!response.ok) {
       const text = await response.text();
-      // Use console.warn for 409, but still throw the error so the UI can catch it.
       if (response.status === 409) {
         console.warn(`[API Conflict]`, response.status, text);
       } else {
         console.error("[API Error]", response.status, text);
       }
-      // Always throw the error to be handled by the calling function's catch block.
       throw new Error(`API ${response.status}: ${text}`);
     }
-    // --- END OF FIX ---
 
     const contentType = response.headers.get("content-type");
     const disposition = response.headers.get("content-disposition");
@@ -597,15 +721,12 @@ async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
     
     return response.text() as unknown as T;
   } catch (error: any) {
-    // --- START OF FIX: This ensures any error, including the one we throw above, is propagated ---
     if (error && error.message && error.message.includes("409")) {
         console.warn("[Network Fetch Conflict]", url, error.message);
     } else {
         console.error("[Network Fetch Failed]", url, error);
     }
-    // Re-throw the error so the component's try/catch block can handle it.
     throw error;
-    // --- END OF FIX ---
   }
 }
 
@@ -668,6 +789,12 @@ const unifiedApi = {
     }
     return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
   },
+
+  searchLeads: (searchTerm: string): Promise<ApiLeadSearchResult[]> => 
+    fetcher("Leads/Search", { 
+      method: "POST", 
+      body: JSON.stringify({ SearchTerm: searchTerm }) 
+    }),
   
   getLeadById: (leadId: number): Promise<ApiLead> => {
       return fetcher("Leads/GetLeadDetails", {
@@ -731,7 +858,7 @@ const unifiedApi = {
   updateClient: (clientId: number, clientData: ApiClientUpdatePayload): Promise<ApiClient> =>
     fetcher(`Client/Update`, { method: "POST", body: JSON.stringify({ Id: clientId, Client: mapKeysToPascalCase(clientData), Contacts: mapKeysToPascalCase(clientData.contacts) }) }),
 
-  // 📁 Bulk Upload (Requires backend implementation for FormData)
+  // 📁 Bulk Upload
   uploadBulkLeads: (file: File): Promise<ApiBulkUploadResponse> => {
     const formData = new FormData();
     formData.append("file", file);
@@ -739,36 +866,48 @@ const unifiedApi = {
   },
   
   // 🕓 Activities & Reminders
-  getAllActivities: (): Promise<ApiActivity[]> =>
-    fetcher("Activity/GetAllActivities", { method: "POST", body: JSON.stringify({}) }),
+  getAllActivities: (filters: { leadId?: number } = {}): Promise<ApiActivity[]> =>
+    fetcher("Activity/GetAllActivities", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(filters)) }),
   
   getActivitiesByLead: (leadId: number): Promise<ApiActivity[]> =>
     fetcher("Activity/GetByLead", { method: "POST", body: JSON.stringify({ LeadId: leadId })}),
   
+  getFilteredActivitiesForLead: (payload: ApiActivityFilterPayload): Promise<ApiActivity[]> =>
+    fetcher("Activity/GetFilteredActivities", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+
   logActivity: (payload: { 
     lead_id: number; 
     details: string; 
     phase: string; 
     activity_type: string; 
+    created_by: string; 
     attachment_path?: string | null; 
+    duration_minutes?: number;
   }): Promise<{message: string}> =>
     fetcher("Activity/AddManualActivity", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  
+  updateLoggedActivity: (activityId: number, payload: { details: string }): Promise<{ message: string }> =>
+    fetcher("Activity/Update", { 
+        method: "POST", 
+        body: JSON.stringify({ ActivityId: activityId, Details: payload.details }) 
+    }),
 
   deleteLoggedActivity: (activityId: number, reason: string): Promise<{message: string}> => 
     fetcher(`Activity/Delete`, { method: "POST", body: JSON.stringify({ ActivityId: activityId, Reason: reason }) }),
   
-  getAllReminders: (): Promise<ApiReminder[]> => 
-    fetcher("Reminders/GetAll", { method: "POST", body: JSON.stringify({})}),
+  getAllReminders: (filters: { leadId?: number } = {}): Promise<ApiReminder[]> => 
+    fetcher("Reminders/GetAll", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(filters))}),
+  
   getUpcomingReminders: (): Promise<ApiReminder[]> =>
     fetcher("Reminders/GetUpcoming", {method: 'POST', body: JSON.stringify({})}),
   scheduleReminder: (payload: any): Promise<{message: string}> =>
     fetcher("Reminders/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
   markReminderDone: (reminderId: number): Promise<{ message: string }> =>
     fetcher(`Reminders/UpdateStatus`, { method: "POST", body: JSON.stringify({ ReminderId: reminderId, Status: "Completed" }) }),
-  completeAndLogReminder: (reminderId: number, outcomeNotes: string, completedBy: string): Promise<{ message: string }> => 
+  completeAndLogReminder: (reminderId: number, outcomeNotes: string, completedBy: string, durationMinutes: number): Promise<{ message: string }> => 
     fetcher(`Reminders/CompleteAndLog`, { 
         method: "POST", 
-        body: JSON.stringify({ ReminderId: reminderId, OutcomeNotes: outcomeNotes, CompletedBy: completedBy }) 
+        body: JSON.stringify({ ReminderId: reminderId, OutcomeNotes: outcomeNotes, CompletedBy: completedBy, DurationMinutes: durationMinutes }) 
     }),
   cancelReminder: (reminderId: number): Promise<{message: string}> => 
     fetcher(`Reminders/Delete`, { method: "POST", body: JSON.stringify({ ReminderId: reminderId }) }),
@@ -782,7 +921,7 @@ const unifiedApi = {
     });
   },
 
-  addActivityWithAttachment: async (leadId: number, details: string, file: File): Promise<{ message: string }> => {
+  addActivityWithAttachment: async (leadId: number, details: string, file: File, createdBy: string): Promise<{ message: string }> => {
     const uploadResponse = await unifiedApi.uploadActivityAttachment(file);
     const attachmentPath = uploadResponse.file_path;
 
@@ -796,35 +935,145 @@ const unifiedApi = {
       phase: 'Quotation',
       activity_type: 'Quotation',
       attachment_path: attachmentPath,
+      created_by: createdBy
     });
   },
+  
+  scheduleMeeting: async (payload: {
+    lead_id: number;
+    assigned_to: string;
+    event_time: string;
+    event_end_time: string;
+    created_by: string;
+    meeting_type: string;
+    attendees: string[];
+    company_auth_name: string | null;
+  }): Promise<ApiMeeting> => {
+    const leadDetails = await unifiedApi.getLeadById(payload.lead_id);
+    if (!leadDetails || !leadDetails.company_name) {
+      throw new Error(`Could not find company name for lead ID: ${payload.lead_id}`);
+    }
+    const companyName = leadDetails.company_name;
 
+    const csharpResponse = await fetcher("Meetings/Create", { 
+      method: "POST", 
+      body: JSON.stringify(mapKeysToPascalCase(payload)) 
+    });
 
-  // 🗓️ Meetings / Demos
-  scheduleMeeting: (payload: any): Promise<ApiMeeting> =>
-    fetcher("Meetings/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
-  scheduleDemo: (payload: any): Promise<ApiDemo> =>
-    fetcher("Demos/Create", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
-  getAllMeetings: async (): Promise<ApiMeeting[]> => {
-    const response: any = await fetcher("Meetings/GetAll", { method: "POST", body: JSON.stringify({}) });
+    if (csharpResponse && payload.company_auth_name) {
+      const pythonPayload = {
+        event_type: "Meeting",
+        company_name: companyName,
+        start_time_utc: payload.event_time,
+        end_time_utc: payload.event_end_time,
+        scheduled_by: payload.created_by,
+        attendee_usernames: payload.attendees,
+        company_auth_name: payload.company_auth_name,
+      };
+
+      try {
+        console.log("Attempting to send email notification via Python API with payload:", pythonPayload);
+        await fetcher(
+          'internal/send-event-email',
+          {
+            method: 'POST',
+            body: JSON.stringify(pythonPayload)
+          },
+          'python'
+        );
+        console.log("Python API notification request sent successfully.");
+      } catch (error) {
+        console.error("Failed to send email notification via Python API:", error);
+        toast.error("Meeting was scheduled, but failed to send email notifications.");
+      }
+    }
+    
+    return csharpResponse as ApiMeeting;
+  },
+
+  scheduleDemo: async (payload: {
+    lead_id: number;
+    assigned_to: string;
+    start_time: string;
+    event_end_time: string;
+    scheduled_by: string;
+    attendees: string[];
+    company_auth_name: string | null;
+  }): Promise<ApiDemo> => {
+    const leadDetails = await unifiedApi.getLeadById(payload.lead_id);
+    if (!leadDetails || !leadDetails.company_name) {
+      throw new Error(`Could not find company name for lead ID: ${payload.lead_id}`);
+    }
+    const companyName = leadDetails.company_name;
+
+    const csharpResponse = await fetcher("Demos/Create", { 
+      method: "POST", 
+      body: JSON.stringify(mapKeysToPascalCase({ ...payload, event_time: payload.start_time })) 
+    });
+
+    if (csharpResponse && payload.company_auth_name) {
+      const pythonPayload = {
+        event_type: "Demo",
+        company_name: companyName,
+        start_time_utc: payload.start_time,
+        end_time_utc: payload.event_end_time,
+        scheduled_by: payload.scheduled_by,
+        attendee_usernames: payload.attendees,
+        company_auth_name: payload.company_auth_name,
+      };
+      
+      try {
+        console.log("Attempting to send demo notification via Python API with payload:", pythonPayload);
+        await fetcher(
+          'internal/send-event-email',
+          {
+            method: 'POST',
+            body: JSON.stringify(pythonPayload)
+          },
+          'python'
+        );
+        console.log("Python API demo notification sent successfully.");
+      } catch (error) {
+        console.error("Failed to send demo notification via Python API:", error);
+        toast.error("Demo was scheduled, but failed to send email notifications.");
+      }
+    }
+
+    return csharpResponse as ApiDemo;
+  },
+
+  getAllMeetings: async (filters: { leadId?: number } = {}): Promise<ApiMeeting[]> => {
+    const response: any = await fetcher("Meetings/GetAll", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(filters)) });
     if (response && typeof response === 'string') {
         const parsedData = JSON.parse(response);
         return mapKeysToSnakeCase(parsedData);
     }
     return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
   },
-  getAllDemos: async (): Promise<ApiDemo[]> => {
-    const response: any = await fetcher("Demos/GetAll", { method: "POST", body: JSON.stringify({}) });
+  getScheduledMeetings: async (): Promise<ApiMeeting[]> => {
+    const allMeetings = await unifiedApi.getAllMeetings();
+    return allMeetings.filter(m => m.phase === 'Scheduled' || m.phase === 'Rescheduled');
+  },
+
+  getAllDemos: async (filters: { leadId?: number } = {}): Promise<ApiDemo[]> => {
+    const response: any = await fetcher("Demos/GetAll", { method: "POST", body: JSON.stringify(mapKeysToPascalCase(filters)) });
      if (response && typeof response === 'string') {
         const parsedData = JSON.parse(response);
         return mapKeysToSnakeCase(parsedData);
     }
     return Array.isArray(response) ? mapKeysToSnakeCase(response) : [];
   },
-  completeMeeting: (payload: { MeetingId: number; Remark: string }): Promise<{ message: string }> =>
+
+  getScheduledDemos: async (): Promise<ApiDemo[]> => {
+    const allDemos = await unifiedApi.getAllDemos();
+    return allDemos.filter(d => d.phase === 'Scheduled' || d.phase === 'Rescheduled');
+  },
+
+  completeMeeting: (payload: { MeetingId: number; Remark: string; DurationMinutes?: number }): Promise<{ message: string }> =>
     fetcher("Meetings/Complete", { method: "POST", body: JSON.stringify(payload) }),
-  completeDemo: (payload: { DemoId: number; Remark: string }): Promise<{ message: string }> =>
+  completeDemo: (payload: { DemoId: number; Remark: string; DurationMinutes?: number }): Promise<{ message: string }> =>
     fetcher("Demos/Complete", { method: "POST", body: JSON.stringify(payload) }),
+  
   rescheduleMeeting: (meetingId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> =>
     fetcher(`Meetings/Reschedule`, {
       method: "POST",
@@ -886,7 +1135,7 @@ const unifiedApi = {
            
             let endTime = parseMicrosoftDate(meeting.event_end_time);
             if (!endTime) {
-                endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Default to 1 hour
+                endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
             }
 
             if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
@@ -916,7 +1165,7 @@ const unifiedApi = {
             
             let endTime = parseMicrosoftDate(demo.event_end_time);
             if (!endTime) {
-                endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Default to 1 hour
+                endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
             }
             
             if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
@@ -1005,7 +1254,24 @@ const unifiedApi = {
   assignDripToLead: (leadId: number, dripSequenceId: number): Promise<{message: string}> =>
     fetcher("DripSequence/AssignToLead", { method: "POST", body: JSON.stringify({ LeadId: leadId, DripSequenceId: dripSequenceId, StartDate: new Date().toISOString(), IsActive: true }) }),
 
+  // ✅ Tasks
+  createTask: (payload: ApiTaskCreatePayload): Promise<{message: string}> =>
+    fetcher(`Tasks/Create`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  getTasksForUser: (userId?: number): Promise<ApiTask[]> =>
+    fetcher(`Tasks/GetForUser`, { method: "POST", body: JSON.stringify({ UserId: userId }) }),
+  
+  getActivitiesForTask: (taskId: number): Promise<ApiActivity[]> =>
+    fetcher(`Tasks/GetActivitiesForTask`, { method: "POST", body: JSON.stringify({ TaskId: taskId }) }),
 
+  syncTaskActivities: (taskId: number, activityIds: number[]): Promise<{message: string}> =>
+    fetcher(`Tasks/SyncTaskActivities`, { method: "POST", body: JSON.stringify({ TaskId: taskId, ActivityIds: activityIds }) }),
+
+
+  updateTaskStatus: (taskId: number, status: 'Pending' | 'In Progress' | 'Completed'): Promise<{message: string}> =>
+    fetcher(`Tasks/UpdateStatus`, { method: "POST", body: JSON.stringify({ TaskId: taskId, Status: status }) }),
+  completeTask: (payload: ApiTaskCompletePayload): Promise<{message: string}> =>
+    fetcher(`Tasks/Complete`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) }),
+  
   
   // 📈 Reports
   getUserPerformanceReport: (userId: number, startDate: string, endDate: string): Promise<ApiReportData> => 
@@ -1024,8 +1290,7 @@ const unifiedApi = {
 // --------------------------------------------------------------
 // EXPORTED API GROUPS
 // --------------------------------------------------------------
-export const api = unifiedApi;
-
+export const api = { ...unifiedApi, getCompanyAuthName };
 
 
 export const masterDataApi = {
@@ -1049,6 +1314,7 @@ export const userApi = {
 export const leadApi = {
   getAllLeads: unifiedApi.getAllLeads,
   getLeadById: unifiedApi.getLeadById,
+  searchLeads: unifiedApi.searchLeads,
   createLead: unifiedApi.createLead,
   updateLead: unifiedApi.updateLead,
   softDeleteLead: unifiedApi.softDeleteLead,
@@ -1077,6 +1343,7 @@ export const clientApi = {
 export const activityApi = {
   getAllActivities: unifiedApi.getAllActivities,
   getActivitiesByLead: unifiedApi.getActivitiesByLead,
+  getFilteredActivitiesForLead: unifiedApi.getFilteredActivitiesForLead,
   logActivity: unifiedApi.logActivity,
   addActivityWithAttachment: unifiedApi.addActivityWithAttachment,
   deleteLoggedActivity: unifiedApi.deleteLoggedActivity,
@@ -1090,12 +1357,14 @@ export const activityApi = {
 export const meetingsApi = {
   scheduleMeeting: unifiedApi.scheduleMeeting,
   getAllMeetings: unifiedApi.getAllMeetings,
+  getScheduledMeetings: unifiedApi.getScheduledMeetings,
   completeMeeting: unifiedApi.completeMeeting,
 };
 
 export const demosApi = {
   scheduleDemo: unifiedApi.scheduleDemo,
   getAllDemos: unifiedApi.getAllDemos,
+  getScheduledDemos: unifiedApi.getScheduledDemos,
   completeDemo: unifiedApi.completeDemo,
 };
 
@@ -1115,22 +1384,31 @@ export const dripSequenceApi = {
   assignDripToLead: unifiedApi.assignDripToLead,
 };
 
-// Placeholder exports for features not fully implemented in the provided C# code
 export const reportApi = {
   getUserPerformanceReport: unifiedApi.getUserPerformanceReport,
   exportSummaryReport: unifiedApi.exportSummaryReport,
 };
 
 export const chatApi = {
-  sendMessage: (message: string, userPhone: string): Promise<{ status: string; reply: string }> => {
-    console.warn("chatApi.sendMessage is a placeholder.");
-    return Promise.reject("Not Implemented");
-  }
+  sendMessage: (message: string, userPhone: string): Promise<{ reply: string }> => {
+    return fetcher(
+      "app", 
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message: message,
+          user_phone: userPhone,
+        }),
+      },
+      'python' 
+    );
+  },
 };
 
 export const taskApi = {
-  getUserTasks: (username: string): Promise<any> => {
-    console.warn("taskApi.getUserTasks is a placeholder.");
-    return Promise.reject("Not Implemented");
-  }
+  createTask: unifiedApi.createTask,
+  getTasksForUser: unifiedApi.getTasksForUser,
+  updateTaskStatus: unifiedApi.updateTaskStatus,
+  //linkActivitiesToTask: unifiedApi.linkActivitiesToTask, This function does not exist
+  completeTask: unifiedApi.completeTask,
 };

@@ -1,3 +1,4 @@
+// frontend/App/dashboard/leads/[leadId]/page.tsx
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
@@ -192,6 +193,9 @@ export default function LeadDetailPage() {
 
   if (!lead) return null
 
+  const creator = users.find(u => u.id === lead?.created_by.toString());
+  const creatorName = creator ? creator.name : lead?.created_by;
+
   return (
     <>
       <div className="space-y-6">
@@ -309,6 +313,7 @@ export default function LeadDetailPage() {
                               <CardHeader><CardTitle>Lead Classification</CardTitle></CardHeader>
                               <CardContent className="space-y-5">
                                   <IconInfoField label="Source" value={lead.source} icon={Globe} />
+                                  <IconInfoField label="Created By" value={creatorName} icon={User} />
                                   <IconInfoField label="Segment" value={lead.segment} icon={Building} />
                                   <IconInfoField label="Lead Type" value={lead.lead_type} icon={Tag} />
                                   <IconInfoField label="Team Size" value={lead.team_size} icon={Users} />

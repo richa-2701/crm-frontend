@@ -8,10 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogDescription, DialogTitle, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { api, ApiLead, ApiUser } from "@/lib/api";
+import { api, ApiUser, ApiLeadSearchResult  } from "@/lib/api";
 import { Loader2, Mic, MicOff } from "lucide-react";
-// --- FIX: Import a debounce utility. If you don't have one, you can use lodash or create a simple one. ---
-import { debounce } from "lodash"; // Example using lodash. `npm install lodash @types/lodash` if not already installed.
+import { debounce } from "lodash";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ModalProps {
     currentUser: ApiUser;
@@ -29,11 +29,31 @@ const getDefaultDateTimeLocal = () => {
     return adjustedDate.toISOString().slice(0, 16);
 };
 
+const convertLocalStringToUtcIso = (localString: string): string => {
+    if (!localString) return "";
+
+    const [datePart, timePart] = localString.split('T');
+    if (!datePart || !timePart) {
+        console.warn("Invalid datetime-local string format:", localString);
+        return new Date(localString).toISOString();
+    }
+
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    
+    const localDate = new Date(year, month - 1, day, hour, minute);
+
+    return localDate.toISOString();
+};
+
 export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess }: ModalProps) {
     const { toast } = useToast();
-    const [leads, setLeads] = useState<ApiLead[]>([]);
+    const [allLeads, setAllLeads] = useState<ApiLeadSearchResult[]>([]);
+    const [filteredLeads, setFilteredLeads] = useState<ApiLeadSearchResult[]>([]);
+    const [hasFetchedInitialLeads, setHasFetchedInitialLeads] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isFetchingLeads, setIsFetchingLeads] = useState(false); // State for lead search
+    const [isFetchingData, setIsFetchingData] = useState(false);
+    const [isFetchingLeads, setIsFetchingLeads] = useState(false);
     
     const [formData, setFormData] = useState({ 
         leadId: "", 
@@ -53,7 +73,6 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
         browserSupportsSpeechRecognition
     } = useSpeechRecognition();
 
-    // --- OPTIMIZATION: Fetch only activity types when the modal opens, not all leads. ---
     useEffect(() => {
         if (isOpen) {
             setFormData({ 
@@ -64,8 +83,10 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
             });
             setOtherActivityType("");
             resetTranscript();
-            setLeads([]); // Clear the leads from the previous session
+            setFilteredLeads([]); 
+            setHasFetchedInitialLeads(false); 
 
+            setIsFetchingData(true);
             api.getByCategory("activity_type")
                 .then((activityTypesData) => {
                     const types = activityTypesData.map(item => item.value);
@@ -73,33 +94,39 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                     if (types.length > 0) {
                         setFormData(prev => ({ ...prev, activityType: types[0] }));
                     }
-                }).catch(() => toast({ title: "Error", description: "Failed to fetch activity types." }));
+                }).catch(() => toast({ title: "Error", description: "Failed to fetch activity types." }))
+                .finally(() => setIsFetchingData(false));
         }
     }, [isOpen, toast, resetTranscript]);
     
-    // --- OPTIMIZATION: Debounced function to search for leads on demand ---
-    const searchLeads = useCallback(
-        debounce(async (searchTerm: string) => {
-            if (searchTerm.length < 2) {
-                setLeads([]);
-                return;
-            }
+    const handleLeadDropdownOpen = async (open: boolean) => {
+        if (open && !hasFetchedInitialLeads) {
             setIsFetchingLeads(true);
             try {
-                // Ideally, this would be a dedicated search endpoint like `api.searchLeads({ company_name: searchTerm })`
-                // For now, we filter the full list, but the debounce prevents excessive calls.
-                const allLeads = await api.getAllLeads();
-                const filteredLeads = allLeads.filter(lead => 
-                    lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
-                );
-                setLeads(filteredLeads);
+                const results = await api.searchLeads("");
+                setAllLeads(results);
+                setFilteredLeads(results);
+                setHasFetchedInitialLeads(true);
             } catch (error) {
-                toast({ title: "Error", description: "Could not search for leads." });
+                toast({ title: "Error", description: "Could not fetch the list of leads." });
             } finally {
                 setIsFetchingLeads(false);
             }
-        }, 300), // 300ms delay after user stops typing
-        [toast]
+        }
+    };
+
+    const searchLeads = useCallback(
+        debounce((searchTerm: string) => {
+            if (!searchTerm) {
+                setFilteredLeads(allLeads);
+                return;
+            }
+            const filtered = allLeads.filter(lead => 
+                lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            setFilteredLeads(filtered);
+        }, 200),
+        [allLeads]
     );
 
     useEffect(() => {
@@ -127,8 +154,12 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
         setIsLoading(true);
 
         try {
-            const localDateTime = new Date(formData.remindDateTime);
-            const utcIsoString = localDateTime.toISOString();
+            const utcIsoString = convertLocalStringToUtcIso(formData.remindDateTime);
+            if (!utcIsoString) {
+                toast({ title: "Error", description: "The provided date and time is invalid.", variant: "destructive" });
+                setIsLoading(false);
+                return;
+            }
 
             const payload = {
                 lead_id: Number(formData.leadId),
@@ -174,11 +205,11 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                 <form onSubmit={handleSubmit} className="space-y-6 pt-4">
                     <div className="space-y-2 ">
                         <Label>Lead Name *</Label>
-                        {/* --- OPTIMIZATION: Changed to a searchable Select component --- */}
                         <Select
                             required
                             value={formData.leadId}
                             onValueChange={(value) => setFormData({ ...formData, leadId: value })}
+                            onOpenChange={handleLeadDropdownOpen}
                         >
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Type to search for a lead..." />
@@ -188,19 +219,21 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                                     <Input
                                         placeholder="Search by company name..."
                                         onChange={(e) => searchLeads(e.target.value)}
+                                        onKeyDown={(e) => e.stopPropagation()}
                                         autoFocus
                                     />
                                 </div>
-                                {isFetchingLeads && (
-                                    <div className="flex items-center justify-center p-2">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    </div>
-                                )}
-                                {leads.length > 0 ? (
-                                    leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
-                                ) : (
-                                    !isFetchingLeads && <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
-                                )}
+                                <ScrollArea className="h-[200px]">
+                                    {isFetchingLeads ? (
+                                        <div className="flex items-center justify-center p-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    ) : filteredLeads.length > 0 ? (
+                                        filteredLeads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
+                                    ) : (
+                                        !isFetchingLeads && <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
+                                    )}
+                                </ScrollArea>
                             </SelectContent>
                         </Select>
                     </div>
@@ -240,6 +273,7 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                     <div className="space-y-2">
                         <Label htmlFor="details-schedule">Reminder Details *</Label>
                         <div className="relative">
+                            {/* --- START OF FIX: Added max-h-24 class to make the Textarea scrollable --- */}
                             <Textarea
                                 id="details-schedule"
                                 placeholder="e.g., Follow up on the proposal. Or click the mic to speak."
@@ -247,8 +281,9 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                                 required
                                 value={formData.details}
                                 onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                                className="resize-y break-all pr-10"
+                                className="resize-y break-all pr-10 max-h-24"
                             />
+                            {/* --- END OF FIX --- */}
                             {browserSupportsSpeechRecognition && (
                                 <Button
                                     type="button"
@@ -266,7 +301,7 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" disabled={isLoading}>
+                        <Button type="submit" disabled={isLoading || isFetchingData}>
                             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Schedule Reminder
                         </Button>

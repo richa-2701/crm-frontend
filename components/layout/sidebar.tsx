@@ -1,4 +1,3 @@
-//frontend/components/layout/sidebar.tsx
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -21,13 +20,13 @@ import {
   ChevronRight, 
   ChevronLeft,
   Users,
-  ChevronDown, // <-- 1. Icon for the accordion toggle
-  Trash2 // <-- NEW: Icon for Recycle Bin
+  ChevronDown,
+  Trash2,
+  CheckSquare // <-- NEW: Icon for Tasks
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ApiUser } from "@/lib/api"
-// <-- 2. Import the Collapsible component from shadcn/ui -->
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState } from "react"
 
@@ -71,7 +70,7 @@ const navigationConfig: NavItem[] = [
       { title: "Leads", href: "/dashboard/leads", icon: ListChecks },
       { title: "Create Lead", href: "/dashboard/create-lead", icon: Menu },
       { title: "Bulk Upload Leads", href: "/dashboard/bulk-upload", icon: UploadCloud },
-      { title: "Recycle Bin", href: "/dashboard/leads/recycle-bin", icon: Trash2 }, // <-- NEW: Recycle Bin Link
+      { title: "Recycle Bin", href: "/dashboard/leads/recycle-bin", icon: Trash2 },
     ]
   },
   {
@@ -96,6 +95,7 @@ const navigationConfig: NavItem[] = [
     ]
   },
   { type: 'link', title: "Activity", href: "/dashboard/activity", icon: MessageSquare, adminOnly: false },
+  { type: 'link', title: "Tasks", href: "/dashboard/tasks", icon: CheckSquare, adminOnly: false }, // <-- NEW: Tasks Link
   { type: 'link', title: "Reports", href: "/dashboard/reports", icon: BarChartHorizontal, adminOnly: true },
   { type: 'link', title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
   {
@@ -112,15 +112,12 @@ const navigationConfig: NavItem[] = [
 ]
 
 
-// <-- 3. This is the new component that creates the accordion effect -->
 function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGroup; isCollapsed?: boolean; onItemClick?: () => void }) {
     const pathname = usePathname();
     const isGroupActive = group.children.some(child => pathname.startsWith(child.href));
     
-    // Each group manages its own open/closed state. It starts open if a child link is active.
     const [isOpen, setIsOpen] = useState(isGroupActive);
 
-    // When the sidebar is fully collapsed, we just show a tooltip, no accordion.
     if (isCollapsed) {
         return (
             <TooltipProvider>
@@ -143,7 +140,6 @@ function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGr
         );
     }
     
-    // This is the main accordion-style menu for the expanded sidebar
     return (
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <CollapsibleTrigger asChild>
@@ -167,7 +163,7 @@ function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGr
                             href={child.href}
                             onClick={onItemClick}
                             className={cn(
-                                "flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors pl-10 pr-3", // Indented sub-item
+                                "flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors pl-10 pr-3", 
                                 isActive
                                     ? "bg-primary text-primary-foreground"
                                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -194,10 +190,8 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-auto py-4 custom-scrollbar">
         <nav className="space-y-1 px-3">
-          {/* 4. Map over the config, rendering either a group or a link */}
           {accessibleNavItems.map((item) => {
             if (item.type === 'group') {
-              // --- Filter out admin-only children if user is not an admin ---
               const accessibleChildren = item.adminOnly && currentUser.role !== 'admin' 
                   ? [] 
                   : item.children;

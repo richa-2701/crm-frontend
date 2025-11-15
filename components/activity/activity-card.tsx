@@ -4,7 +4,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/date-format"; 
-import { Clock, CheckCircle, Phone, Mail, MessageSquare, Eye, LucideIcon, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+// --- START OF CHANGE: Import Timer icon ---
+import { Clock, CheckCircle, Phone, Mail, MessageSquare, Eye, LucideIcon, MoreHorizontal, Edit, Trash2, Timer } from "lucide-react";
+// --- END OF CHANGE ---
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,22 +90,25 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
             </div>
 
             <CardFooter className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 py-2.5 px-4 border-t">
-                {/* --- DEFINITIVE FIX --- */}
-                {/* This logic now correctly uses the unified 'date' property and checks 'logged_or_scheduled' to pick the right icon. */}
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    {(() => {
-                        const isScheduled = activity.logged_or_scheduled === 'Scheduled';
-                        const IconToUse = isScheduled ? Clock : CheckCircle;
+                {/* --- START OF FIX: Updated footer to include duration --- */}
+                <div className="text-xs text-muted-foreground flex items-center flex-wrap gap-x-3 gap-y-1">
+                    <div className="flex items-center gap-1.5">
+                        {activity.logged_or_scheduled === 'Scheduled' ? (
+                            <Clock className="h-3.5 w-3.5" />
+                        ) : (
+                            <CheckCircle className="h-3.5 w-3.5" />
+                        )}
+                        <span>{formatDateTime(activity.date)}</span>
+                    </div>
 
-                        return (
-                            <>
-                                <IconToUse className="h-3.5 w-3.5" />
-                                <span>{formatDateTime(activity.date)}</span>
-                            </>
-                        );
-                    })()}
+                    {activity.duration_minutes && activity.duration_minutes > 0 && (
+                        <div className="flex items-center gap-1.5">
+                            <Timer className="h-3.5 w-3.5" />
+                            <span>{activity.duration_minutes} min</span>
+                        </div>
+                    )}
                 </div>
-                {/* --- END FIX --- */}
+                {/* --- END OF FIX --- */}
 
                 <div className="flex items-center gap-1">
                     {isActionable ? (
@@ -148,4 +153,4 @@ export function ActivityCard({ activity, onMarkAsDone, onViewDetails, onViewPast
             </CardFooter>
         </Card>
     );
-}
+} 

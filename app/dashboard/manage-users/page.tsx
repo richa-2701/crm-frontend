@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,28 +15,14 @@ import { EditUserModal } from "@/components/users/edit-user-modal"
 import { CreateUserModal } from "@/components/users/create-user-modal"
 import { DeleteUserModal } from "@/components/users/delete-user-modal"
 import { userApi, type ApiUser } from "@/lib/api"
-// --- START: FIX ---
-// The correct function to import is `formatDateTime`. There is no `formatDate`.
 import { formatDateTime } from "@/lib/date-format"
-// --- END: FIX ---
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  phone?: string
-  department?: string
-  createdAt?: string
-  company_name: string;
-}
 
 export default function ManageUsersPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [users, setUsers] = useState<User[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(null)
+  const [users, setUsers] = useState<ApiUser[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<ApiUser[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedUser, setSelectedUser] = useState<ApiUser | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -48,20 +35,10 @@ export default function ManageUsersPage() {
     try {
       setIsLoading(true)
       setError("")
-
+      // --- START OF FIX: Directly use the data from the API without transformation ---
       const usersData = await userApi.getUsers()
-      const transformedUsers: User[] = usersData.map((user: ApiUser) => ({
-        id: user.id.toString(),
-        name: user.username,
-        email: user.email || `${user.username}@company.com`,
-        role: user.role || "user",
-        phone: user.usernumber,
-        department: user.department || "N/A",
-        createdAt: user.created_at,
-        company_name: user.company_name,
-      }))
-
-      setUsers(transformedUsers)
+      setUsers(usersData)
+      // --- END OF FIX ---
     } catch (err) {
       console.error("Failed to load users:", err)
       setError("Failed to load users. Please try again.")
@@ -83,35 +60,28 @@ export default function ManageUsersPage() {
       return
     }
 
-    setCurrentUser({
-        id: parsedUser.id.toString(),
-        name: parsedUser.username,
-        email: parsedUser.email || "",
-        role: parsedUser.role || "user",
-        phone: parsedUser.usernumber,
-        department: parsedUser.department,
-        createdAt: parsedUser.created_at,
-        company_name: parsedUser.company_name
-    })
+    setCurrentUser(parsedUser)
     loadUsers()
   }, [router, loadUsers])
 
   useEffect(() => {
+    // --- START OF FIX: Filter based on the correct ApiUser properties ---
     const filtered = users.filter(
       (user) =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.department?.toLowerCase().includes(searchTerm.toLowerCase()),
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase())),
     )
     setFilteredUsers(filtered)
+    // --- END OF FIX ---
   }, [searchTerm, users])
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = (user: ApiUser) => {
     setSelectedUser(user)
     setIsEditModalOpen(true)
   }
 
-  const handleDeleteUser = (user: User) => {
+  const handleDeleteUser = (user: ApiUser) => {
     setSelectedUser(user)
     setIsDeleteModalOpen(true)
   }
@@ -223,10 +193,10 @@ export default function ManageUsersPage() {
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback className="text-xs">{user.username.charAt(0).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{user.name}</p>
+                            <p className="font-medium">{user.username}</p>
                             <p className="text-sm text-muted-foreground">{user.email}</p>
                           </div>
                         </div>
@@ -237,13 +207,10 @@ export default function ManageUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>{user.department || "N/A"}</TableCell>
-                      <TableCell>{user.phone || "N/A"}</TableCell>
-                      {/* --- START: FIX --- */}
-                      {/* Replace `formatDate` with `formatDateTime` and extract the date part */}
+                      <TableCell>{user.usernumber || "N/A"}</TableCell>
                       <TableCell>
-                        {user.createdAt ? formatDateTime(user.createdAt).split(',')[0] + ',' + formatDateTime(user.createdAt).split(',')[1] : "N/A"}
+                        {user.created_at ? formatDateTime(user.created_at).split(',').slice(0, 2).join(',') : "N/A"}
                       </TableCell>
-                      {/* --- END: FIX --- */}
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

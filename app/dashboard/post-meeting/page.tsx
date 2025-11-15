@@ -1,4 +1,3 @@
-// frontend/app/dashboard/post-meeting/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -13,6 +12,7 @@ import { api, type ApiMeeting, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input" // Import Input component
 
 export default function PostMeetingPage() {
   const router = useRouter()
@@ -29,6 +29,9 @@ export default function PostMeetingPage() {
     meeting_id: "",
     lead_id: "",
     remark: "",
+    // --- START OF CHANGE: Add duration_minutes to form state ---
+    duration_minutes: "",
+    // --- END OF CHANGE ---
   })
 
   useEffect(() => {
@@ -41,7 +44,7 @@ export default function PostMeetingPage() {
         ]);
         
         setAllLeads(leadsData);
-        setScheduledMeetings(meetingsData);
+        setScheduledMeetings(meetingsData.filter(m => m.phase === 'Scheduled' || m.phase === 'Rescheduled'));
 
         const leadIdFromUrl = searchParams.get('leadId');
         const meetingIdFromUrl = searchParams.get('meetingId');
@@ -88,24 +91,29 @@ export default function PostMeetingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.meeting_id || !formData.remark) {
-        toast({ title: "Error", description: "Please select a meeting and enter notes.", variant: "destructive" });
+    if (!formData.meeting_id || !formData.remark || !formData.duration_minutes) {
+        toast({ title: "Error", description: "Please select a meeting, enter notes, and provide the duration.", variant: "destructive" });
         return;
     }
     setIsLoading(true);
 
     try {
-      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-      const meetingData = {
-        meeting_id: Number.parseInt(formData.meeting_id),
-        notes: formData.remark,
-        updated_by: currentUser.username || "System",
+      const duration = Number.parseInt(formData.duration_minutes, 10);
+      if (isNaN(duration) || duration <= 0) {
+        toast({ title: "Error", description: "Please enter a valid duration.", variant: "destructive" });
+        setIsLoading(false);
+        return;
       }
-
-      // --- START OF FIX: Replace direct fetch with api object ---
-      await api.completeMeeting(meetingData);
-      // --- END OF FIX ---
+        
+      // --- START OF CHANGE: Updated the payload to include DurationMinutes ---
+      const meetingData = {
+        MeetingId: Number.parseInt(formData.meeting_id),
+        Remark: formData.remark,
+        DurationMinutes: duration,
+      }
+      // --- END OF CHANGE ---
       
+      await api.completeMeeting(meetingData);
       setShowConfirmation(true)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
@@ -165,6 +173,21 @@ export default function PostMeetingPage() {
                 disabled={isPrefilled}
               />
             </div>
+            
+            {/* --- START OF CHANGE: Add duration input field --- */}
+            <div className="space-y-2">
+                <Label htmlFor="duration_minutes">Actual Duration (minutes) *</Label>
+                <Input
+                    id="duration_minutes"
+                    type="number"
+                    placeholder="e.g., 45"
+                    value={formData.duration_minutes}
+                    onChange={(e) => handleInputChange("duration_minutes", e.target.value)}
+                    required
+                    min="1"
+                />
+            </div>
+            {/* --- END OF CHANGE --- */}
 
             <div className="space-y-2">
               <Label htmlFor="remark">Meeting Notes *</Label>

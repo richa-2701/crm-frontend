@@ -59,30 +59,22 @@ function parseAsUTCDate(dateInput?: string | Date): Date | null {
 /**
  * Formats a date from the API into a localized date and time string for the user.
  * 
- * **EXPLICIT FIX IMPLEMENTED HERE:**
- * This function now manually adds a 5 hour and 30 minute offset to the parsed UTC time.
- * This forces the display to be correct for the India Standard Time (IST) timezone (UTC+5:30).
- * 
  * @param dateInput - The date string or Date object from the API.
  */
 export function formatDateTime(dateInput?: string | Date): string {
-    // This correctly creates a Date object representing the UTC moment (e.g., 6:00 AM).
     const utcDate = parseAsUTCDate(dateInput); 
     
     if (!utcDate) return "N/A";
     
     try {
-        // --- EXPLICIT FIX: MANUALLY ADD 5 HOURS AND 30 MINUTES ---
-        // We create a new date object to avoid modifying the original.
-        const adjustedDate = new Date(utcDate);
-        
-        // We manually add the offset for IST (UTC+5:30).
-        adjustedDate.setHours(adjustedDate.getHours() + 5);
-        adjustedDate.setMinutes(adjustedDate.getMinutes() + 30);
-        
-        // We now format this new, manually adjusted date.
-        // This will display "11:30 AM" because we have forced the time adjustment.
-        return format(adjustedDate, 'PPp'); 
+        // --- START OF FIX: Removed manual timezone offset ---
+        // The original code manually added 5.5 hours, but the `format` function
+        // ALSO automatically converts the time to the user's local timezone.
+        // This resulted in the offset being applied twice.
+        // The correct approach is to let `date-fns` handle the entire conversion.
+        // It will correctly display the time for any user in any timezone.
+        return format(utcDate, 'PPp'); 
+        // --- END OF FIX ---
 
     } catch (error) {
         console.error("Error formatting datetime:", dateInput, error);

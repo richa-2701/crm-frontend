@@ -1,4 +1,3 @@
-//frontend/components/activity/activity-detail-modal.tsx
 "use client";
 
 import {
@@ -12,8 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/date-format";
-import { Phone, Mail, MessageSquare, CheckCircle, Download, FileText } from "lucide-react";
-// --- FIX: Import the UnifiedActivity interface from the page component ---
+import { Phone, Mail, MessageSquare, CheckCircle, Download, FileText, Timer } from "lucide-react";
 import type { UnifiedActivity } from "@/app/dashboard/activity/page"; 
 
 interface ActivityDetailModalProps {
@@ -30,15 +28,11 @@ const activityTypeIcons: { [key: string]: React.ElementType } = {
     default: CheckCircle
 };
 
-// --- START OF FIX: Use a more comprehensive check for files the browser can preview in an iframe ---
 const isBrowserPreviewable = (filePath: string) => {
     const extension = filePath.split('.').pop()?.toLowerCase() || '';
-    // This list includes common image formats, PDFs, and text files that are safe to embed.
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'txt'].includes(extension);
 };
-// --- END OF FIX ---
 
-// You might need your API's base URL if it's different from the frontend URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") || "http://localhost:57214";
 
 export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetailModalProps) {
@@ -46,7 +40,7 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
 
     const Icon = activityTypeIcons[activity.activity_type] || activityTypeIcons.default;
     const isScheduled = activity.logged_or_scheduled === 'Scheduled';
-    const attachmentPath = activity.raw_activity.attachment_path;
+    const attachmentPath = (activity.raw_activity as any).attachment_path;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -60,7 +54,9 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
                         {isScheduled ? "Details of the scheduled activity." : "Details of the logged activity."}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-[120px_1fr] gap-y-4 py-4 text-sm max-h-[60vh] overflow-y-auto pr-4">
+                {/* --- START OF FIX: Removed max-h and overflow classes from the main grid container --- */}
+                <div className="grid grid-cols-[120px_1fr] gap-y-4 py-4 text-sm pr-4">
+                {/* --- END OF FIX --- */}
                     <span className="font-semibold text-right pr-4">Status</span>
                     <Badge variant={activity.status.toLowerCase() === 'pending' || activity.status.toLowerCase() === 'scheduled' ? 'secondary' : 'default'} className="capitalize w-fit">
                         {activity.status.replace(/_/g, ' ')}
@@ -81,28 +77,41 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
                         </>
                     )}
                     
+                    {activity.type === 'log' && activity.duration_minutes && activity.duration_minutes > 0 && (
+                         <>
+                            <span className="font-semibold text-right pr-4 flex items-center justify-end gap-2">
+                                <Timer className="h-4 w-4 text-muted-foreground" />
+                                Time Taken
+                            </span>
+                            <span>{activity.duration_minutes} minutes</span>
+                        </>
+                    )}
+                    
                     <span className="font-semibold text-right pr-4 self-start">Details</span>
-                    <p className="bg-muted/50 p-2 rounded-md col-span-1">{activity.details}</p>
+                    {/* --- START OF FIX: Wrapped the details <p> in a scrollable div --- */}
+                    <div className="bg-muted/50 p-2 rounded-md col-span-1 max-h-48 overflow-y-auto">
+                         <p className="whitespace-pre-wrap break-words">
+                            {activity.details}
+                        </p>
+                    </div>
+                    {/* --- END OF FIX --- */}
                     
                     {attachmentPath && (
                         <>
                             <span className="font-semibold text-right pr-4 self-start">Attachment</span>
                             <div className="col-span-1 space-y-2">
-                                {/* --- START OF FIX: Render previewable files in an iframe --- */}
                                 {isBrowserPreviewable(attachmentPath) ? (
                                     <iframe
                                         src={`${API_URL}${attachmentPath}`}
                                         title="Attachment Preview"
-                                        className="w-full h-48 rounded-md border bg-white" // Added bg-white for better PDF viewing in dark mode
+                                        className="w-full h-48 rounded-md border bg-white"
                                     />
                                 ) : (
-                                    // Fallback for non-previewable files (e.g., .docx, .xlsx)
                                     <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border">
                                         <FileText className="h-5 w-5 flex-shrink-0" />
                                         <span className="text-sm truncate">{attachmentPath.split('/').pop()}</span>
                                     </div>
                                 )}
-                                {/* --- END OF FIX --- */}
                                 <Button asChild variant="secondary" size="sm">
                                     <a href={`${API_URL}${attachmentPath}`} download>
                                         <Download className="mr-2 h-4 w-4" />

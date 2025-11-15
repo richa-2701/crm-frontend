@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,13 +16,106 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { leadApi, userApi, type ApiUser, api } from "@/lib/api"
-import { Loader2, PlusCircle, Trash2 } from "lucide-react"
+import { Loader2, PlusCircle, Trash2, Settings } from "lucide-react"
 import { Country, State, City } from "country-state-city"
 import { Combobox } from "@/components/ui/combobox"
 import PhoneInput from "react-phone-input-2"
 import "react-phone-input-2/lib/style.css"
+
+// Define all optional fields that can be toggled
+const optionalFieldsConfig = {
+  "Company Details": ["website", "linkedIn", "email", "phone_2", "team_size", "turnover"],
+  "Address Details": ["address"],
+  "Opportunity Details": ["opportunity_business", "target_closing_date"],
+  "Technical & Financial Details": ["version", "database_type", "amc", "gst", "company_pan"],
+  "Additional Info": ["segment", "verticles", "lead_type", "current_system", "machine_specification", "challenges", "remark"],
+  "Contact Person Optional Fields": ["contact_designation", "contact_pan", "contact_linkedin", "contact_email"],
+};
+
+// Type definition for all possible optional field keys
+type OptionalField = keyof typeof optionalFieldsConfig;
+
+// Component for the settings modal
+const FieldVisibilityModal = ({
+  open,
+  onOpenChange,
+  visibleFields,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  visibleFields: Set<string>
+  onSave: (newFields: Set<string>) => void
+}) => {
+  const [localVisibleFields, setLocalVisibleFields] = useState(new Set(visibleFields));
+
+  const handleToggleField = (field: string, checked: boolean) => {
+    setLocalVisibleFields(prev => {
+      const newFields = new Set(prev);
+      if (checked) {
+        newFields.add(field);
+      } else {
+        newFields.delete(field);
+      }
+      return newFields;
+    });
+  };
+
+  const handleSave = () => {
+    onSave(localVisibleFields);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Customize Form Fields</DialogTitle>
+          <DialogDescription>
+            Select the fields you want to display on the create lead form. Required fields are always visible.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
+          {Object.entries(optionalFieldsConfig).map(([group, fields]) => (
+            <div key={group} className="space-y-2">
+              <h4 className="font-semibold text-md mb-2 border-b pb-1">{group}</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {fields.map(field => (
+                  <div key={field} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={field}
+                      checked={localVisibleFields.has(field)}
+                      onCheckedChange={(checked) => handleToggleField(field, !!checked)}
+                    />
+                    <Label htmlFor={field} className="capitalize font-normal cursor-pointer">
+                      {field.replace(/_/g, " ")}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button onClick={handleSave}>Save Preferences</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 
 interface User {
   id: string
@@ -45,16 +138,16 @@ interface Contact {
 const namePrefixes = ["Mr.", "Mrs.", "Ms."];
 
 interface MasterDataOptions {
-    source: string[];
-    segment: string[];
-    verticles: string[];
-    lead_type: string[];
-    current_system: string[];
+  source: string[];
+  segment: string[];
+  verticles: string[];
+  lead_type: string[];
+  current_system: string[];
 }
 
 type ValidationErrors = {
-  [key: string]: string | undefined; // General form fields
-  contacts?: { // Nested errors for contacts
+  [key: string]: string | undefined;
+  contacts?: {
     [index: number]: {
       first_name?: string;
       last_name?: string;
@@ -62,6 +155,10 @@ type ValidationErrors = {
     }
   }
 }
+
+const defaultVisibleFields = new Set([
+  "website", "linkedIn", "address", "opportunity_business", "target_closing_date", "current_system", "remark"
+]);
 
 export default function CreateLeadPage() {
   const router = useRouter()
@@ -76,8 +173,11 @@ export default function CreateLeadPage() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const formRef = useRef<HTMLFormElement>(null);
 
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
+
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
-      source: [], segment: [], verticles: [], lead_type: [], current_system: []
+    source: [], segment: [], verticles: [], lead_type: [], current_system: []
   });
 
   const [formData, setFormData] = useState({
@@ -116,6 +216,14 @@ export default function CreateLeadPage() {
   const [selectedState, setSelectedState] = useState<string | undefined>()
 
   useEffect(() => {
+    // Load visible fields from localStorage
+    const savedFields = localStorage.getItem("visibleLeadFields");
+    if (savedFields) {
+      setVisibleFields(new Set(JSON.parse(savedFields)));
+    } else {
+      setVisibleFields(defaultVisibleFields);
+    }
+
     const fetchData = async () => {
       try {
         const userData = localStorage.getItem("user")
@@ -123,31 +231,29 @@ export default function CreateLeadPage() {
           const parsedUser = JSON.parse(userData)
           setUser(parsedUser)
 
-          // --- START OF FIX: Changed category names to match the database schema (snake_case) ---
           const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData] = await Promise.all([
-              userApi.getUsers(),
-              api.getByCategory("source"),
-              api.getByCategory("segment"),
-              api.getByCategory("verticles"),
-              api.getByCategory("lead_type"),
-              api.getByCategory("current_system")
+            userApi.getUsers(),
+            api.getByCategory("source"),
+            api.getByCategory("segment"),
+            api.getByCategory("verticles"),
+            api.getByCategory("lead_type"),
+            api.getByCategory("current_system")
           ]);
-          // --- END OF FIX ---
 
           setMasterOptions({
-              source: sourceData.map(item => item.value),
-              segment: segmentData.map(item => item.value),
-              verticles: verticlesData.map(item => item.value),
-              lead_type: leadTypeData.map(item => item.value),
-              current_system: currentSystemData.map(item => item.value),
+            source: sourceData.map(item => item.value),
+            segment: segmentData.map(item => item.value),
+            verticles: verticlesData.map(item => item.value),
+            lead_type: leadTypeData.map(item => item.value),
+            current_system: currentSystemData.map(item => item.value),
           });
 
           setCompanyUsers(usersData);
 
           const currentUserInList = usersData.some(u => u.username === parsedUser.username);
           setFormData(prev => ({
-              ...prev,
-              assigned_to: currentUserInList ? parsedUser.username : (usersData[0]?.username || ""),
+            ...prev,
+            assigned_to: currentUserInList ? parsedUser.username : (usersData[0]?.username || ""),
           }));
         }
       } catch (error) {
@@ -163,25 +269,34 @@ export default function CreateLeadPage() {
     fetchData()
   }, [toast])
 
+  const handleSaveVisibleFields = useCallback((newFields: Set<string>) => {
+    setVisibleFields(newFields);
+    localStorage.setItem("visibleLeadFields", JSON.stringify(Array.from(newFields)));
+    toast({
+      title: "Preferences Saved",
+      description: "Your form field preferences have been updated.",
+    });
+  }, [toast]);
+
   const countryOptions = useMemo(() => Country.getAllCountries().map(c => ({ value: c.isoCode, label: c.name })), [])
   const stateOptions = useMemo(() => selectedCountry ? State.getStatesOfCountry(selectedCountry).map(s => ({ value: s.isoCode, label: s.name })) : [], [selectedCountry])
   const cityOptions = useMemo(() => (selectedCountry && selectedState) ? City.getCitiesOfState(selectedCountry, selectedState).map(c => ({ value: c.name, label: c.name })) : [], [selectedCountry, selectedState])
 
   const handleInputChange = (field: string, value: string) => {
-    setErrors(prev => ({...prev, [field]: undefined}));
+    setErrors(prev => ({ ...prev, [field]: undefined }));
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   const handleContactChange = (index: number, field: keyof Omit<Contact, "phone">, value: string) => {
     setErrors(prev => {
-        const newContactErrors = { ...(prev.contacts || {}) };
-        if (newContactErrors[index]) {
-            delete (newContactErrors[index] as any)[field];
-            if(Object.keys(newContactErrors[index]).length === 0) {
-                delete newContactErrors[index];
-            }
+      const newContactErrors = { ...(prev.contacts || {}) };
+      if (newContactErrors[index]) {
+        delete (newContactErrors[index] as any)[field];
+        if (Object.keys(newContactErrors[index]).length === 0) {
+          delete newContactErrors[index];
         }
-        return { ...prev, contacts: newContactErrors };
+      }
+      return { ...prev, contacts: newContactErrors };
     });
     const newContacts = [...contacts]
     newContacts[index][field] = value
@@ -190,14 +305,14 @@ export default function CreateLeadPage() {
 
   const handleContactPhoneChange = (index: number, phoneValue: string) => {
     setErrors(prev => {
-        const newContactErrors = { ...(prev.contacts || {}) };
-        if (newContactErrors[index]) {
-            delete newContactErrors[index].phone;
-             if(Object.keys(newContactErrors[index]).length === 0) {
-                delete newContactErrors[index];
-            }
+      const newContactErrors = { ...(prev.contacts || {}) };
+      if (newContactErrors[index]) {
+        delete newContactErrors[index].phone;
+        if (Object.keys(newContactErrors[index]).length === 0) {
+          delete newContactErrors[index];
         }
-        return { ...prev, contacts: newContactErrors };
+      }
+      return { ...prev, contacts: newContactErrors };
     });
     const newContacts = [...contacts]
     const formattedPhone = phoneValue.startsWith('+') ? phoneValue : `+${phoneValue}`;
@@ -215,7 +330,7 @@ export default function CreateLeadPage() {
       setContacts(newContacts)
     }
   }
-  
+
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
     let firstErrorId: string | null = null;
@@ -228,41 +343,45 @@ export default function CreateLeadPage() {
       newErrors.assigned_to = "'Assigned To' is required.";
       if (!firstErrorId) firstErrorId = "assigned_to";
     }
+    if (!formData.source.trim()) {
+        newErrors.source = "Source is required.";
+        if (!firstErrorId) firstErrorId = "source";
+    }
 
     const contactErrors: ValidationErrors['contacts'] = {};
     contacts.forEach((contact, index) => {
-        const currentContactErrors: {first_name?: string; last_name?: string; phone?: string;} = {};
-        if (!contact.first_name.trim()) {
-            currentContactErrors.first_name = "First Name is required.";
-            if (!firstErrorId) firstErrorId = `first_name_${index}`;
-        }
-        if (!contact.last_name.trim()) {
-            currentContactErrors.last_name = "Last Name is required.";
-            if (!firstErrorId) firstErrorId = `last_name_${index}`;
-        }
-        if (!contact.phone || contact.phone.length <= 3) {
-            currentContactErrors.phone = "Phone number is required.";
-            if (!firstErrorId) firstErrorId = `phone_${index}`;
-        }
-        if (Object.keys(currentContactErrors).length > 0) {
-            contactErrors[index] = currentContactErrors;
-        }
+      const currentContactErrors: { first_name?: string; last_name?: string; phone?: string; } = {};
+      if (!contact.first_name.trim()) {
+        currentContactErrors.first_name = "First Name is required.";
+        if (!firstErrorId) firstErrorId = `first_name_${index}`;
+      }
+      if (!contact.last_name.trim()) {
+        currentContactErrors.last_name = "Last Name is required.";
+        if (!firstErrorId) firstErrorId = `last_name_${index}`;
+      }
+      if (!contact.phone || contact.phone.length <= 3) {
+        currentContactErrors.phone = "Phone number is required.";
+        if (!firstErrorId) firstErrorId = `phone_${index}`;
+      }
+      if (Object.keys(currentContactErrors).length > 0) {
+        contactErrors[index] = currentContactErrors;
+      }
     });
 
     if (Object.keys(contactErrors).length > 0) {
-        newErrors.contacts = contactErrors;
+      newErrors.contacts = contactErrors;
     }
 
     setErrors(newErrors);
 
     if (firstErrorId) {
-        const errorElement = formRef.current?.querySelector(`#${firstErrorId}`);
-        errorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        toast({
-            title: "Missing Required Fields",
-            description: "Please fill in all the highlighted fields.",
-            variant: "destructive",
-        });
+      const errorElement = formRef.current?.querySelector(`#${firstErrorId}`);
+      errorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast({
+        title: "Missing Required Fields",
+        description: "Please fill in all the highlighted fields.",
+        variant: "destructive",
+      });
     }
 
     return Object.keys(newErrors).length === 0;
@@ -306,7 +425,7 @@ export default function CreateLeadPage() {
         title: "Lead Created",
         description: response.message || "The lead has been successfully created.",
       })
-      
+
       router.push('/dashboard/leads');
 
     } catch (error) {
@@ -317,7 +436,7 @@ export default function CreateLeadPage() {
         variant: "destructive",
       })
     } finally {
-        setIsLoading(false)
+      setIsLoading(false)
     }
   }
 
@@ -331,10 +450,26 @@ export default function CreateLeadPage() {
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      <div className="px-1">
-        <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Create Lead</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Add a new lead to your CRM system</p>
+      <FieldVisibilityModal
+        open={isSettingsModalOpen}
+        onOpenChange={setIsSettingsModalOpen}
+        visibleFields={visibleFields}
+        onSave={handleSaveVisibleFields}
+      />
+
+      <div className="flex justify-between items-center px-1">
+        <div>
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Create Lead</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Add a new lead to your CRM system</p>
+        </div>
+        {/* --- START OF CHANGE --- */}
+        <Button size="sm" onClick={() => setIsSettingsModalOpen(true)}>
+          <Settings className="h-4 w-4 mr-2" />
+          Customize Fields
+        </Button>
+        {/* --- END OF CHANGE --- */}
       </div>
+
 
       <Card className="border-0 sm:border shadow-none sm:shadow-sm">
         <CardHeader className="pb-3 sm:pb-6">
@@ -342,49 +477,6 @@ export default function CreateLeadPage() {
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
           <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="company_name">Company *</Label>
-                <Input
-                  id="company_name"
-                  value={formData.company_name}
-                  onChange={e => handleInputChange("company_name", e.target.value)}
-                  className={errors.company_name ? "border-red-500" : ""}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="email">Company Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={e => handleInputChange("email", e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="website">Website</Label>
-                <Input
-                  id="website"
-                  type="url"
-                  value={formData.website}
-                  onChange={e => handleInputChange("website", e.target.value)}
-                  placeholder="e.g., https://www.example.com"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="linkedIn">Company LinkedIn</Label>
-                <Input
-                  id="linkedIn"
-                  type="url"
-                  value={formData.linkedIn}
-                  onChange={e => handleInputChange("linkedIn", e.target.value)}
-                  placeholder="e.g., https://linkedin.com/company/example"
-                />
-              </div>
-            </div>
 
             <div className="space-y-4 rounded-md border p-4">
               <h3 className="text-md font-semibold">Contact Persons</h3>
@@ -401,17 +493,17 @@ export default function CreateLeadPage() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
-                  <div className="grid gap-4 grid-cols-1 md:grid-cols-3 items-end">
+                  <div className="grid gap-0 grid-cols-1 md:grid-cols-5 items-end">
                     <div className="space-y-1">
                       <Label htmlFor={`prefix_${index}`}>Prefix *</Label>
                       <Select
                         value={contact.prefix}
                         onValueChange={value => handleContactChange(index, "prefix", value)}
                       >
-                        <SelectTrigger id={`prefix_${index}`}>
+                        <SelectTrigger id={`prefix_${index}`} className="w-40">
                           <SelectValue placeholder="Select prefix" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="w-32 max-h-60 overflow-y-auto">
                           {namePrefixes.map(p => (
                             <SelectItem key={p} value={p}>
                               {p}
@@ -420,25 +512,23 @@ export default function CreateLeadPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`first_name_${index}`}>First Name *</Label>
-                        <Input
-                          id={`first_name_${index}`}
-                          value={contact.first_name}
-                          onChange={e => handleContactChange(index, "first_name", e.target.value)}
-                          className={errors.contacts?.[index]?.first_name ? "border-red-500" : ""}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`last_name_${index}`}>Last Name *</Label>
-                        <Input
-                          id={`last_name_${index}`}
-                          value={contact.last_name}
-                          onChange={e => handleContactChange(index, "last_name", e.target.value)}
-                          className={errors.contacts?.[index]?.last_name ? "border-red-500" : ""}
-                        />
-                      </div>
+                    <div className="space-y-4 md:col-span-2">
+                      <Label htmlFor={`first_name_${index}`}>First Name *</Label>
+                      <Input
+                        id={`first_name_${index}`}
+                        value={contact.first_name}
+                        onChange={e => handleContactChange(index, "first_name", e.target.value)}
+                        className={`w-full md:w-10/12 ${errors.contacts?.[index]?.first_name ? "border-red-500" : ""}`}
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label htmlFor={`last_name_${index}`}>Last Name *</Label>
+                      <Input
+                        id={`last_name_${index}`}
+                        value={contact.last_name}
+                        onChange={e => handleContactChange(index, "last_name", e.target.value)}
+                        className={errors.contacts?.[index]?.last_name ? "border-red-500" : ""}
+                      />
                     </div>
                   </div>
                   <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
@@ -454,47 +544,45 @@ export default function CreateLeadPage() {
                         inputClass={`!w-full !flex !h-10 !rounded-md !border !bg-background !pl-10 !px-3 !py-2 !text-sm ${errors.contacts?.[index]?.phone ? "!border-red-500" : "!border-input"}`}
                       />
                     </div>
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                    {visibleFields.has("contact_designation") && visibleFields.has("contact_pan") ? (
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`designation_${index}`}>Designation</Label>
+                          <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
+                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" />
+                        </div>
+                      </div>
+                    ) : visibleFields.has("contact_designation") ? (
                       <div className="space-y-1">
                         <Label htmlFor={`designation_${index}`}>Designation</Label>
-                        <Input
-                          id={`designation_${index}`}
-                          value={contact.designation}
-                          onChange={e => handleContactChange(index, "designation", e.target.value)}
-                        />
+                        <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} />
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`contact_email_${index}`}>Email</Label>
-                        <Input
-                          id={`contact_email_${index}`}
-                          type="email"
-                          value={contact.email}
-                          onChange={e => handleContactChange(index, "email", e.target.value)}
-                        />
-                      </div>
-                    </div>
+                    ) : visibleFields.has("contact_pan") && (
+                       <div className="space-y-1">
+                          <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
+                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" />
+                        </div>
+                    )}
                   </div>
-                  <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label>
-                      <Input
-                        id={`contact_linkedin_${index}`}
-                        type="url"
-                        value={contact.linkedIn}
-                        onChange={e => handleContactChange(index, "linkedIn", e.target.value)}
-                        placeholder="e.g., https://linkedin.com/in/john-doe"
-                      />
+                  {(visibleFields.has("contact_linkedin") || visibleFields.has("contact_email")) && (
+                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                      {visibleFields.has("contact_linkedin") && (
+                        <div className="space-y-1">
+                          <Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label>
+                          <Input id={`contact_linkedin_${index}`} type="url" value={contact.linkedIn} onChange={e => handleContactChange(index, "linkedIn", e.target.value)} placeholder="https://linkedin.com/in/john-doe" />
+                        </div>
+                      )}
+                      {visibleFields.has("contact_email") && (
+                        <div className="space-y-1">
+                          <Label htmlFor={`contact_email_${index}`}>Email</Label>
+                          <Input id={`contact_email_${index}`} type="email" value={contact.email} onChange={e => handleContactChange(index, "email", e.target.value)} />
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
-                      <Input
-                        id={`contact_pan_${index}`}
-                        value={contact.pan}
-                        onChange={e => handleContactChange(index, "pan", e.target.value)}
-                        placeholder="e.g., ABCDE1234F"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-2">
@@ -502,174 +590,218 @@ export default function CreateLeadPage() {
                 Add Another Contact
               </Button>
             </div>
-
-            <div className="space-y-4 rounded-md border p-4">
-              <h3 className="text-md font-semibold">Address Details</h3>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="address">Address Line 1</Label>
-                  <Input id="address" value={formData.address} onChange={e => handleInputChange("address", e.target.value)} />
-                </div>
-                <div>
-                  <Label htmlFor="address_2">Address Line 2</Label>
-                  <Input id="address_2" value={formData.address_2} onChange={e => handleInputChange("address_2", e.target.value)} />
-                </div>
-              </div>
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Combobox
-                    options={countryOptions}
-                    value={formData.country}
-                    onChange={value => {
-                      handleInputChange("country", value)
-                      setSelectedCountry(value)
-                      handleInputChange("state", "")
-                      setSelectedState(undefined)
-                      handleInputChange("city", "")
-                    }}
-                    placeholder="Select country..."
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="state">State</Label>
-                  <Combobox
-                    options={stateOptions}
-                    value={formData.state}
-                    onChange={value => {
-                      handleInputChange("state", value)
-                      setSelectedState(value)
-                      handleInputChange("city", "")
-                    }}
-                    placeholder="Select state..."
-                    disabled={!selectedCountry}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Combobox options={cityOptions} value={formData.city} onChange={value => handleInputChange("city", value)} placeholder="Select city..." disabled={!selectedState} />
-                </div>
-                <div>
-                  <Label htmlFor="pincode">Pincode</Label>
-                  <Input id="pincode" value={formData.pincode} onChange={e => handleInputChange("pincode", e.target.value)} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ">
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1">
-                <Label htmlFor="phone_2">Company Phone 2</Label>
-                <PhoneInput
-                  country={"in"}
-                  value={formData.phone_2}
-                  onChange={phone => handleInputChange("phone_2", phone)}
-                  enableSearch={true}
-                  inputProps={{ id: "phone_2" }}
-                  containerClass="w-full"
-                  inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm"
+                <Label htmlFor="company_name">Company *</Label>
+                <Input
+                  id="company_name"
+                  value={formData.company_name}
+                  onChange={e => handleInputChange("company_name", e.target.value)}
+                  className={errors.company_name ? "border-red-500" : ""}
                 />
               </div>
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
+              {visibleFields.has("email") && (
                 <div className="space-y-1">
-                  <Label htmlFor="team_size">Team Size</Label>
-                  <Input
-                    id="team_size"
-                    type="number"
-                    value={formData.team_size}
-                    onChange={e => handleInputChange("team_size", e.target.value)}
-                  />
+                  <Label htmlFor="email">Company Email</Label>
+                  <Input id="email" type="email" value={formData.email} onChange={e => handleInputChange("email", e.target.value)} />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="turnover">Turnover</Label>
-                  <Input
-                    id="turnover"
-                    placeholder="e.g., 1 Cr"
-                    value={formData.turnover}
-                    onChange={e => handleInputChange("turnover", e.target.value)}
-                  />
+              )}
+            </div>
+            {(visibleFields.has("website") || visibleFields.has("linkedIn")) && (
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                {visibleFields.has("website") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="website">Website</Label>
+                    <Input id="website" type="url" value={formData.website} onChange={e => handleInputChange("website", e.target.value)} placeholder="e.g., https://www.example.com" />
+                  </div>
+                )}
+                {visibleFields.has("linkedIn") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="linkedIn">Company LinkedIn</Label>
+                    <Input id="linkedIn" type="url" value={formData.linkedIn} onChange={e => handleInputChange("linkedIn", e.target.value)} placeholder="e.g., https://linkedin.com/company/example" />
+                  </div>
+                )}
+              </div>
+            )}
+            {visibleFields.has("address") && (
+              <div className="space-y-4 rounded-md border p-4">
+                <h3 className="text-md font-semibold">Address Details</h3>
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="address">Address Line 1</Label>
+                    <Input id="address" value={formData.address} onChange={e => handleInputChange("address", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="address_2">Address Line 2</Label>
+                    <Input id="address_2" value={formData.address_2} onChange={e => handleInputChange("address_2", e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label htmlFor="country">Country</Label>
+                    <Combobox
+                      options={countryOptions}
+                      value={formData.country}
+                      onChange={value => {
+                        handleInputChange("country", value)
+                        setSelectedCountry(value)
+                        handleInputChange("state", "")
+                        setSelectedState(undefined)
+                        handleInputChange("city", "")
+                      }}
+                      placeholder="Select country..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="state">State</Label>
+                    <Combobox
+                      options={stateOptions}
+                      value={formData.state}
+                      onChange={value => {
+                        handleInputChange("state", value)
+                        setSelectedState(value)
+                        handleInputChange("city", "")
+                      }}
+                      placeholder="Select state..."
+                      disabled={!selectedCountry}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="city">City</Label>
+                    <Combobox options={cityOptions} value={formData.city} onChange={value => handleInputChange("city", value)} placeholder="Select city..." disabled={!selectedState} />
+                  </div>
+                  <div>
+                    <Label htmlFor="pincode">Pincode</Label>
+                    <Input id="pincode" value={formData.pincode} onChange={e => handleInputChange("pincode", e.target.value)} />
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="space-y-4 rounded-md border p-4">
+            )}
+            {(visibleFields.has("phone_2") || visibleFields.has("team_size") || visibleFields.has("turnover")) && (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ">
+                    {visibleFields.has("phone_2") && (
+                        <div className="space-y-1">
+                            <Label htmlFor="phone_2">Company Phone 2</Label>
+                            <PhoneInput country={"in"} value={formData.phone_2} onChange={phone => handleInputChange("phone_2", phone)} enableSearch={true} inputProps={{ id: "phone_2" }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" />
+                        </div>
+                    )}
+                    {visibleFields.has("team_size") && visibleFields.has("turnover") ? (
+                        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
+                            <div className="space-y-1">
+                                <Label htmlFor="team_size">Team Size</Label>
+                                <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="turnover">Turnover</Label>
+                                <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
+                            </div>
+                        </div>
+                    ) : visibleFields.has("team_size") ? (
+                        <div className="space-y-1">
+                            <Label htmlFor="team_size">Team Size</Label>
+                            <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
+                        </div>
+                    ) : visibleFields.has("turnover") && (
+                        <div className="space-y-1">
+                            <Label htmlFor="turnover">Turnover</Label>
+                            <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
+                        </div>
+                    )}
+                </div>
+            )}
+            {(visibleFields.has("opportunity_business") || visibleFields.has("target_closing_date")) && (
+              <div className="space-y-4 rounded-md border p-4">
                 <h3 className="text-md font-semibold">Opportunity Details</h3>
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  {visibleFields.has("opportunity_business") && (
                     <div className="space-y-1">
-                        <Label htmlFor="opportunity_business">Opportunity Business</Label>
-                        <Input
-                            id="opportunity_business"
-                            placeholder="e.g., 5 Lakhs, $10,000"
-                            value={formData.opportunity_business}
-                            onChange={e => handleInputChange("opportunity_business", e.target.value)}
-                        />
+                      <Label htmlFor="opportunity_business">Opportunity Business</Label>
+                      <Input id="opportunity_business" placeholder="e.g., 5 Lakhs, $10,000" value={formData.opportunity_business} onChange={e => handleInputChange("opportunity_business", e.target.value)} />
                     </div>
+                  )}
+                  {visibleFields.has("target_closing_date") && (
                     <div className="space-y-1">
-                        <Label htmlFor="target_closing_date">Target Closing Date</Label>
-                        <Input
-                            id="target_closing_date"
-                            type="date"
-                            value={formData.target_closing_date}
-                            onChange={e => handleInputChange("target_closing_date", e.target.value)}
-                        />
+                      <Label htmlFor="target_closing_date">Target Closing Date</Label>
+                      <Input id="target_closing_date" type="date" value={formData.target_closing_date} onChange={e => handleInputChange("target_closing_date", e.target.value)} />
                     </div>
+                  )}
                 </div>
-            </div>
-
-            <div className="space-y-4 rounded-md border p-4">
+              </div>
+            )}
+            {(visibleFields.has("version") || visibleFields.has("database_type") || visibleFields.has("amc") || visibleFields.has("gst") || visibleFields.has("company_pan")) && (
+              <div className="space-y-4 rounded-md border p-4">
                 <h3 className="text-md font-semibold">Technical & Financial Details</h3>
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                  {visibleFields.has("version") && (
                     <div className="space-y-1">
-                        <Label htmlFor="version">Version</Label>
-                        <Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} />
+                      <Label htmlFor="version">Version</Label>
+                      <Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} />
                     </div>
+                  )}
+                  {visibleFields.has("database_type") && (
                     <div className="space-y-1">
-                        <Label htmlFor="database_type">Database Type</Label>
-                        <Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} />
+                      <Label htmlFor="database_type">Database Type</Label>
+                      <Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} />
                     </div>
-                     <div className="space-y-1">
-                        <Label htmlFor="amc">AMC</Label>
-                        <Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} />
-                    </div>
+                  )}
+                  {visibleFields.has("amc") && (
                     <div className="space-y-1">
-                        <Label htmlFor="gst">Company GST</Label>
-                        <Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} />
+                      <Label htmlFor="amc">AMC</Label>
+                      <Input id="amc" value={formData.amc} onChange={e => handleInputChange("amc", e.target.value)} />
                     </div>
+                  )}
+                  {visibleFields.has("gst") && (
                     <div className="space-y-1">
-                        <Label htmlFor="company_pan">Company PAN</Label>
-                        <Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} />
+                      <Label htmlFor="gst">Company GST</Label>
+                      <Input id="gst" value={formData.gst} onChange={e => handleInputChange("gst", e.target.value)} />
                     </div>
+                  )}
+                  {visibleFields.has("company_pan") && (
+                    <div className="space-y-1">
+                      <Label htmlFor="company_pan">Company PAN</Label>
+                      <Input id="company_pan" value={formData.company_pan} onChange={e => handleInputChange("company_pan", e.target.value)} />
+                    </div>
+                  )}
                 </div>
-            </div>
-
+              </div>
+            )}
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               <div className="space-y-1">
-                <Label htmlFor="source">Source</Label>
+                <Label htmlFor="source">Source *</Label>
                 <Select value={formData.source} onValueChange={value => handleInputChange("source", value)}>
-                  <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                  <SelectTrigger id="source" className={errors.source ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select source" />
+                  </SelectTrigger>
                   <SelectContent>{masterOptions.source.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="segment">Segment</Label>
-                <Select value={formData.segment} onValueChange={value => handleInputChange("segment", value)}>
-                  <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
-                  <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="verticles">Verticals</Label>
-                <Select value={formData.verticles} onValueChange={value => handleInputChange("verticles", value)}>
-                  <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
-                  <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="lead_type">Lead Type</Label>
-                <Select value={formData.lead_type} onValueChange={value => handleInputChange("lead_type", value)}>
-                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                  <SelectContent>{masterOptions.lead_type.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              {visibleFields.has("segment") && (
+                <div className="space-y-1">
+                  <Label htmlFor="segment">Segment</Label>
+                  <Select value={formData.segment} onValuechange={value => handleInputChange("segment", value)}>
+                    <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
+                    <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+              {visibleFields.has("verticles") && (
+                <div className="space-y-1">
+                  <Label htmlFor="verticles">Verticals</Label>
+                  <Select value={formData.verticles} onValuechange={value => handleInputChange("verticles", value)}>
+                    <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
+                    <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+              {visibleFields.has("lead_type") && (
+                <div className="space-y-1">
+                  <Label htmlFor="lead_type">Lead Type</Label>
+                  <Select value={formData.lead_type} onValuechange={value => handleInputChange("lead_type", value)}>
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>{masterOptions.lead_type.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="assigned_to">Assigned To *</Label>
                 <Select value={formData.assigned_to} onValueChange={value => handleInputChange("assigned_to", value)}>
@@ -679,34 +811,42 @@ export default function CreateLeadPage() {
                   <SelectContent>{companyUsers.map(user => <SelectItem key={user.id} value={user.username}>{user.username}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-              <Label htmlFor="current_system">Current System</Label>
-              <Select value={formData.current_system} onValueChange={value => handleInputChange("current_system", value)}>
-                  <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
-                  <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
-              </Select>
+              {visibleFields.has("current_system") && (
+                <div className="space-y-1">
+                  <Label htmlFor="current_system">Current System</Label>
+                  <Select value={formData.current_system} onValuechange={value => handleInputChange("current_system", value)}>
+                    <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
+                    <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-            </div>
-
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="machine_specification">Machine Specification</Label>
-                <Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={3} className="resize-none" />
+            {(visibleFields.has("machine_specification") || visibleFields.has("challenges")) && (
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                {visibleFields.has("machine_specification") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="machine_specification">Machine Specification</Label>
+                    <Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={3} className="resize-none" />
+                  </div>
+                )}
+                {visibleFields.has("challenges") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="challenges">Challenges</Label>
+                    <Textarea id="challenges" value={formData.challenges} onChange={e => handleInputChange("challenges", e.target.value)} rows={3} className="resize-none" />
+                  </div>
+                )}
               </div>
+            )}
+            {visibleFields.has("remark") && (
               <div className="space-y-1">
-                <Label htmlFor="challenges">Challenges</Label>
-                <Textarea id="challenges" value={formData.challenges} onChange={e => handleInputChange("challenges", e.target.value)} rows={3} className="resize-none" />
+                <Label htmlFor="remark">Remark</Label>
+                <Textarea id="remark" value={formData.remark} onChange={e => handleInputChange("remark", e.target.value)} rows={3} className="resize-none" />
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="remark">Remark</Label>
-              <Textarea id="remark" value={formData.remark} onChange={e => handleInputChange("remark", e.target.value)} rows={3} className="resize-none" />
-            </div>
+            )}
 
             <div className="flex gap-4 pt-2">
               <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading ? ( <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving... </> ) : ( "Save Lead" )}
+                {isLoading ? (<> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving... </>) : ("Save Lead")}
               </Button>
               <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
                 Cancel

@@ -1,0 +1,258 @@
+"use client"
+
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { ColumnDef } from "@tanstack/react-table"
+import { toast } from "sonner"
+// --- START OF CHANGE: Import Timer icon ---
+import { MoreHorizontal, PlusCircle, Check, Play, Edit, Loader2, Timer } from "lucide-react"
+// --- END OF CHANGE ---
+
+import { api, ApiTask, ApiUser, ApiActivity } from "@/lib/api"
+import { formatDateTime } from "@/lib/date-format"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+
+import { TaskDataTable } from "@/components/tasks/task-data-table"
+import { CreateTaskModal } from "@/components/tasks/create-task-modal"
+import { TaskDetailModal } from "@/components/tasks/task-detail-modal"
+import { ManageActivitiesModal } from "@/components/tasks/manage-activities-modal"
+import { LogActivityModal } from "@/components/activity/log-activity-modal"
+
+export default function TasksPage() {
+    const { toast: legacyToast } = useToast();
+    const [tasks, setTasks] = useState<ApiTask[]>([])
+    const [loading, setLoading] = useState(true)
+    const [currentUser, setCurrentUser] = useState<ApiUser | null>(null)
+    
+    const [isCreateModalOpen, setCreateModalOpen] = useState(false)
+    const [isManageActivitiesModalOpen, setManageActivitiesModalOpen] = useState(false);
+    const [isDetailModalOpen, setDetailModalOpen] = useState(false);
+    const [isLogActivityModalOpen, setIsLogActivityModalOpen] = useState(false);
+    
+    const [selectedTask, setSelectedTask] = useState<ApiTask | null>(null)
+
+    const router = useRouter()
+
+    const fetchData = useCallback(async (userId: number) => {
+        setLoading(true)
+        try {
+            const userTasks = await api.getTasksForUser(userId)
+            setTasks(userTasks || [])
+        } catch (error) {
+            console.error("Failed to fetch tasks:", error)
+            toast.error("Failed to load tasks.")
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        const userFromStorage = localStorage.getItem("user")
+        if (userFromStorage) {
+            const parsedUser = JSON.parse(userFromStorage) as ApiUser
+            setCurrentUser(parsedUser)
+            fetchData(parsedUser.id)
+        } else {
+            router.push("/login")
+        }
+    }, [fetchData, router])
+    
+    const handleTaskAction = () => {
+        if (currentUser) {
+            fetchData(currentUser.id)
+        }
+    }
+
+    const handleViewDetails = (task: ApiTask) => {
+        setSelectedTask(task);
+        setDetailModalOpen(true);
+    };
+
+    const handleStartTask = async (taskId: number) => {
+        try {
+            await api.updateTaskStatus(taskId, 'In Progress')
+            toast.success("Task moved to 'In Progress'.")
+            if (currentUser) fetchData(currentUser.id)
+        } catch (error: any) {
+            toast.error("Failed to start task.", { description: error.message })
+        }
+    }
+
+    const handleOpenCompleteModal = (task: ApiTask) => {
+        setSelectedTask(task);
+        setManageActivitiesModalOpen(true);
+    }
+
+    const pendingTasks = useMemo(() => tasks.filter(t => t.status === 'Pending'), [tasks])
+    const inProgressTasks = useMemo(() => tasks.filter(t => t.status === 'In Progress'), [tasks])
+    const completedTasks = useMemo(() => tasks.filter(t => t.status === 'Completed'), [tasks])
+
+    const columns: ColumnDef<ApiTask>[] = [
+        {
+            accessorKey: "title",
+            header: "Task Title",
+            cell: ({ row }) => (
+                <div 
+                    className="flex flex-col cursor-pointer hover:underline"
+                    onClick={() => handleViewDetails(row.original)}
+                >
+                    <span className="font-medium">{row.original.title}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-xs">{row.original.details}</span>
+                </div>
+            ),
+        },
+        {
+            accessorKey: "company_names",
+            header: "Related Leads",
+            cell: ({ row }) => {
+                const names = row.original.company_names?.split(', ');
+                if (!names || names.length === 0 || names[0] === "") return <Badge variant="secondary">General Task</Badge>;
+                return (
+                    <div className="flex flex-wrap gap-1 max-w-xs">
+                        {names.map(name => <Badge key={name} variant="outline">{name}</Badge>)}
+                    </div>
+                );
+            },
+        },
+        {
+            accessorKey: "due_date",
+            header: "Due Date",
+            cell: ({ row }) => formatDateTime(row.original.due_date),
+        },
+        // --- START OF CHANGE: Added a new column for "Time Taken" ---
+        {
+            accessorKey: "duration_minutes",
+            header: "Time Taken",
+            cell: ({ row }) => {
+                const task = row.original;
+                if (task.status === 'Completed' && task.duration_minutes != null && task.duration_minutes >= 0) {
+                    return (
+                        <div className="flex items-center gap-2 text-sm">
+                            <Timer className="h-4 w-4 text-muted-foreground" />
+                            <span>{task.duration_minutes} min</span>
+                        </div>
+                    );
+                }
+                return <span className="text-muted-foreground text-center">—</span>;
+            },
+        },
+        // --- END OF CHANGE ---
+        {
+            accessorKey: "created_by_username",
+            header: "Assigned By",
+        },
+        {
+            id: "actions",
+            cell: ({ row }) => {
+                const task = row.original
+                return (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleViewDetails(task)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                View Details
+                            </DropdownMenuItem>
+                            {task.status === 'Pending' && (
+                                <DropdownMenuItem onClick={() => handleStartTask(task.id)}>
+                                    <Play className="mr-2 h-4 w-4" />
+                                    Start Task
+                                </DropdownMenuItem>
+                            )}
+                            {task.status !== 'Completed' && (
+                                <DropdownMenuItem onClick={() => handleOpenCompleteModal(task)}>
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Mark as Complete
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )
+            },
+        },
+    ]
+
+    if (loading || !currentUser) {
+        return <div className="flex items-center justify-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>
+    }
+
+    return (
+        <div className="container mx-auto py-6">
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>Task Management</CardTitle>
+                            <CardDescription>
+                                Here are the tasks assigned to you. Manage your workflow to stay productive.
+                            </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                           <Button variant="outline" onClick={() => setIsLogActivityModalOpen(true)}>Log Activity</Button>
+                            {currentUser.role === 'admin' && (
+                                <Button onClick={() => setCreateModalOpen(true)}>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Create New Task
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <Tabs defaultValue="todo">
+                        <TabsList>
+                            <TabsTrigger value="todo">To-Do ({pendingTasks.length})</TabsTrigger>
+                            <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
+                            <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="todo"><TaskDataTable columns={columns} data={pendingTasks} /></TabsContent>
+                        <TabsContent value="in_progress"><TaskDataTable columns={columns} data={inProgressTasks} /></TabsContent>
+                        <TabsContent value="completed"><TaskDataTable columns={columns} data={completedTasks} /></TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+            
+            {currentUser.role === 'admin' && (
+                <CreateTaskModal
+                    currentUser={currentUser}
+                    isOpen={isCreateModalOpen}
+                    onClose={() => setCreateModalOpen(false)}
+                    onSuccess={() => { setCreateModalOpen(false); handleTaskAction(); }}
+                />
+            )}
+            
+            <LogActivityModal
+                currentUser={currentUser}
+                isOpen={isLogActivityModalOpen}
+                onClose={() => setIsLogActivityModalOpen(false)}
+                onSuccess={() => { setIsLogActivityModalOpen(false); handleTaskAction(); }}
+            />
+
+            <ManageActivitiesModal
+                task={selectedTask}
+                isOpen={isManageActivitiesModalOpen}
+                isCompleting={true} // This modal is now only for the final completion step
+                onClose={() => setManageActivitiesModalOpen(false)}
+                onSuccess={() => { setManageActivitiesModalOpen(false); handleTaskAction(); }}
+            />
+            
+            <TaskDetailModal
+                task={selectedTask}
+                isOpen={isDetailModalOpen}
+                onClose={() => setDetailModalOpen(false)}
+                onActivityAdded={handleTaskAction}
+            />
+        </div>
+    )
+}

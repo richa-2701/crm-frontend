@@ -1,7 +1,7 @@
 //frontend/app/dashboard/add-quotation/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -9,23 +9,37 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { api, type ApiLead } from "@/lib/api"
+import { api, type ApiLeadSearchResult } from "@/lib/api"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Loader2, Upload } from "lucide-react"
+import { debounce } from "lodash"
 
 export default function AddQuotationPage() {
-  const [leads, setLeads] = useState<ApiLead[]>([])
+  const [allLeads, setAllLeads] = useState<ApiLeadSearchResult[]>([])
+  const [filteredLeads, setFilteredLeads] = useState<ApiLeadSearchResult[]>([])
+  const [hasFetchedLeads, setHasFetchedLeads] = useState(false)
   const [selectedLeadId, setSelectedLeadId] = useState<string>("")
   const [details, setDetails] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isFetchingLeads, setIsFetchingLeads] = useState(true)
+  const [isFetchingLeads, setIsFetchingLeads] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    const fetchLeads = async () => {
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setFile(event.target.files[0])
+    }
+  }
+
+  const handleLeadDropdownOpen = async (open: boolean) => {
+    if (open && !hasFetchedLeads) {
+      setIsFetchingLeads(true)
       try {
-        const leadsData = await api.getAllLeads()
-        setLeads(leadsData)
+        const leadsData = await api.searchLeads("") // Fetch all lightweight leads
+        setAllLeads(leadsData)
+        setFilteredLeads(leadsData)
+        setHasFetchedLeads(true)
       } catch (error) {
         toast({
           title: "Failed to fetch leads",
@@ -36,14 +50,21 @@ export default function AddQuotationPage() {
         setIsFetchingLeads(false)
       }
     }
-    fetchLeads()
-  }, [toast])
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      setFile(event.target.files[0])
-    }
   }
+
+  const searchLeads = useCallback(
+    debounce((searchTerm: string) => {
+      if (!searchTerm) {
+        setFilteredLeads(allLeads)
+        return
+      }
+      const filtered = allLeads.filter((lead) =>
+        lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredLeads(filtered)
+    }, 200),
+    [allLeads]
+  )
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -60,18 +81,16 @@ export default function AddQuotationPage() {
     try {
       const activityDetails = `Quotation Added: ${details.trim()}`;
       
-      // This call now works correctly due to the changes in `api.ts`
       await api.addActivityWithAttachment(Number(selectedLeadId), activityDetails, file);
 
       toast({
         title: "Success!",
         description: "Quotation has been successfully uploaded and logged as an activity.",
       })
-      // Reset form
+      
       setSelectedLeadId("")
       setDetails("")
       setFile(null)
-      // A more robust solution might reset the file input visually
       const fileInput = document.getElementById('file-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
 
@@ -101,16 +120,35 @@ export default function AddQuotationPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="lead-select">Lead *</Label>
-              <Select value={selectedLeadId} onValueChange={setSelectedLeadId} disabled={isFetchingLeads}>
+              <Select value={selectedLeadId} onValueChange={setSelectedLeadId} onOpenChange={handleLeadDropdownOpen}>
                 <SelectTrigger id="lead-select">
-                  <SelectValue placeholder={isFetchingLeads ? "Loading leads..." : "Select a lead"} />
+                  <SelectValue placeholder="Select or search for a lead..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {leads.map((lead) => (
-                    <SelectItem key={lead.id} value={lead.id.toString()}>
-                      {lead.company_name}
-                    </SelectItem>
-                  ))}
+                  <div className="p-2">
+                    <Input
+                      placeholder="Search by company name..."
+                      onChange={(e) => searchLeads(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <ScrollArea className="h-[200px]">
+                    {isFetchingLeads ? (
+                      <div className="flex items-center justify-center p-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    ) : filteredLeads.length > 0 ? (
+                      filteredLeads.map((lead) => (
+                        <SelectItem key={lead.id} value={lead.id.toString()}>
+                          {lead.company_name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-center text-sm text-muted-foreground">
+                        No leads found.
+                      </div>
+                    )}
+                  </ScrollArea>
                 </SelectContent>
               </Select>
             </div>

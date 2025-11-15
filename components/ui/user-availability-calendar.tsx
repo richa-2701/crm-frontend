@@ -15,14 +15,15 @@ interface UserEvent {
   start_time: string
   end_time: string
   assigned_to: string
-  assigned_to_usernumber?: string // Demos can be assigned by usernumber
+  assigned_to_usernumber?: string
+  phase?: string // Add phase to the interface
 }
 
 interface UserAvailabilityCalendarProps {
   className?: string
   showAllUsers?: boolean
   selectedDate?: Date
-  selectedUser?: string // This is the username
+  selectedUser?: string
 }
 
 export function UserAvailabilityCalendar({
@@ -41,13 +42,16 @@ export function UserAvailabilityCalendar({
       try {
         setLoading(true)
 
-        // --- THE FIX: Changed to use the correct API function names ---
+        // --- START OF FIX: Use API functions that fetch only SCHEDULED events ---
+        // Changed from getAllMeetings/getAllDemos to getScheduledMeetings/getScheduledDemos.
+        // This ensures that completed, canceled, etc., events are not included.
         const [meetingsData, demosData, usersData, leadsData] = await Promise.all([
-          api.getAllMeetings(),     // Corrected from getScheduledMeetings
-          api.getAllDemos(),        // Corrected from getScheduledDemos
+          api.getScheduledMeetings(), 
+          api.getScheduledDemos(),
           api.getUsers(),
           api.getAllLeads(), 
         ]);
+        // --- END OF FIX ---
 
         setUsers(usersData);
         setLeads(leadsData);
@@ -65,6 +69,7 @@ export function UserAvailabilityCalendar({
             start_time: meeting.event_time,
             end_time: meeting.event_end_time || meeting.event_time,
             assigned_to: meeting.assigned_to,
+            phase: meeting.phase,
           })),
           ...demosData.map((demo: ApiDemo) => {
             const assignedUser = usersData.find(u => u.usernumber === demo.assigned_to);
@@ -74,8 +79,9 @@ export function UserAvailabilityCalendar({
                 title: `Demo - ${getLeadName(demo.lead_id)}`,
                 start_time: demo.start_time,
                 end_time: demo.event_end_time || demo.start_time,
-                assigned_to: assignedUser ? assignedUser.username : demo.assigned_to, // Map usernumber to username
+                assigned_to: assignedUser ? assignedUser.username : demo.assigned_to,
                 assigned_to_usernumber: demo.assigned_to,
+                phase: demo.phase,
             }
           }),
         ];
@@ -89,7 +95,7 @@ export function UserAvailabilityCalendar({
     }
 
     fetchUserAvailability()
-  }, []) // Fetch once on component mount
+  }, [])
 
   const getEventsForDate = (date: Date) => {
     const dateString = date.toDateString();
@@ -119,7 +125,7 @@ export function UserAvailabilityCalendar({
       map.get(event.assigned_to)!.push(event);
     });
     return map;
-  }, [events, selectedDate, users, selectedUser]); // Recompute when these change
+  }, [events, selectedDate, users, selectedUser]);
 
   const formatTime = (dateString: string) => {
     if (!dateString) return "N/A";

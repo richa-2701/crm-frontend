@@ -1,4 +1,3 @@
-// frontend/app/dashboard/post-event/page.tsx
 "use client"
 
 import type React from "react"
@@ -12,9 +11,9 @@ import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { api, ApiLead, ApiMeeting, ApiDemo } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
-import { FileText, ClipboardList } from "lucide-react"
+import { FileText, ClipboardList, Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input" // Import Input component
 
-// Combine types for simplicity
 interface Event extends ApiMeeting, ApiDemo {
   type: "meeting" | "demo";
 }
@@ -25,6 +24,7 @@ export default function PostEventPage() {
   const [leads, setLeads] = useState<ApiLead[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [confirmationMessage, setConfirmationMessage] = useState("")
 
@@ -34,10 +34,14 @@ export default function PostEventPage() {
     event_id: "",
     lead_id: "",
     remark: "",
+    // --- START OF CHANGE: Add duration_minutes to form state ---
+    duration_minutes: "",
+    // --- END OF CHANGE ---
   })
 
   useEffect(() => {
     const fetchData = async () => {
+      setIsDataLoading(true);
       try {
         const [leadsData, meetingsData, demosData] = await Promise.all([
             api.getAllLeads(),
@@ -55,27 +59,28 @@ export default function PostEventPage() {
 
       } catch (error) {
         console.error("[v0] Failed to fetch data:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load page data. Please refresh.",
-          variant: "destructive",
-        })
+        toast({ title: "Error", description: "Failed to load page data. Please refresh." })
+      } finally {
+        setIsDataLoading(false);
       }
     }
 
     fetchData()
   }, [toast])
-
+  
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value, event_id: "" })) // Reset event_id when lead changes
-
+    // --- START OF CHANGE: Modified to handle duration_minutes ---
     if (field === "lead_id") {
+      setFormData((prev) => ({ ...prev, lead_id: value, event_id: "", duration_minutes: prev.duration_minutes, remark: prev.remark }));
       const eventsForLead = events.filter(e => e.lead_id.toString() === value && e.type === eventType);
       if (eventsForLead.length > 0) {
         const latestEvent = eventsForLead.sort((a,b) => new Date(b.event_time || b.start_time).getTime() - new Date(a.event_time || a.start_time).getTime())[0];
-        setFormData((prev) => ({ ...prev, event_id: latestEvent.id.toString() }))
+        setFormData((prev) => ({ ...prev, lead_id: value, event_id: latestEvent.id.toString() }));
       }
+    } else {
+        setFormData((prev) => ({ ...prev, [field]: value }));
     }
+    // --- END OF CHANGE ---
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,22 +88,26 @@ export default function PostEventPage() {
     setIsLoading(true)
 
     try {
-        const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-        if (!formData.event_id) {
-            throw new Error(`No scheduled ${eventType} found for this lead.`);
+        if (!formData.event_id || !formData.remark || !formData.duration_minutes) {
+            throw new Error(`Please select a lead, provide notes, and enter the duration.`);
+        }
+        
+        const duration = Number.parseInt(formData.duration_minutes, 10);
+        if (isNaN(duration) || duration <= 0) {
+            throw new Error("Please enter a valid, positive number for the duration.");
         }
 
         if (eventType === "meeting") {
             await api.completeMeeting({
-                meeting_id: Number.parseInt(formData.event_id),
-                notes: formData.remark,
-                updated_by: currentUser.username || "System",
+                MeetingId: Number.parseInt(formData.event_id),
+                Remark: formData.remark,
+                DurationMinutes: duration, // Pass duration
             });
         } else {
             await api.completeDemo({
-                demo_id: Number.parseInt(formData.event_id),
-                notes: formData.remark,
-                updated_by: currentUser.username || "System",
+                DemoId: Number.parseInt(formData.event_id),
+                Remark: formData.remark,
+                DurationMinutes: duration, // Pass duration
             });
         }
 
@@ -107,11 +116,7 @@ export default function PostEventPage() {
     } catch (error) {
       console.error(`[v0] Failed to complete ${eventType}:`, error)
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-      toast({
-        title: "Error",
-        description: `Failed to save notes: ${errorMessage}`,
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: `Failed to save notes: ${errorMessage}`, variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
@@ -127,6 +132,10 @@ export default function PostEventPage() {
     value: lead.id.toString(),
     label: `${lead.company_name} ${lead.contacts && lead.contacts[0] ? `(${lead.contacts[0].contact_name})` : ''}`,
   }));
+  
+  if (isDataLoading) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
 
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -184,6 +193,24 @@ export default function PostEventPage() {
               />
             </div>
 
+            {/* --- START OF CHANGE: Add duration input field --- */}
+            <div className="space-y-1">
+              <Label htmlFor="duration_minutes" className="text-xs sm:text-sm">
+                Actual Duration (minutes) *
+              </Label>
+              <Input
+                id="duration_minutes"
+                type="number"
+                placeholder="e.g., 45"
+                value={formData.duration_minutes}
+                onChange={(e) => handleInputChange("duration_minutes", e.target.value)}
+                required
+                min="1"
+                className="text-sm"
+              />
+            </div>
+            {/* --- END OF CHANGE --- */}
+
             <div className="space-y-1">
               <Label htmlFor="remark" className="text-xs sm:text-sm">
                 {eventType === "meeting" ? "Meeting" : "Demo"} Notes *
@@ -200,8 +227,9 @@ export default function PostEventPage() {
             </div>
 
             <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={isLoading} className="flex-1 h-9 text-sm">
-                {isLoading ? "Saving..." : "Save Notes"}
+              <Button type="submit" disabled={isLoading || !formData.event_id} className="flex-1 h-9 text-sm">
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Notes
               </Button>
               <Button type="button" variant="outline" onClick={() => router.back()} className="h-9 text-sm px-4">
                 Cancel

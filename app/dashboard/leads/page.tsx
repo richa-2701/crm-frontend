@@ -58,7 +58,7 @@ import Link from "next/link"
 import { ReassignLeadModal } from "@/components/leads/reassign-lead-modal"
 import { EditLeadModal } from "@/components/leads/edit-lead-modal"
 import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
-import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
+// import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
 import { ConvertToProposalModal } from "@/components/leads/convert-to-proposal-modal";
@@ -119,7 +119,7 @@ function TableRowComponent({
   getUserName,
   handleViewDetails,
   handleViewActivities,
-  handleViewHistory,
+  // handleViewHistory,
   handleReassignLead,
   handleEditLead,
   handleDownloadPdf,
@@ -134,7 +134,7 @@ function TableRowComponent({
   getUserName: (userId: string) => string
   handleViewDetails: (lead: Lead) => void
   handleViewActivities: (lead: Lead) => void
-  handleViewHistory: (lead: Lead) => void
+  // handleViewHistory: (lead: Lead) => void
   handleReassignLead: (lead: Lead) => void
   handleEditLead: (lead: Lead) => void
   handleDownloadPdf: (lead: Lead) => void
@@ -205,6 +205,8 @@ function TableRowComponent({
         )
       case "assigned_to":
         return <TableCell>{getUserName(lead.assigned_to)}</TableCell>
+      case "created_by":
+        return <TableCell>{getUserName(lead.created_by)}</TableCell>
       case "status":
         const statusKey = lead.status as keyof typeof statusColors;
         return (
@@ -236,10 +238,10 @@ function TableRowComponent({
                   <Activity className="mr-2 h-4 w-4" />
                   Activities
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleViewHistory(lead)}>
+                {/* <DropdownMenuItem onClick={() => handleViewHistory(lead)}>
                   <History className="mr-2 h-4 w-4" />
                   History
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuItem asChild>
                   <Link href={`/dashboard/view-quotations/${lead.id}`}>
                     <QuotationIcon className="mr-2 h-4 w-4" />
@@ -329,6 +331,7 @@ const ALL_COLUMNS: ColumnConfig[] = [
     { id: "remark", label: "Remark", key: "remark" },
     { id: "lead_type", label: "Lead Type", key: "lead_type" },
     { id: "assigned_to", label: "Assigned To", key: "assigned_to" },
+    { id: "created_by", label: "Created By", key: "created_by" },
     { id: "status", label: "Status", key: "status" },
     { id: "opportunity_business", label: "Opportunity Business", key: "opportunity_business" },
     { id: "target_closing_date", label: "Target Closing Date", key: "target_closing_date" },
@@ -522,7 +525,7 @@ export default function LeadsPage() {
   const [showReassignModal, setShowReassignModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivitiesModal, setShowActivitiesModal] = useState(false)
-  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  // const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showPdfDialog, setShowPdfDialog] = useState(false)
@@ -573,6 +576,7 @@ export default function LeadsPage() {
     remark: false,
     lead_type: false,
     assigned_to: false,
+    created_by: false,
     status: true,
     opportunity_business: false,
     target_closing_date: false,
@@ -613,7 +617,7 @@ export default function LeadsPage() {
         api.getDripSequences()
       ]);
       const transformedLeads: Lead[] = allLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
-        id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
+        id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, created_by: lead.created_by, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
         last_activity: lead.last_activity || null,
         opportunity_business: lead.opportunity_business,
         target_closing_date: lead.target_closing_date,
@@ -861,7 +865,7 @@ export default function LeadsPage() {
     }
   };
 
-  const handleViewHistory = (lead: Lead) => { setSelectedLead(lead); setShowHistoryModal(true); }
+  // const handleViewHistory = (lead: Lead) => { setSelectedLead(lead); setShowHistoryModal(true); }
 
   const handleReassignComplete = async (leadId: string, newUserId: string) => {
     const newUser = companyUsers.find((u) => u.id === newUserId)
@@ -1157,7 +1161,7 @@ export default function LeadsPage() {
                         getUserName={getUserName}
                         handleViewDetails={handleViewDetails}
                         handleViewActivities={handleViewActivities}
-                        handleViewHistory={handleViewHistory}
+                        // handleViewHistory={handleViewHistory}
                         handleReassignLead={handleReassignLead}
                         handleEditLead={handleEditLead}
                         handleDownloadPdf={handleDownloadPdf}
@@ -1218,7 +1222,7 @@ export default function LeadsPage() {
       {selectedLead && (
         <>
           <LeadActivitiesModal lead={selectedLead} isOpen={showActivitiesModal} onClose={() => setShowActivitiesModal(false)} />
-          <LeadHistoryModal lead={selectedLead} isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} />
+          {/* <LeadHistoryModal lead={selectedLead} isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} /> */}
           {canManageAllLeads(user) && (<ReassignLeadModal lead={selectedLead} isOpen={showReassignModal} onClose={() => setShowReassignModal(false)} onReassign={handleReassignComplete} users={companyUsers} />)}
           <EditLeadModal lead={selectedLead} isOpen={showEditModal} onClose={() => setShowEditModal(false)} onSave={handleEditComplete} users={companyUsers} />
           <ConvertLeadToClientModal

@@ -1,4 +1,4 @@
-//frontend/components/activity/log-activity-modal.tsx
+//frontend/components/activity/log-activity-modal.tsx 
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -10,10 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Mic, MicOff, Paperclip, XCircle } from "lucide-react"
-import { api, ApiLead, ApiUser } from "@/lib/api"
-// --- FIX: Import a debounce utility. If you don't have one, you can use lodash or create a simple one. ---
-import { debounce } from "lodash"; // Example using lodash. `npm install lodash @types/lodash` if not already installed.
-
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { api, ApiUser, ApiLeadSearchResult } from "@/lib/api"
+import { debounce } from "lodash";
 
 interface ModalProps {
   currentUser: ApiUser;
@@ -24,10 +23,13 @@ interface ModalProps {
 
 export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: ModalProps) {
     const { toast } = useToast();
-    const [leads, setLeads] = useState<ApiLead[]>([]);
+    const [allLeads, setAllLeads] = useState<ApiLeadSearchResult[]>([]);
+    const [filteredLeads, setFilteredLeads] = useState<ApiLeadSearchResult[]>([]);
+    const [hasFetchedInitialLeads, setHasFetchedInitialLeads] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isFetchingLeads, setIsFetchingLeads] = useState(false); // State for lead search
-    const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "" });
+    const [isFetchingData, setIsFetchingData] = useState(false);
+    const [isFetchingLeads, setIsFetchingLeads] = useState(false);
+    const [formData, setFormData] = useState({ leadId: "", details: "", activityType: "", duration_minutes: "" });
     const [otherActivityType, setOtherActivityType] = useState("");
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [textBeforeListening, setTextBeforeListening] = useState("");
@@ -40,49 +42,62 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
         browserSupportsSpeechRecognition
     } = useSpeechRecognition();
 
-    // --- OPTIMIZATION: Fetch activity types on mount, not leads. ---
     useEffect(() => {
         if (isOpen) {
-            setFormData({ leadId: "", details: "", activityType: "" });
+            setFormData({ leadId: "", details: "", activityType: "", duration_minutes: "" });
             setOtherActivityType("");
+            setSelectedFile(null);
             resetTranscript();
-            setLeads([]); // Clear previous lead list
+            setFilteredLeads([]);
+            setHasFetchedInitialLeads(false);
             
-            api.getByCategory("activity_type")
-                .then((activityTypesData) => {
+            const fetchData = async () => {
+                setIsFetchingData(true);
+                try {
+                    const activityTypesData = await api.getByCategory("activity_type");
                     const types = activityTypesData.map(item => item.value);
                     setActivityTypeOptions([...types, "Other"]);
                     if (types.length > 0) {
                         setFormData(prev => ({ ...prev, activityType: types[0] }));
                     }
-                }).catch(() => toast({ title: "Error", description: "Failed to fetch activity types." }));
+                } catch (error) {
+                    toast({ title: "Error", description: "Failed to fetch activity types." });
+                } finally {
+                    setIsFetchingData(false);
+                }
+            };
+            fetchData();
         }
     }, [isOpen, toast, resetTranscript]);
 
-    // --- OPTIMIZATION: Debounced function to search leads ---
-    const searchLeads = useCallback(
-        debounce(async (searchTerm: string) => {
-            if (searchTerm.length < 2) {
-                setLeads([]);
-                return;
-            }
+    const handleLeadDropdownOpen = async (open: boolean) => {
+        if (open && !hasFetchedInitialLeads) {
             setIsFetchingLeads(true);
             try {
-                // Assuming your backend can filter leads by name. If not, this still fetches all,
-                // but the debounce prevents it from happening on every keystroke.
-                // A better backend would be `api.searchLeads({ company_name: searchTerm })`
-                const allLeads = await api.getAllLeads();
-                const filteredLeads = allLeads.filter(lead => 
-                    lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
-                );
-                setLeads(filteredLeads);
+                const results = await api.searchLeads("");
+                setAllLeads(results);
+                setFilteredLeads(results);
+                setHasFetchedInitialLeads(true);
             } catch (error) {
-                toast({ title: "Error", description: "Could not search for leads." });
+                toast({ title: "Error", description: "Could not fetch the list of leads." });
             } finally {
                 setIsFetchingLeads(false);
             }
-        }, 300), // 300ms delay after user stops typing
-        [toast]
+        }
+    };
+
+    const searchLeads = useCallback(
+        debounce((searchTerm: string) => {
+            if (!searchTerm) {
+                setFilteredLeads(allLeads);
+                return;
+            }
+            const filtered = allLeads.filter(lead => 
+                lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            setFilteredLeads(filtered);
+        }, 200),
+        [allLeads]
     );
 
     useEffect(() => {
@@ -94,11 +109,10 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
         }
     }, [transcript, listening, textBeforeListening]);
 
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.leadId || !formData.details.trim()) {
-            toast({ title: "Error", description: "Please select a lead and provide activity details.", variant: "destructive" });
+        if (!formData.leadId || !formData.details.trim() || !formData.duration_minutes) {
+            toast({ title: "Error", description: "Please complete all required fields, including duration.", variant: "destructive" });
             return;
         }
         setIsLoading(true);
@@ -110,27 +124,35 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
             return;
         }
 
+        const duration = Number.parseInt(formData.duration_minutes, 10);
+        if (isNaN(duration) || duration <= 0) {
+            toast({ title: "Error", description: "Please enter a valid, positive number for the duration.", variant: "destructive" });
+            setIsLoading(false);
+            return;
+        }
+
         try {
             let attachmentPath: string | null = null;
             if (selectedFile) {
                 const uploadResponse = await api.uploadActivityAttachment(selectedFile);
-                // --- START OF FIX: Check for 'file_path' (snake_case) instead of 'filePath' (camelCase) ---
                 if (uploadResponse && uploadResponse.file_path) {
                     attachmentPath = uploadResponse.file_path;
                 } else {
                     throw new Error("File upload failed to return a path.");
                 }
-                // --- END OF FIX ---
             }
             
+            // --- START OF FIX: Add created_by to the payload ---
             const payload = {
                 lead_id: Number(formData.leadId),
                 details: formData.details,
                 phase: "Activity Logged",
                 activity_type: finalActivityType,
+                created_by: currentUser.username, // This line sends the logged-in user's name
                 attachment_path: attachmentPath,
+                duration_minutes: duration,
             };
-            
+            // --- END OF FIX ---
 
             await api.logActivity(payload);
             toast({ title: "Success", description: "Activity logged successfully." });
@@ -168,47 +190,61 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                     <DialogDescription>Record the details of a completed interaction with a lead.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                    <div >
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Lead Name *</Label>
-                            {/* --- OPTIMIZATION: Changed to a searchable Select component --- */}
                             <Select
                                 required
                                 value={formData.leadId}
                                 onValueChange={(value) => setFormData({ ...formData, leadId: value })}
+                                onOpenChange={handleLeadDropdownOpen}
                             >
                                 <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Type to search for a lead..." />
+                                    <SelectValue placeholder="Select or search for a lead..." />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <div className="p-2">
                                         <Input
                                             placeholder="Search by company name..."
                                             onChange={(e) => searchLeads(e.target.value)}
+                                            onKeyDown={(e) => e.stopPropagation()}
                                             autoFocus
                                         />
                                     </div>
-                                    {isFetchingLeads && (
-                                        <div className="flex items-center justify-center p-2">
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        </div>
-                                    )}
-                                    {leads.length > 0 ? (
-                                        leads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
-                                    ) : (
-                                        !isFetchingLeads && <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
-                                    )}
+                                    <ScrollArea className="h-[200px]">
+                                        {isFetchingLeads ? (
+                                            <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                        ) : filteredLeads.length > 0 ? (
+                                            filteredLeads.map(lead => <SelectItem key={lead.id} value={String(lead.id)}>{lead.company_name}</SelectItem>)
+                                        ) : (
+                                            <div className="p-2 text-center text-sm text-muted-foreground">No leads found.</div>
+                                        )}
+                                    </ScrollArea>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Activity Type *</Label>
-                            <Select value={formData.activityType} onValueChange={(value) => setFormData({ ...formData, activityType: value })}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {activityTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                                <Label>Activity Type *</Label>
+                                <Select value={formData.activityType} onValueChange={(value) => setFormData({ ...formData, activityType: value })}>
+                                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {activityTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="duration_minutes">Time Taken (minutes) *</Label>
+                                <Input
+                                    id="duration_minutes"
+                                    type="number"
+                                    placeholder="e.g., 30"
+                                    value={formData.duration_minutes}
+                                    onChange={(e) => setFormData(prev => ({...prev, duration_minutes: e.target.value }))}
+                                    required
+                                    min="1"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -228,21 +264,15 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                         <div className="relative">
                             <Textarea
                                 id="details"
-                                placeholder="e.g., Called the client, they are interested in the premium package. Or click the mic to speak."
+                                placeholder="e.g., Called the client... Or click the mic to speak."
                                 rows={4}
                                 required
                                 value={formData.details}
                                 onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                                className="resize-y break-all pr-10"
+                                className="resize-y max-h-24 pr-10"
                             />
                             {browserSupportsSpeechRecognition && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={handleMicClick}
-                                    className="absolute bottom-2 right-2 h-7 w-7"
-                                >
+                                <Button type="button" variant="ghost" size="icon" onClick={handleMicClick} className="absolute bottom-2 right-2 h-7 w-7">
                                     {listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}
                                     <span className="sr-only">Toggle microphone</span>
                                 </Button>
@@ -273,7 +303,7 @@ export function LogActivityModal({ currentUser, isOpen, onClose, onSuccess }: Mo
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" disabled={isLoading}>
+                        <Button type="submit" disabled={isLoading || isFetchingData}>
                             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Log Activity
                         </Button>

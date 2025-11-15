@@ -1,4 +1,4 @@
-// frontend/components/users/edit-user-modal.tsx
+//frontend/components/users/edit-user-modal.tsx
 "use client"
 
 import type React from "react"
@@ -10,48 +10,42 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { userApi } from "@/lib/api" // Import the API library
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  phone?: string
-  department?: string
-  createdAt?: string
-  company_name: string; 
-}
+import { userApi, type ApiUser } from "@/lib/api" // Import the consistent ApiUser type
 
 interface EditUserModalProps {
-  user: User | null
-  isOpen: boolean
-  onClose: () => void
-  onUserUpdated: () => void
+  user: ApiUser | null; // Use the ApiUser type for consistency
+  isOpen: boolean;
+  onClose: () => void;
+  onUserUpdated: () => void;
 }
 
 export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUserModalProps) {
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     email: "",
     role: "",
-    phone: "",
+    usernumber: "",
     department: "",
-  })
+  });
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // --- START OF FIX: Updated the dependency array for useEffect ---
   useEffect(() => {
-    if (user) {
+    // This effect now runs whenever the modal is opened OR when the selected user changes.
+    if (isOpen && user) {
       setFormData({
-        name: user.name || "",
+        username: user.username || "",
         email: user.email || "",
         role: user.role || "user", 
-        phone: user.phone || "",
+        usernumber: user.usernumber || "",
         department: user.department || "",
       })
+      // Clear any previous errors when opening the modal for a new user
+      setError("")
     }
-  }, [user])
+  }, [user, isOpen]) // Depends on both `user` and `isOpen`
+  // --- END OF FIX ---
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -59,24 +53,17 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
   }
 
   const validateForm = () => {
-    if (!formData.name || !formData.email || !formData.role) {
+    if (!formData.username || !formData.email || !formData.role) {
       setError("Please fill in all required fields: Name, Email, and Role.")
       return false
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      setError("Please enter a valid email address")
-      return false
-    }
-
     return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm() || !user) {
+    if (!validateForm() || !user?.email) {
       return
     }
 
@@ -84,19 +71,15 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
     setError("")
 
     try {
-      // --- START OF FIX: Pass the user's original email as the identifier ---
-      // The first argument must be the email the backend uses in its WHERE clause.
       await userApi.updateUser(user.email, {
-        username: formData.name,
-        usernumber: formData.phone,
-        email: formData.email, // This field is technically sent but ignored by the backend's WHERE clause
+        username: formData.username,
+        usernumber: formData.usernumber,
         department: formData.department,
         role: formData.role,
-      })
-      // --- END OF FIX ---
+      });
 
-      onUserUpdated()
-      onClose()
+      onUserUpdated();
+      onClose();
     } catch (err: any) {
       console.error("Update user error:", err);
       setError(err.message || "An unexpected error occurred.");
@@ -131,23 +114,21 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
               <Input
                 id="edit-name"
                 type="text"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
+                value={formData.username}
+                onChange={(e) => handleInputChange("username", e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-email">Email *</Label>
-              {/* --- START OF FIX: Make email read-only as it's the identifier --- */}
               <Input
                 id="edit-email"
                 type="email"
                 value={formData.email}
                 readOnly
                 disabled
-                className="cursor-not-allowed"
+                className="cursor-not-allowed bg-muted/50"
               />
-              {/* --- END OF FIX --- */}
             </div>
           </div>
 
@@ -169,8 +150,8 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
               <Input
                 id="edit-phone"
                 type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange("phone", e.target.value)}
+                value={formData.usernumber}
+                onChange={(e) => handleInputChange("usernumber", e.target.value)}
               />
             </div>
           </div>

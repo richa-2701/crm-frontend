@@ -1,4 +1,3 @@
-// frontend/app/dashboard/post-demo/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -12,6 +11,7 @@ import { Autocomplete } from "@/components/ui/autocomplete"
 import { api, type ApiDemo, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input" // Import Input component
 
 export default function PostDemoPage() {
   const router = useRouter()
@@ -27,6 +27,9 @@ export default function PostDemoPage() {
     demo_id: "",
     lead_id: "",
     remark: "",
+    // --- START OF CHANGE: Add duration_minutes to form state ---
+    duration_minutes: "",
+    // --- END OF CHANGE ---
   })
 
   useEffect(() => {
@@ -76,24 +79,29 @@ export default function PostDemoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.demo_id || !formData.remark) {
-        toast({ title: "Error", description: "Please select a scheduled demo and enter notes.", variant: "destructive" });
+    if (!formData.demo_id || !formData.remark || !formData.duration_minutes) {
+        toast({ title: "Error", description: "Please select a scheduled demo, enter notes, and provide the duration.", variant: "destructive" });
         return;
     }
     setIsLoading(true);
 
     try {
-      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
-      const demoData = {
-        demo_id: Number.parseInt(formData.demo_id),
-        notes: formData.remark,
-        updated_by: currentUser.username || "System",
-      }
+        const duration = Number.parseInt(formData.duration_minutes, 10);
+        if (isNaN(duration) || duration <= 0) {
+            toast({ title: "Error", description: "Please enter a valid duration.", variant: "destructive" });
+            setIsLoading(false);
+            return;
+        }
 
-      // --- START OF FIX: Replace direct fetch with api object ---
-      await api.completeDemo(demoData);
-      // --- END OF FIX ---
+      // --- START OF CHANGE: Updated the payload to include DurationMinutes ---
+      const demoData = {
+        DemoId: Number.parseInt(formData.demo_id),
+        Remark: formData.remark,
+        DurationMinutes: duration,
+      }
+      // --- END OF CHANGE ---
       
+      await api.completeDemo(demoData);
       setShowConfirmation(true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
@@ -146,6 +154,22 @@ export default function PostDemoPage() {
                 disabled={isPrefilled}
               />
             </div>
+
+            {/* --- START OF CHANGE: Add duration input field --- */}
+            <div className="space-y-2">
+                <Label htmlFor="duration_minutes">Actual Duration (minutes) *</Label>
+                <Input
+                    id="duration_minutes"
+                    type="number"
+                    placeholder="e.g., 60"
+                    value={formData.duration_minutes}
+                    onChange={(e) => handleInputChange("duration_minutes", e.target.value)}
+                    required
+                    min="1"
+                />
+            </div>
+            {/* --- END OF CHANGE --- */}
+
             <div className="space-y-2">
               <Label htmlFor="remark">Demo Notes *</Label>
               <Textarea id="remark" placeholder="Enter demo notes and client feedback..." value={formData.remark} onChange={(e) => handleInputChange("remark", e.target.value)} rows={5} required />

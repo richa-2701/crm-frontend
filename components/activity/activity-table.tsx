@@ -1,10 +1,10 @@
-// activity-table.tssx
+//frontend/components/activity/activity-table.tsx
 "use client"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/date-format";
-import { Phone, Mail, MessageSquare, CheckCircle, LucideIcon, Eye, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { Phone, Mail, MessageSquare, CheckCircle, LucideIcon, Eye, MoreHorizontal, Edit, Trash2, Timer } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +58,9 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
                     <TableHead>Logged/Scheduled</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Date</TableHead>
+                    {/* --- START OF CHANGE: Add Time Taken column --- */}
+                    <TableHead>Time Taken</TableHead>
+                    {/* --- END OF CHANGE --- */}
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
             </TableHeader>
@@ -90,10 +93,20 @@ export function ActivityTable({ activities, onMarkAsDone, onViewDetails, onViewP
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                {/* --- THE DEFINITIVE FIX --- */}
-                                {/* Always use the unified 'activity.date' property for display. */}
                                 {formatDateTime(activity.date)}
                             </TableCell>
+                            {/* --- START OF CHANGE: Add Time Taken cell content --- */}
+                            <TableCell>
+                                {activity.type === 'log' && activity.duration_minutes && activity.duration_minutes > 0 ? (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Timer className="h-4 w-4 text-muted-foreground" />
+                                        <span>{activity.duration_minutes} min</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-muted-foreground ml-4">—</span>
+                                )}
+                            </TableCell>
+                            {/* --- END OF CHANGE --- */}
                             <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-1">
                                     {isActionable && (

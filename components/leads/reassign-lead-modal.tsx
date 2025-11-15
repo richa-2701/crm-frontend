@@ -49,7 +49,9 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
     onClose()
   }
   
-  const currentlyAssignedUser = users.find(user => user.name === lead.assign_to);
+  // --- START OF FIX: Changed lead.assign_to to lead.assigned_to ---
+  const currentlyAssignedUser = users.find(user => user.name === lead.assigned_to);
+  // --- END OF FIX ---
   const availableUsers = users.filter(user => user.id !== currentlyAssignedUser?.id);
 
   return (
@@ -68,7 +70,6 @@ export function ReassignLeadModal({ lead, isOpen, onClose, onReassign, users }: 
                 <SelectValue placeholder="Select a team member" />
               </SelectTrigger>
               <SelectContent>
-                {/* Use the new filtered list */}
                 {availableUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name} ({user.email})
