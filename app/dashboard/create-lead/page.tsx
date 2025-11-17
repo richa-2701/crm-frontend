@@ -449,7 +449,7 @@ export default function CreateLeadPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-2 md:space-y-4 px-3 sm:px-4 md:px-0">
       <FieldVisibilityModal
         open={isSettingsModalOpen}
         onOpenChange={setIsSettingsModalOpen}
@@ -457,50 +457,59 @@ export default function CreateLeadPage() {
         onSave={handleSaveVisibleFields}
       />
 
-      <div className="flex justify-between items-center px-1">
+      {/* Desktop: Show heading with button */}
+      <div className="hidden md:flex justify-between items-center">
         <div>
-          <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Create Lead</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Add a new lead to your CRM system</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Create Lead</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Add a new lead to your CRM system</p>
         </div>
-        {/* --- START OF CHANGE --- */}
         <Button size="sm" onClick={() => setIsSettingsModalOpen(true)}>
           <Settings className="h-4 w-4 mr-2" />
           Customize Fields
         </Button>
-        {/* --- END OF CHANGE --- */}
       </div>
 
-
-      <Card className="border-0 sm:border shadow-none sm:shadow-sm">
-        <CardHeader className="pb-3 sm:pb-6">
-          <CardTitle className="text-lg sm:text-xl">Lead Information</CardTitle>
+      <Card className="border-0 md:border shadow-none md:shadow-sm">
+        <CardHeader className="pb-2 md:pb-4">
+          {/* Mobile: Settings icon and Fields button in same row as Lead Information */}
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm sm:text-base md:text-lg">Lead Information</CardTitle>
+            <Button
+              size="sm"
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="md:hidden h-7 px-2 text-xs"
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              Fields
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="px-3 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-6" ref={formRef}>
+        <CardContent className="px-2 sm:px-3 md:px-6">
+          <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4" ref={formRef}>
 
-            <div className="space-y-4 rounded-md border p-4">
-              <h3 className="text-md font-semibold">Contact Persons</h3>
+            <div className="space-y-2 md:space-y-3 rounded-md border p-2 md:p-3">
+              <h3 className="text-xs sm:text-sm md:text-base font-semibold">Contact Persons</h3>
               {contacts.map((contact, index) => (
-                <div key={index} className="space-y-3 rounded-md border p-3 relative">
+                <div key={index} className="space-y-2 rounded-md border p-2 md:p-3 relative">
                   {contacts.length > 1 && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute top-1 right-1 h-6 w-6"
+                      className="absolute top-0.5 right-0.5 h-5 w-5 md:h-6 md:w-6"
                       onClick={() => removeContact(index)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
                     </Button>
                   )}
-                  <div className="grid gap-0 grid-cols-1 md:grid-cols-5 items-end">
+                  <div className="grid gap-2 grid-cols-1 md:grid-cols-5 items-end">
                     <div className="space-y-1">
-                      <Label htmlFor={`prefix_${index}`}>Prefix *</Label>
+                      <Label htmlFor={`prefix_${index}`} className="text-[10px] sm:text-xs">Prefix *</Label>
                       <Select
                         value={contact.prefix}
                         onValueChange={value => handleContactChange(index, "prefix", value)}
                       >
-                        <SelectTrigger id={`prefix_${index}`} className="w-40">
+                        <SelectTrigger id={`prefix_${index}`} className="w-full md:w-40 h-8 text-xs sm:text-sm">
                           <SelectValue placeholder="Select prefix" />
                         </SelectTrigger>
                         <SelectContent className="w-32 max-h-60 overflow-y-auto">
@@ -512,28 +521,28 @@ export default function CreateLeadPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-4 md:col-span-2">
-                      <Label htmlFor={`first_name_${index}`}>First Name *</Label>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label htmlFor={`first_name_${index}`} className="text-[10px] sm:text-xs">First Name *</Label>
                       <Input
                         id={`first_name_${index}`}
                         value={contact.first_name}
                         onChange={e => handleContactChange(index, "first_name", e.target.value)}
-                        className={`w-full md:w-10/12 ${errors.contacts?.[index]?.first_name ? "border-red-500" : ""}`}
+                        className={`w-full md:w-10/12 h-8 text-xs sm:text-sm ${errors.contacts?.[index]?.first_name ? "border-red-500" : ""}`}
                       />
                     </div>
                     <div className="space-y-1 md:col-span-2">
-                      <Label htmlFor={`last_name_${index}`}>Last Name *</Label>
+                      <Label htmlFor={`last_name_${index}`} className="text-[10px] sm:text-xs">Last Name *</Label>
                       <Input
                         id={`last_name_${index}`}
                         value={contact.last_name}
                         onChange={e => handleContactChange(index, "last_name", e.target.value)}
-                        className={errors.contacts?.[index]?.last_name ? "border-red-500" : ""}
+                        className={`h-8 text-xs sm:text-sm ${errors.contacts?.[index]?.last_name ? "border-red-500" : ""}`}
                       />
                     </div>
                   </div>
-                  <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
                     <div className="space-y-1">
-                      <Label htmlFor={`phone_${index}`}>Phone *</Label>
+                      <Label htmlFor={`phone_${index}`} className="text-[10px] sm:text-xs">Phone *</Label>
                       <PhoneInput
                         country={"in"}
                         value={contact.phone}
@@ -541,92 +550,92 @@ export default function CreateLeadPage() {
                         enableSearch={true}
                         inputProps={{ id: `phone_${index}` }}
                         containerClass="w-full"
-                        inputClass={`!w-full !flex !h-10 !rounded-md !border !bg-background !pl-10 !px-3 !py-2 !text-sm ${errors.contacts?.[index]?.phone ? "!border-red-500" : "!border-input"}`}
+                        inputClass={`!w-full !flex !h-8 !rounded-md !border !bg-background !pl-10 !px-3 !py-2 !text-xs sm:!text-sm ${errors.contacts?.[index]?.phone ? "!border-red-500" : "!border-input"}`}
                       />
                     </div>
                     {visibleFields.has("contact_designation") && visibleFields.has("contact_pan") ? (
-                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                      <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label htmlFor={`designation_${index}`}>Designation</Label>
-                          <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} />
+                          <Label htmlFor={`designation_${index}`} className="text-[10px] sm:text-xs">Designation</Label>
+                          <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} className="h-8 text-xs sm:text-sm" />
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
-                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" />
+                          <Label htmlFor={`contact_pan_${index}`} className="text-[10px] sm:text-xs">PAN</Label>
+                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" className="h-8 text-xs sm:text-sm" />
                         </div>
                       </div>
                     ) : visibleFields.has("contact_designation") ? (
                       <div className="space-y-1">
-                        <Label htmlFor={`designation_${index}`}>Designation</Label>
-                        <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} />
+                        <Label htmlFor={`designation_${index}`} className="text-[10px] sm:text-xs">Designation</Label>
+                        <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} className="h-8 text-xs sm:text-sm" />
                       </div>
                     ) : visibleFields.has("contact_pan") && (
                        <div className="space-y-1">
-                          <Label htmlFor={`contact_pan_${index}`}>PAN</Label>
-                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" />
+                          <Label htmlFor={`contact_pan_${index}`} className="text-[10px] sm:text-xs">PAN</Label>
+                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" className="h-8 text-xs sm:text-sm" />
                         </div>
                     )}
                   </div>
                   {(visibleFields.has("contact_linkedin") || visibleFields.has("contact_email")) && (
-                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                    <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
                       {visibleFields.has("contact_linkedin") && (
                         <div className="space-y-1">
-                          <Label htmlFor={`contact_linkedin_${index}`}>LinkedIn Profile</Label>
-                          <Input id={`contact_linkedin_${index}`} type="url" value={contact.linkedIn} onChange={e => handleContactChange(index, "linkedIn", e.target.value)} placeholder="https://linkedin.com/in/john-doe" />
+                          <Label htmlFor={`contact_linkedin_${index}`} className="text-[10px] sm:text-xs">LinkedIn Profile</Label>
+                          <Input id={`contact_linkedin_${index}`} type="url" value={contact.linkedIn} onChange={e => handleContactChange(index, "linkedIn", e.target.value)} placeholder="https://linkedin.com/in/john-doe" className="h-8 text-xs sm:text-sm" />
                         </div>
                       )}
                       {visibleFields.has("contact_email") && (
                         <div className="space-y-1">
-                          <Label htmlFor={`contact_email_${index}`}>Email</Label>
-                          <Input id={`contact_email_${index}`} type="email" value={contact.email} onChange={e => handleContactChange(index, "email", e.target.value)} />
+                          <Label htmlFor={`contact_email_${index}`} className="text-[10px] sm:text-xs">Email</Label>
+                          <Input id={`contact_email_${index}`} type="email" value={contact.email} onChange={e => handleContactChange(index, "email", e.target.value)} className="h-8 text-xs sm:text-sm" />
                         </div>
                       )}
                     </div>
                   )}
                 </div>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-2">
-                <PlusCircle className="h-4 w-4" />
+              <Button type="button" variant="outline" size="sm" onClick={addContact} className="flex items-center gap-1.5 h-7 text-xs">
+                <PlusCircle className="h-3 w-3" />
                 Add Another Contact
               </Button>
             </div>
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <div className="grid gap-2 md:gap-3 grid-cols-1 md:grid-cols-2">
               <div className="space-y-1">
-                <Label htmlFor="company_name">Company *</Label>
+                <Label htmlFor="company_name" className="text-[10px] sm:text-xs">Company *</Label>
                 <Input
                   id="company_name"
                   value={formData.company_name}
                   onChange={e => handleInputChange("company_name", e.target.value)}
-                  className={errors.company_name ? "border-red-500" : ""}
+                  className={`h-8 text-xs sm:text-sm ${errors.company_name ? "border-red-500" : ""}`}
                 />
               </div>
               {visibleFields.has("email") && (
                 <div className="space-y-1">
-                  <Label htmlFor="email">Company Email</Label>
-                  <Input id="email" type="email" value={formData.email} onChange={e => handleInputChange("email", e.target.value)} />
+                  <Label htmlFor="email" className="text-[10px] sm:text-xs">Company Email</Label>
+                  <Input id="email" type="email" value={formData.email} onChange={e => handleInputChange("email", e.target.value)} className="h-8 text-xs sm:text-sm" />
                 </div>
               )}
             </div>
             {(visibleFields.has("website") || visibleFields.has("linkedIn")) && (
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+              <div className="grid gap-2 md:gap-3 grid-cols-1 md:grid-cols-2">
                 {visibleFields.has("website") && (
                   <div className="space-y-1">
-                    <Label htmlFor="website">Website</Label>
-                    <Input id="website" type="url" value={formData.website} onChange={e => handleInputChange("website", e.target.value)} placeholder="e.g., https://www.example.com" />
+                    <Label htmlFor="website" className="text-[10px] sm:text-xs">Website</Label>
+                    <Input id="website" type="url" value={formData.website} onChange={e => handleInputChange("website", e.target.value)} placeholder="e.g., https://www.example.com" className="h-8 text-xs sm:text-sm" />
                   </div>
                 )}
                 {visibleFields.has("linkedIn") && (
                   <div className="space-y-1">
-                    <Label htmlFor="linkedIn">Company LinkedIn</Label>
-                    <Input id="linkedIn" type="url" value={formData.linkedIn} onChange={e => handleInputChange("linkedIn", e.target.value)} placeholder="e.g., https://linkedin.com/company/example" />
+                    <Label htmlFor="linkedIn" className="text-[10px] sm:text-xs">Company LinkedIn</Label>
+                    <Input id="linkedIn" type="url" value={formData.linkedIn} onChange={e => handleInputChange("linkedIn", e.target.value)} placeholder="e.g., https://linkedin.com/company/example" className="h-8 text-xs sm:text-sm" />
                   </div>
                 )}
               </div>
             )}
             {visibleFields.has("address") && (
-              <div className="space-y-4 rounded-md border p-4">
-                <h3 className="text-md font-semibold">Address Details</h3>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+              <div className="space-y-2 md:space-y-3 rounded-md border p-2 md:p-3">
+                <h3 className="text-xs sm:text-sm md:text-base font-semibold">Address Details</h3>
+                <div className="grid gap-2 md:gap-3 grid-cols-1 md:grid-cols-2">
                   <div>
                     <Label htmlFor="address">Address Line 1</Label>
                     <Input id="address" value={formData.address} onChange={e => handleInputChange("address", e.target.value)} />
@@ -844,11 +853,11 @@ export default function CreateLeadPage() {
               </div>
             )}
 
-            <div className="flex gap-4 pt-2">
-              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading ? (<> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving... </>) : ("Save Lead")}
+            <div className="flex flex-col sm:flex-row gap-2 pt-1 md:pt-2">
+              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto h-8 sm:h-9 text-xs sm:text-sm">
+                {isLoading ? (<> <Loader2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> Saving... </>) : ("Save Lead")}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto h-8 sm:h-9 text-xs sm:text-sm">
                 Cancel
               </Button>
             </div>

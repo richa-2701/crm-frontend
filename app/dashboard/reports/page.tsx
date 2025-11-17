@@ -208,22 +208,50 @@ export default function ReportsPage() {
 
   return (
     <>
-      <div className="space-y-6 pb-6 px-2 md:px-0">
+      <div className="space-y-3 md:space-y-6 pb-6 px-3 sm:px-4 md:px-0">
         <Card className="border-none shadow-none">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:justify-between gap-4">
-                <div>
+          <CardHeader className="pb-2 md:pb-4">
+            <div className="flex flex-col md:flex-row md:justify-between gap-2 md:gap-4">
+                {/* Desktop: Show heading */}
+                <div className="hidden md:block">
                     <CardTitle className="text-2xl md:text-3xl font-bold tracking-tight">User Performance Report</CardTitle>
                     <CardDescription className="text-sm md:text-base">Analyze user performance for a selected time period.</CardDescription>
                 </div>
-                 <div className="flex items-center gap-2">
-                    <Button onClick={handleExportToPDF} disabled={!reportData || isPdfExporting || loading} variant="outline" size="sm"><Download className="mr-2 h-4 w-4" /> PDF</Button>
-                    {currentUser?.role === 'admin' && <Button onClick={() => setIsExportModalOpen(true)} disabled={isExcelExporting} size="sm"><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel Summary</Button>}
+                <div className="flex items-center justify-between md:justify-end gap-1.5 sm:gap-2 md:ml-auto">
+                    {/* Mobile: Show "Reports" text */}
+                    <CardTitle className="md:hidden text-sm sm:text-base">Reports</CardTitle>
+
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                        {/* Mobile: Icon-only buttons */}
+                        <Button
+                          onClick={handleExportToPDF}
+                          disabled={!reportData || isPdfExporting || loading}
+                          variant="outline"
+                          size="icon"
+                          className="md:w-auto md:px-4 h-8 w-8 sm:h-9 sm:w-9"
+                          title="Download PDF"
+                        >
+                          <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          <span className="hidden md:inline md:ml-2">PDF</span>
+                        </Button>
+                        {currentUser?.role === 'admin' && (
+                          <Button
+                            onClick={() => setIsExportModalOpen(true)}
+                            disabled={isExcelExporting}
+                            size="icon"
+                            className="md:w-auto md:px-4 h-8 w-8 sm:h-9 sm:w-9"
+                            title="Export Excel Summary"
+                          >
+                            <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <span className="hidden md:inline md:ml-2">Excel Summary</span>
+                          </Button>
+                        )}
+                    </div>
                 </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <ReportFilters 
+          <CardContent className="px-2 sm:px-3 md:px-6">
+            <ReportFilters
                 users={users}
                 selectedUserId={selectedUserId}
                 onUserChange={setSelectedUserId}
@@ -234,51 +262,81 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        {loading && <div className="text-center p-16 flex flex-col items-center justify-center"><Loader2 className="h-8 w-8 animate-spin mb-4" /><p className="text-muted-foreground">Generating Report...</p></div>}
-        
-        {error && 
-            <Card className="text-center p-16 bg-destructive/10 border-destructive">
-                <ServerCrash className="h-12 w-12 text-destructive mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-destructive">Failed to Generate Report</h3>
-                <p className="text-sm text-destructive/80">{error}</p>
+        {loading && <div className="text-center p-8 md:p-16 flex flex-col items-center justify-center"><Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mb-2 md:mb-4" /><p className="text-xs sm:text-sm text-muted-foreground">Generating Report...</p></div>}
+
+        {error &&
+            <Card className="text-center p-8 md:p-16 bg-destructive/10 border-destructive">
+                <ServerCrash className="h-8 w-8 sm:h-12 sm:w-12 text-destructive mx-auto mb-2 md:mb-4" />
+                <h3 className="text-sm sm:text-base md:text-lg font-semibold text-destructive">Failed to Generate Report</h3>
+                <p className="text-xs sm:text-sm text-destructive/80 mt-1">{error}</p>
             </Card>
         }
 
         {!canGenerate && !loading && !error && (
-            <Card className="text-center p-16 border-dashed">
-                <BarChart2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold">Ready to generate a report</h3>
-                <p className="text-sm text-muted-foreground">Select a user and date range to begin.</p>
+            <Card className="text-center p-8 md:p-16 border-dashed">
+                <BarChart2 className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 md:mb-4" />
+                <h3 className="text-sm sm:text-base md:text-lg font-semibold">Ready to generate a report</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">Select a user and date range to begin.</p>
             </Card>
         )}
 
         {reportData && !loading && (
-          <div className="space-y-6">
+          <div className="space-y-3 md:space-y-6">
             <KpiCardGrid reportData={reportData} onCardClick={handleKpiCardClick} />
             <ReportCharts reportData={reportData} />
             <Card>
-              <CardHeader>
-                  <CardTitle>Deals Won Details</CardTitle>
-                  <CardDescription>A list of all leads converted to clients in this period.</CardDescription>
+              <CardHeader className="pb-2 md:pb-4">
+                  <CardTitle className="text-sm sm:text-base md:text-lg">Deals Won Details</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">A list of all leads converted to clients in this period.</CardDescription>
               </CardHeader>
-              <CardContent>
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Client Name</TableHead><TableHead>Source</TableHead><TableHead>Converted Date</TableHead><TableHead className="text-right">Time to Close (Days)</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {reportData.tables.deals_won.length > 0 ? (
-                              reportData.tables.deals_won.map((deal) => (
-                                  <TableRow key={deal.client_id}>
-                                      <TableCell className="font-medium">{deal.company_name}</TableCell>
-                                      <TableCell>{deal.source}</TableCell>
-                                      <TableCell>{format(new Date(deal.converted_date), "LLL dd, y")}</TableCell>
-                                      <TableCell className="text-right">{deal.time_to_close}</TableCell>
-                                  </TableRow>
-                              ))
-                          ) : (
-                              <TableRow><TableCell colSpan={4} className="h-24 text-center">No deals were won in this period.</TableCell></TableRow>
-                          )}
-                      </TableBody>
-                  </Table>
+              <CardContent className="p-0 md:p-6">
+                  {/* Desktop Table */}
+                  <div className="hidden md:block">
+                      <Table>
+                          <TableHeader><TableRow><TableHead>Client Name</TableHead><TableHead>Source</TableHead><TableHead>Converted Date</TableHead><TableHead className="text-right">Time to Close (Days)</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                              {reportData.tables.deals_won.length > 0 ? (
+                                  reportData.tables.deals_won.map((deal) => (
+                                      <TableRow key={deal.client_id}>
+                                          <TableCell className="font-medium">{deal.company_name}</TableCell>
+                                          <TableCell>{deal.source}</TableCell>
+                                          <TableCell>{format(new Date(deal.converted_date), "LLL dd, y")}</TableCell>
+                                          <TableCell className="text-right">{deal.time_to_close}</TableCell>
+                                      </TableRow>
+                                  ))
+                              ) : (
+                                  <TableRow><TableCell colSpan={4} className="h-24 text-center">No deals were won in this period.</TableCell></TableRow>
+                              )}
+                          </TableBody>
+                      </Table>
+                  </div>
+
+                  {/* Mobile Card View */}
+                  <div className="md:hidden space-y-2 px-3 pb-3">
+                      {reportData.tables.deals_won.length > 0 ? (
+                          reportData.tables.deals_won.map((deal) => (
+                              <div key={deal.client_id} className="border rounded-lg p-2.5 space-y-1.5 bg-card">
+                                  <div className="font-medium text-sm truncate">{deal.company_name}</div>
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                          <span className="text-muted-foreground">Source:</span>
+                                          <p className="font-medium truncate mt-0.5">{deal.source}</p>
+                                      </div>
+                                      <div>
+                                          <span className="text-muted-foreground">Time to Close:</span>
+                                          <p className="font-medium truncate mt-0.5">{deal.time_to_close} days</p>
+                                      </div>
+                                      <div className="col-span-2">
+                                          <span className="text-muted-foreground">Converted:</span>
+                                          <p className="font-medium truncate mt-0.5">{format(new Date(deal.converted_date), "LLL dd, y")}</p>
+                                      </div>
+                                  </div>
+                              </div>
+                          ))
+                      ) : (
+                          <div className="text-center py-8 text-xs text-muted-foreground">No deals were won in this period.</div>
+                      )}
+                  </div>
               </CardContent>
             </Card>
           </div>

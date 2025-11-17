@@ -1020,73 +1020,157 @@ export default function LeadsPage() {
     setLeadForPdf(null);
   }
 
-  if (isLoading) { return ( <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /><span className="ml-2">Loading leads...</span></div> )}
+  if (isLoading) {
+    return (
+      <div className="space-y-3 md:space-y-4 px-3 sm:px-4 md:px-0">
+        {/* Page header skeleton */}
+        <div className="hidden md:block space-y-2">
+          <div className="h-8 w-32 bg-muted rounded animate-pulse"></div>
+          <div className="h-4 w-64 bg-muted rounded animate-pulse"></div>
+        </div>
+
+        <Card>
+          <CardHeader className="space-y-3 md:space-y-4">
+            {/* Title and action buttons skeleton */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="h-6 w-40 bg-muted rounded animate-pulse"></div>
+              <div className="flex gap-2">
+                <div className="h-9 w-9 bg-muted rounded animate-pulse"></div>
+                <div className="hidden sm:block h-9 w-24 bg-muted rounded animate-pulse"></div>
+              </div>
+            </div>
+
+            {/* Search and filters skeleton */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="h-9 flex-1 bg-muted rounded animate-pulse"></div>
+              <div className="flex gap-2">
+                <div className="h-9 w-20 bg-muted rounded animate-pulse"></div>
+                <div className="h-9 w-20 bg-muted rounded animate-pulse"></div>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {/* Desktop table skeleton */}
+            <div className="hidden md:block rounded-md border mx-6 mb-6">
+              <div className="divide-y">
+                {/* Table header */}
+                <div className="flex gap-4 p-3 border-b bg-muted/50">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-4 flex-1 bg-muted rounded animate-pulse"></div>
+                  ))}
+                </div>
+                {/* Table rows */}
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="flex gap-4 p-3">
+                    {[...Array(6)].map((_, j) => (
+                      <div key={j} className="h-4 flex-1 bg-muted rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile card skeleton */}
+            <div className="md:hidden space-y-3 px-3 pb-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-2 bg-card">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 space-y-2">
+                      <div className="h-5 w-3/4 bg-muted rounded animate-pulse"></div>
+                      <div className="h-4 w-1/2 bg-muted rounded animate-pulse"></div>
+                    </div>
+                    <div className="h-6 w-16 bg-muted rounded animate-pulse"></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                    {[...Array(4)].map((_, j) => (
+                      <div key={j} className="space-y-1">
+                        <div className="h-3 w-16 bg-muted rounded animate-pulse"></div>
+                        <div className="h-4 w-full bg-muted rounded animate-pulse"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (error) { return ( <div className="flex items-center justify-center h-64"><div className="text-center"><p className="text-red-500 mb-4">{error}</p><Button onClick={() => window.location.reload()}>Retry</Button></div></div> )}
   if (!user) { return <div>Loading...</div> }
 
    return (
     <>
-      <div className="flex h-full flex-col space-y-4">
-        <div className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Lead Details</h1>
-              <p className="text-muted-foreground">{viewMode === "all" ? "Manage and track all leads" : "Manage and track your assigned leads"}</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button onClick={handleOpenExportModal} variant="outline" disabled={isExporting}>
-                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExportIcon className="mr-2 h-4 w-4" />}
-                Export to Excel
-              </Button>
-              <Link href="/dashboard/create-lead"><Button><Plus className="mr-2 h-4 w-4" />Create Lead</Button></Link>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex h-full flex-col space-y-2 md:space-y-3">
         <Card className="flex flex-1 flex-col overflow-hidden">
-          <CardHeader className="flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <CardTitle>
-                {viewMode === "all" ? "All Leads" : "My Assigned Leads"}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">({filteredLeads.length} leads)</span>
-              </CardTitle>
-              <div className="flex items-center space-x-2">
-                <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center space-x-2"><User className="h-4 w-4" /><span>My Leads</span></Button>
-                <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center space-x-2"><Users className="h-4 w-4" /><span>All Leads</span></Button>
+          <CardHeader className="flex-shrink-0 space-y-2 md:space-y-3 pb-3 md:pb-4">
+            <div className="flex flex-col gap-2 sm:gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base sm:text-lg md:text-xl">
+                  {viewMode === "all" ? "All Leads" : "My Assigned Leads"}
+                  <span className="ml-2 text-xs sm:text-sm font-normal text-muted-foreground">({filteredLeads.length} leads)</span>
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleOpenExportModal} variant="outline" size="icon" disabled={isExporting} title="Export to Excel" className="h-8 w-8 sm:h-9 sm:w-9">
+                    {isExporting ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" /> : <ExportIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                  </Button>
+                  <Link href="/dashboard/create-lead">
+                    <Button size="icon" title="Create Lead" className="h-8 w-8 sm:h-9 sm:w-9">
+                      <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant={viewMode === "my" ? "default" : "outline"} size="sm" onClick={() => setViewMode("my")} className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+                  <User className="h-4 w-4" />
+                  <span className="text-xs sm:text-sm">My Leads</span>
+                </Button>
+                <Button variant={viewMode === "all" ? "default" : "outline"} size="sm" onClick={() => setViewMode("all")} className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+                  <Users className="h-4 w-4" />
+                  <span className="text-xs sm:text-sm">All Leads</span>
+                </Button>
               </div>
             </div>
-            <div className="flex items-center space-x-2 pt-4">
-              <div className="relative flex-grow">
-                <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search all columns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 w-full"/>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search all columns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8 h-9"/>
               </div>
-              <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                      <Button variant="outline"><Columns className="mr-2 h-4 w-4" />Columns</Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {ALL_COLUMNS.filter(col => col.key !== 'actions').map((column) => (
-                          <DropdownMenuCheckboxItem
-                              key={column.id}
-                              className="capitalize"
-                              checked={columnVisibility[column.id]}
-                              onCheckedChange={(value) => setColumnVisibility(prev => ({ ...prev, [column.id]: !!value }))}
-                          >
-                              {column.label}
-                          </DropdownMenuCheckboxItem>
-                      ))}
-                  </DropdownMenuContent>
-              </DropdownMenu>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="relative">
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filters
-                    {activeFilterCount > 0 && (<Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 justify-center p-0">{activeFilterCount}</Badge>)}
-                  </Button>
-                </PopoverTrigger>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1 sm:flex-initial">
+                          <Columns className="h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Columns</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {ALL_COLUMNS.filter(col => col.key !== 'actions').map((column) => (
+                            <DropdownMenuCheckboxItem
+                                key={column.id}
+                                className="capitalize"
+                                checked={columnVisibility[column.id]}
+                                onCheckedChange={(value) => setColumnVisibility(prev => ({ ...prev, [column.id]: !!value }))}
+                            >
+                                {column.label}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="relative flex-1 sm:flex-initial">
+                      <Filter className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Filters</span>
+                      {activeFilterCount > 0 && (<Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 justify-center p-0 text-xs">{activeFilterCount}</Badge>)}
+                    </Button>
+                  </PopoverTrigger>
                 <PopoverContent className="w-80" align="end">
                   <div className="space-y-4">
                     <h4 className="font-medium leading-none">Apply Filters</h4>
@@ -1118,6 +1202,7 @@ export default function LeadsPage() {
                   </div>
                 </PopoverContent>
               </Popover>
+              </div>
             </div>
             {activeFilterCount > 0 && (
               <div className="flex items-center gap-2 pt-4 flex-wrap">
@@ -1184,12 +1269,12 @@ export default function LeadsPage() {
               )}
             </div>
 
-            <div className="flex-shrink-0 pt-4">
-              <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                      <Label htmlFor="rows-per-page" className="text-sm text-muted-foreground">Rows per page</Label>
+            <div className="flex-shrink-0 pt-3 pb-16 md:pb-0 md:pt-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                      <Label htmlFor="rows-per-page" className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">Rows per page</Label>
                       <Select value={String(rowsPerPage)} onValueChange={(value) => { setRowsPerPage(Number(value)); setCurrentPage(1); }}>
-                          <SelectTrigger className="w-20 h-9">
+                          <SelectTrigger className="w-16 sm:w-20 h-8 sm:h-9">
                               <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1199,15 +1284,15 @@ export default function LeadsPage() {
                           </SelectContent>
                       </Select>
                   </div>
-                  <div className="flex items-center space-x-4">
-                      <span className="text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+                      <span className="text-xs sm:text-sm text-muted-foreground">
                           Page {currentPage} of {Math.ceil(filteredLeads.length / rowsPerPage) || 1}
                       </span>
-                      <div className="flex items-center space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                          <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
                               Previous
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage >= Math.ceil(filteredLeads.length / rowsPerPage)}>
+                          <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm" onClick={() => setCurrentPage(prev => prev + 1)} disabled={currentPage >= Math.ceil(filteredLeads.length / rowsPerPage)}>
                               Next
                           </Button>
                       </div>

@@ -35,6 +35,7 @@ interface SidebarProps {
   isCollapsed?: boolean
   onToggle?: () => void
   onItemClick?: () => void
+  isMobile?: boolean
 }
 
 interface NavLink {
@@ -179,12 +180,21 @@ function CollapsibleNavGroup({ group, isCollapsed, onItemClick }: { group: NavGr
     );
 }
 
-export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }: SidebarProps) {
+export function SidebarContent({ currentUser, onItemClick, isCollapsed = false, isMobile = false }: SidebarProps) {
   const pathname = usePathname()
 
-  const accessibleNavItems = navigationConfig.filter(item =>
-      !item.adminOnly || (item.adminOnly && currentUser.role === 'admin')
-  );
+  // Items that appear in bottom nav (exclude from mobile sidebar)
+  const bottomNavItems = ['Dashboard', 'Leads', 'Events', 'Activity', 'Tasks']
+
+  const accessibleNavItems = navigationConfig.filter(item => {
+    // Filter by admin role
+    if (item.adminOnly && currentUser.role !== 'admin') return false
+
+    // On mobile, exclude items that are in bottom nav
+    if (isMobile && item.type === 'link' && bottomNavItems.includes(item.title)) return false
+
+    return true
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -239,7 +249,14 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false }
 export function Sidebar({ currentUser, isCollapsed = false, onToggle }: SidebarProps) {
   return (
     <aside className={cn("hidden md:fixed md:inset-y-0 md:flex md:flex-col md:z-30 transition-all duration-300", isCollapsed ? "md:w-16" : "md:w-64")}>
-      <div className="flex flex-col flex-1 min-h-0 border-r bg-card pt-16">
+      <div className="flex flex-col flex-1 min-h-0 border-r bg-card">
+        {/* Sidebar Header - matching navbar height */}
+        {!isCollapsed && (
+          <div className="flex items-center justify-center h-16 border-b bg-card flex-shrink-0">
+            <h1 className="text-xl font-bold tracking-tight">INDUS CRM</h1>
+          </div>
+        )}
+
         <SidebarContent currentUser={currentUser} isCollapsed={isCollapsed} />
       </div>
       <Button variant="ghost" size="icon" onClick={onToggle} className="absolute -right-3 top-20 z-40 h-6 w-6 rounded-full border bg-background shadow-md hover:bg-accent">

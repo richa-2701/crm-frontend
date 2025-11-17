@@ -19,9 +19,11 @@ import React from "react"
 interface NavbarProps {
   user: ApiUser
   children?: React.ReactNode
+  pageTitle?: string
+  isSidebarCollapsed?: boolean
 }
 
-export function Navbar({ user, children }: NavbarProps) {
+export function Navbar({ user, children, pageTitle, isSidebarCollapsed = false }: NavbarProps) {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
 
@@ -58,21 +60,26 @@ export function Navbar({ user, children }: NavbarProps) {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <nav className={`sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-4">
-          {children}
-          <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight cursor-pointer">INDUS CRM</h1>
+        <div className="flex items-center gap-4 md:flex-1">
+          {/* Mobile menu button */}
+          <div className="md:hidden">
+            {children}
+          </div>
+          {/* Page title - mobile shows in navbar, desktop shows in navbar too */}
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity md:pointer-events-none">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight cursor-pointer md:cursor-default">{pageTitle || "INDUS CRM"}</h1>
           </Link>
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-4">
-          {user.role === "admin" && user.company_name !== "Amar Ujala" && (
+          {/* Commented out for now as requested */}
+          {/* {user.role === "admin" && user.company_name !== "Amar Ujala" && (
             <Button variant="ghost" size="sm" className="h-8 px-3" onClick={handleProposalManagementClick}>
               Proposal Management
             </Button>
-          )}
+          )} */}
 
           {/* This "Management" dropdown remains unchanged, visible to all admins. */}
           {user.role === "admin" && (
