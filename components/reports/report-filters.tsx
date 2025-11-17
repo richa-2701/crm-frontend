@@ -21,23 +21,25 @@ interface ReportFiltersProps {
 
 export function ReportFilters({ users, selectedUserId, onUserChange, dateRange, onDateChange, isUserSelectionDisabled }: ReportFiltersProps) {
   return (
-    <div className="flex flex-col md:flex-row gap-4">
+    <div className="flex flex-col md:flex-row gap-2 md:gap-4">
       <div className="flex-1">
-        <label className="text-sm font-medium mb-1 block">User</label>
+        <label className="text-[10px] sm:text-xs md:text-sm font-medium mb-0.5 md:mb-1 block">User</label>
         <Select value={selectedUserId} onValueChange={onUserChange} disabled={isUserSelectionDisabled}>
-          <SelectTrigger><SelectValue placeholder="Select a user" /></SelectTrigger>
+          <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select a user" /></SelectTrigger>
           <SelectContent>
             {users.map(u => (<SelectItem key={u.id} value={String(u.id)}>{u.username}</SelectItem>))}
           </SelectContent>
         </Select>
       </div>
       <div className="flex-1">
-        <label className="text-sm font-medium mb-1 block">Date Range</label>
+        <label className="text-[10px] sm:text-xs md:text-sm font-medium mb-0.5 md:mb-1 block">Date Range</label>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="w-full justify-start text-left font-normal">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}` : format(dateRange.from, "LLL dd, y")) : <span>Pick a date</span>}
+            <Button variant="outline" className="w-full justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm">
+              <CalendarIcon className="mr-1.5 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="truncate">
+                {dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}` : format(dateRange.from, "LLL dd, y")) : <span>Pick a date</span>}
+              </span>
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">

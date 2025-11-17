@@ -12,8 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { AlertCircle, CheckCircle, User, Lock, Settings, Eye, EyeOff } from "lucide-react"
-import Link from "next/link"
+import { AlertCircle, CheckCircle, User, Lock, Eye, EyeOff } from "lucide-react"
 
 interface UserData {
   id: string
@@ -163,132 +162,121 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-          <p className="text-muted-foreground">Manage your account settings and preferences</p>
-        </div>
-        {user.role === "Administrator" && (
-          <Link href="/dashboard/manage-users">
-            <Button>
-              <Settings className="h-4 w-4 mr-2" />
-              Manage Users
-            </Button>
-          </Link>
-        )}
-      </div>
-
+    <div className="space-y-2 md:space-y-4 px-3 sm:px-4 md:px-0">
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+        <Alert variant="destructive" className="py-2">
+          <AlertCircle className="h-3.5 w-3.5" />
+          <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert className="border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
-          <CheckCircle className="h-4 w-4" />
-          <AlertDescription>{success}</AlertDescription>
+        <Alert className="border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200 py-2">
+          <CheckCircle className="h-3.5 w-3.5" />
+          <AlertDescription className="text-xs sm:text-sm">{success}</AlertDescription>
         </Alert>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-2 md:gap-4 md:grid-cols-2">
         {/* Profile Information */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+          <CardHeader className="pb-2 md:pb-4">
+            <CardTitle className="flex items-center gap-1.5 text-sm sm:text-base md:text-lg">
+              <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Profile Information
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center space-x-4">
-              <Avatar className="h-16 w-16">
-                <AvatarFallback className="text-lg">{(user.username || "U").charAt(0).toUpperCase()}</AvatarFallback>
+          <CardContent className="space-y-2 md:space-y-4">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Avatar className="h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14">
+                <AvatarFallback className="text-sm sm:text-base">{(user.username || "U").charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <div>
-                <h3 className="text-lg font-semibold">{user.username}</h3>
-                <p className="text-muted-foreground">{user.email}</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm sm:text-base font-semibold truncate">{user.username}</h3>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{user.email}</p>
                 <Badge
                   variant={user.role === "admin" || user.role === "Administrator" ? "default" : "secondary"}
-                  className="mt-1"
+                  className="mt-0.5 text-[10px] px-1.5 py-0"
                 >
                   {user.role === "admin" || user.role === "Administrator" ? "Administrator" : "Company User"}
                 </Badge>
               </div>
             </div>
 
-            <Separator />
+            <Separator className="my-2" />
 
             {!isEditing ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 md:space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Name</Label>
-                    <p className="text-sm">{user.username}</p>
+                    <Label className="text-[10px] sm:text-xs font-medium text-muted-foreground">Name</Label>
+                    <p className="text-xs sm:text-sm mt-0.5">{user.username}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Email</Label>
-                    <p className="text-sm">{user.email}</p>
+                    <Label className="text-[10px] sm:text-xs font-medium text-muted-foreground">Email</Label>
+                    <p className="text-xs sm:text-sm mt-0.5 truncate">{user.email}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
-                    <p className="text-sm">{user.usernumber || user.phone || "Not provided"}</p>
+                    <Label className="text-[10px] sm:text-xs font-medium text-muted-foreground">Phone</Label>
+                    <p className="text-xs sm:text-sm mt-0.5">{user.usernumber || user.phone || "Not provided"}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Department</Label>
-                    <p className="text-sm">{user.department || "Not provided"}</p>
+                    <Label className="text-[10px] sm:text-xs font-medium text-muted-foreground">Department</Label>
+                    <p className="text-xs sm:text-sm mt-0.5">{user.department || "Not provided"}</p>
                   </div>
                 </div>
-                <Button onClick={() => setIsEditing(true)} className="w-full">
+                <Button onClick={() => setIsEditing(true)} className="w-full h-8 text-xs sm:text-sm">
                   Edit Profile
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+              <form onSubmit={handleUpdateProfile} className="space-y-2 md:space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="name" className="text-[10px] sm:text-xs">Name</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      className="h-8 text-xs sm:text-sm"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="email" className="text-[10px] sm:text-xs">Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
+                      className="h-8 text-xs sm:text-sm"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="phone" className="text-[10px] sm:text-xs">Phone</Label>
                     <Input
                       id="phone"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="h-8 text-xs sm:text-sm"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="department" className="text-[10px] sm:text-xs">Department</Label>
                     <Input
                       id="department"
                       value={formData.department}
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      className="h-8 text-xs sm:text-sm"
                     />
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={isLoading}>
+                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+                  <Button type="submit" disabled={isLoading} className="h-8 text-xs sm:text-sm sm:flex-1">
                     {isLoading ? "Saving..." : "Save Changes"}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="h-8 text-xs sm:text-sm sm:flex-1">
                     Cancel
                   </Button>
                 </div>
@@ -299,26 +287,26 @@ export default function ProfilePage() {
 
         {/* Change Password */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
+          <CardHeader className="pb-2 md:pb-4">
+            <CardTitle className="flex items-center gap-1.5 text-sm sm:text-base md:text-lg">
+              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Security
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!isChangingPassword ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+              <div className="space-y-2 md:space-y-3">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">
                   Keep your account secure by using a strong password and changing it regularly.
                 </p>
-                <Button onClick={() => setIsChangingPassword(true)} className="w-full">
+                <Button onClick={() => setIsChangingPassword(true)} className="w-full h-8 text-xs sm:text-sm">
                   Change Password
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
+              <form onSubmit={handleChangePassword} className="space-y-2 md:space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="currentPassword" className="text-[10px] sm:text-xs">Current Password</Label>
                   <div className="relative">
                     <Input
                       id="currentPassword"
@@ -326,21 +314,21 @@ export default function ProfilePage() {
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                       required
-                      className="pr-10"
+                      className="pr-9 h-8 text-xs sm:text-sm"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      className="absolute right-0 top-0 h-8 px-2 hover:bg-transparent"
                       onClick={() => togglePasswordVisibility("current")}
                     >
-                      {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPasswords.current ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="newPassword" className="text-[10px] sm:text-xs">New Password</Label>
                   <div className="relative">
                     <Input
                       id="newPassword"
@@ -348,21 +336,21 @@ export default function ProfilePage() {
                       value={passwordData.newPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                       required
-                      className="pr-10"
+                      className="pr-9 h-8 text-xs sm:text-sm"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      className="absolute right-0 top-0 h-8 px-2 hover:bg-transparent"
                       onClick={() => togglePasswordVisibility("new")}
                     >
-                      {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPasswords.new ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </Button>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="confirmPassword" className="text-[10px] sm:text-xs">Confirm New Password</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -370,24 +358,24 @@ export default function ProfilePage() {
                       value={passwordData.confirmPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                       required
-                      className="pr-10"
+                      className="pr-9 h-8 text-xs sm:text-sm"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      className="absolute right-0 top-0 h-8 px-2 hover:bg-transparent"
                       onClick={() => togglePasswordVisibility("confirm")}
                     >
-                      {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showPasswords.confirm ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={isLoading}>
+                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+                  <Button type="submit" disabled={isLoading} className="h-8 text-xs sm:text-sm sm:flex-1">
                     {isLoading ? "Changing..." : "Change Password"}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setIsChangingPassword(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsChangingPassword(false)} className="h-8 text-xs sm:text-sm sm:flex-1">
                     Cancel
                   </Button>
                 </div>

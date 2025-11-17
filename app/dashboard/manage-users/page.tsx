@@ -123,18 +123,7 @@ export default function ManageUsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Manage Users</h1>
-          <p className="text-muted-foreground">View and manage all system users</p>
-        </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add User
-        </Button>
-      </div>
-
+    <div className="space-y-3 md:space-y-6 px-3 sm:px-4 md:px-0">
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -150,25 +139,37 @@ export default function ManageUsersPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Users ({filteredUsers.length})
-          </CardTitle>
+        <CardHeader className="space-y-2 md:space-y-3 pb-3 md:pb-4">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span>Users ({filteredUsers.length})</span>
+            </CardTitle>
+            <Button
+              onClick={() => setIsCreateModalOpen(true)}
+              size="icon"
+              className="md:w-auto md:px-4 h-8 w-8 sm:h-9 sm:w-9"
+              title="Add User"
+            >
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden md:inline md:ml-2">Add User</span>
+            </Button>
+          </div>
           <div className="flex items-center space-x-2">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
+                className="pl-8 h-9"
               />
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+        <CardContent className="p-0">
+          {/* Desktop Table View */}
+          <div className="hidden md:block rounded-md border mx-6 mb-6">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -237,6 +238,75 @@ export default function ManageUsersPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3 px-3 pb-3">
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                No users found
+              </div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div key={user.id} className="border rounded-lg p-3 space-y-2 bg-card">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Avatar className="h-8 w-8 flex-shrink-0">
+                        <AvatarFallback className="text-xs">{user.username.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{user.username}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        {user.id !== currentUser.id && (
+                          <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="text-red-600">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Role:</span>
+                      <div className="mt-1">
+                        <Badge variant={user.role === "admin" ? "default" : "secondary"} className="text-xs">
+                          {user.role === 'admin' ? 'Admin' : 'User'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Department:</span>
+                      <p className="mt-1 font-medium truncate">{user.department || "N/A"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Phone:</span>
+                      <p className="mt-1 font-medium truncate">{user.usernumber || "N/A"}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Created:</span>
+                      <p className="mt-1 font-medium truncate">
+                        {user.created_at ? formatDateTime(user.created_at).split(',').slice(0, 2).join(',') : "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

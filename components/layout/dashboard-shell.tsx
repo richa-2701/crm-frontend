@@ -2,16 +2,40 @@
 "use client"
 import type React from "react"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Navbar } from "./navbar"
-import { Sidebar, SidebarContent } from "./sidebar" 
+import { Sidebar, SidebarContent } from "./sidebar"
+import { BottomNav } from "./bottom-nav"
 import { CRMChatbot, FloatingChatbotButton } from "@/components/chatbot/crm-chatbot"
 import { ApiUser } from "@/lib/api"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
+
+// Map of routes to page titles
+const pageTitles: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/dashboard/leads': 'Leads',
+  '/dashboard/create-lead': 'Create Lead',
+  '/dashboard/bulk-upload': 'Bulk Upload Leads',
+  '/dashboard/leads/recycle-bin': 'Recycle Bin',
+  '/dashboard/proposals': 'Proposals',
+  '/dashboard/add-quotation': 'Add Proposal',
+  '/dashboard/clients': 'Clients',
+  '/dashboard/schedule': 'Schedule Events',
+  '/dashboard/events': 'Events',
+  '/dashboard/activity': 'Activity',
+  '/dashboard/tasks': 'Tasks',
+  '/dashboard/reports': 'Reports',
+  '/dashboard/google-calendar': 'Google Calendar',
+  '/dashboard/message-master': 'Message Master',
+  '/dashboard/drip-sequence': 'Drip Sequence',
+  '/dashboard/masters': 'Masters',
+  '/dashboard/manage-users': 'Manage Users',
+  '/dashboard/profile': 'Profile',
+}
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null)
@@ -19,7 +43,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
   const isMobile = useIsMobile()
+
+  // Get page title based on current route
+  const pageTitle = pageTitles[pathname] || 'INDUS CRM'
 
   useEffect(() => {
     const userData = localStorage.getItem("user")
@@ -55,14 +83,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 Navigate through the CRM application.
             </SheetDescription> */}
         </SheetHeader>
-        <SidebarContent currentUser={user} onItemClick={() => setMobileSidebarOpen(false)} />
+        <SidebarContent currentUser={user} onItemClick={() => setMobileSidebarOpen(false)} isMobile={true} />
       </SheetContent>
     </Sheet>
   )
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar user={user}>
+      <Navbar user={user} pageTitle={pageTitle} isSidebarCollapsed={isSidebarCollapsed}>
         {isMobile && MobileSidebar}
       </Navbar>
       <div className="flex">
@@ -73,15 +101,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         />
         <main
           className={cn(
-            "flex-1 overflow-auto transition-all duration-300 pt-16", 
+            "flex-1 overflow-auto transition-all duration-300 pt-16 md:pt-0",
             isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
           )}
         >
-          <div className="pt-0 pl-2 pb-4 md:px-6 md:pb-6">
+          <div className="pt-1 pl-2 pb-20 md:pt-2 md:pb-6 md:px-6">
             <div className="mx-auto max-w-7xl">{children}</div>
           </div>
         </main>
       </div>
+
+      {/* Bottom Navigation for Mobile */}
+      <BottomNav />
 
       {!isChatbotOpen && <FloatingChatbotButton onClick={() => setIsChatbotOpen(true)} />}
 

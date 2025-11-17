@@ -427,7 +427,83 @@ export default function ActivityPage() {
         fetchDataForUser();
     };
 
-    if (!user) { return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>; }
+    if (isLoading || !user) {
+        return (
+            <div className="space-y-4 md:space-y-6 px-3 sm:px-4 md:px-0">
+                {/* Page header skeleton */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-2 flex-1">
+                        <div className="h-8 w-48 bg-muted rounded animate-pulse"></div>
+                        <div className="h-4 w-80 bg-muted rounded animate-pulse"></div>
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="h-9 w-32 bg-muted rounded animate-pulse"></div>
+                        <div className="h-9 w-40 bg-muted rounded animate-pulse"></div>
+                    </div>
+                </div>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-4">
+                            {/* Search bar skeleton */}
+                            <div className="h-9 flex-1 max-w-sm bg-muted rounded animate-pulse"></div>
+
+                            {/* Desktop filters skeleton */}
+                            <div className="hidden md:flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div key={i} className="h-4 w-16 bg-muted rounded animate-pulse"></div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="h-9 w-9 bg-muted rounded animate-pulse"></div>
+                                    <div className="h-9 w-9 bg-muted rounded animate-pulse"></div>
+                                </div>
+                            </div>
+
+                            {/* Mobile filter button skeleton */}
+                            <div className="md:hidden flex justify-end">
+                                <div className="h-9 w-24 bg-muted rounded animate-pulse"></div>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {/* Card view skeleton */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[...Array(6)].map((_, i) => (
+                                <div key={i} className="border rounded-lg p-4 space-y-3 bg-card">
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-5 w-3/4 bg-muted rounded animate-pulse"></div>
+                                            <div className="h-4 w-1/2 bg-muted rounded animate-pulse"></div>
+                                        </div>
+                                        <div className="h-6 w-20 bg-muted rounded animate-pulse"></div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="h-4 w-full bg-muted rounded animate-pulse"></div>
+                                        <div className="h-4 w-5/6 bg-muted rounded animate-pulse"></div>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2">
+                                        <div className="h-3 w-32 bg-muted rounded animate-pulse"></div>
+                                        <div className="h-8 w-24 bg-muted rounded animate-pulse"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pagination skeleton */}
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                            <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                            <div className="flex gap-2">
+                                <div className="h-9 w-24 bg-muted rounded animate-pulse"></div>
+                                <div className="h-9 w-24 bg-muted rounded animate-pulse"></div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <>

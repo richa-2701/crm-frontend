@@ -188,37 +188,69 @@ export default function TasksPage() {
     }
 
     return (
-        <div className="container mx-auto py-6">
-            <Card>
-                <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <CardTitle>Task Management</CardTitle>
-                            <CardDescription>
-                                Here are the tasks assigned to you. Manage your workflow to stay productive.
-                            </CardDescription>
-                        </div>
-                        <div className="flex gap-2">
-                           <Button variant="outline" onClick={() => setIsLogActivityModalOpen(true)}>Log Activity</Button>
+        <div className="space-y-3 md:space-y-4 px-3 sm:px-4 md:px-0">
+            {/* Desktop: Show heading with description */}
+            <div className="hidden md:block space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Task Management</h1>
+                <p className="text-sm md:text-base text-muted-foreground">
+                    Here are the tasks assigned to you. Manage your workflow to stay productive.
+                </p>
+            </div>
+
+            <Card className="border-0 md:border shadow-none md:shadow-sm">
+                <CardHeader className="pb-2 md:pb-4">
+                    <div className="flex justify-between items-center gap-2">
+                        {/* Mobile: Show "Tasks" text with buttons in same row */}
+                        <CardTitle className="text-sm sm:text-base md:text-lg">Tasks</CardTitle>
+                        <div className="flex gap-1.5 sm:gap-2">
+                           <Button
+                                variant="outline"
+                                onClick={() => setIsLogActivityModalOpen(true)}
+                                size="sm"
+                                className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+                           >
+                                <span className="hidden sm:inline">Log Activity</span>
+                                <span className="sm:hidden">Log Activity</span>
+                           </Button>
                             {currentUser.role === 'admin' && (
-                                <Button onClick={() => setCreateModalOpen(true)}>
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Create New Task
+                                <Button
+                                    onClick={() => setCreateModalOpen(true)}
+                                    size="sm"
+                                    className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+                                >
+                                    <PlusCircle className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                                    <span className="hidden sm:inline">Create New Task</span>
+                                    <span className="sm:hidden">Create Task</span>
                                 </Button>
                             )}
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-2 sm:px-3 md:px-6">
                     <Tabs defaultValue="todo">
-                        <TabsList>
-                            <TabsTrigger value="todo">To-Do ({pendingTasks.length})</TabsTrigger>
-                            <TabsTrigger value="in_progress">In Progress ({inProgressTasks.length})</TabsTrigger>
-                            <TabsTrigger value="completed">Completed ({completedTasks.length})</TabsTrigger>
+                        <TabsList className="w-full grid grid-cols-3 h-9 sm:h-10">
+                            <TabsTrigger value="todo" className="text-xs sm:text-sm px-1 sm:px-3">
+                                <span className="hidden sm:inline">To-Do ({pendingTasks.length})</span>
+                                <span className="sm:hidden">To-Do ({pendingTasks.length})</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="in_progress" className="text-xs sm:text-sm px-1 sm:px-3">
+                                <span className="hidden sm:inline">In Progress ({inProgressTasks.length})</span>
+                                <span className="sm:hidden">Progress ({inProgressTasks.length})</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="completed" className="text-xs sm:text-sm px-1 sm:px-3">
+                                <span className="hidden sm:inline">Completed ({completedTasks.length})</span>
+                                <span className="sm:hidden">Done ({completedTasks.length})</span>
+                            </TabsTrigger>
                         </TabsList>
-                        <TabsContent value="todo"><TaskDataTable columns={columns} data={pendingTasks} /></TabsContent>
-                        <TabsContent value="in_progress"><TaskDataTable columns={columns} data={inProgressTasks} /></TabsContent>
-                        <TabsContent value="completed"><TaskDataTable columns={columns} data={completedTasks} /></TabsContent>
+                        <TabsContent value="todo" className="mt-3 md:mt-4">
+                            <TaskDataTable columns={columns} data={pendingTasks} />
+                        </TabsContent>
+                        <TabsContent value="in_progress" className="mt-3 md:mt-4">
+                            <TaskDataTable columns={columns} data={inProgressTasks} />
+                        </TabsContent>
+                        <TabsContent value="completed" className="mt-3 md:mt-4">
+                            <TaskDataTable columns={columns} data={completedTasks} />
+                        </TabsContent>
                     </Tabs>
                 </CardContent>
             </Card>
