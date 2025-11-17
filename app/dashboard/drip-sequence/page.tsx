@@ -52,31 +52,43 @@ export default function DripMasterPage() {
     );
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Drip Master</h1>
-                    <p className="text-muted-foreground">Manage your automated messaging sequences.</p>
+        <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="space-y-1">
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Drip Master</h1>
+                    <p className="text-sm md:text-base text-muted-foreground">Manage your automated messaging sequences.</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <Button variant="outline" onClick={() => router.push("/dashboard/drip-sequence/assign")}>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => router.push("/dashboard/drip-sequence/assign")}
+                        className="w-full sm:w-auto justify-center"
+                    >
                         <Users className="mr-2 h-4 w-4" />
-                        Assign Drip to Leads
+                        <span className="whitespace-nowrap">Assign Drip to Leads</span>
                     </Button>
-                    <Button onClick={() => router.push("/dashboard/drip-sequence/create")}>
+                    <Button
+                        onClick={() => router.push("/dashboard/drip-sequence/create")}
+                        className="w-full sm:w-auto justify-center"
+                    >
                         <Plus className="mr-2 h-4 w-4" />
-                        Create Drip Sequence
+                        <span className="whitespace-nowrap">Create Drip Sequence</span>
                     </Button>
                 </div>
             </div>
             <Card>
-                <CardHeader>
+                <CardHeader className="p-4 md:p-6">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Search drips by name or code..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8" />
+                        <Input
+                            placeholder="Search drips by name or code..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="pl-8"
+                        />
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0 md:p-6 md:pt-0">
                     <DripsTable drips={filteredDrips} onDelete={handleDelete} isLoading={isLoading} />
                 </CardContent>
             </Card>

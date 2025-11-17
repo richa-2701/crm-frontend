@@ -7,7 +7,7 @@ import { AlertDialog } from "@radix-ui/react-alert-dialog";
 import { Dialog } from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 
-const CSHARP_API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:57214").replace(/\/api$/, "") + "/api";
+const CSHARP_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:57214/api/indas";
 const PYTHON_API_BASE_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL?.replace(/\/$/, "");
 
 // 🧠 Helper: Get saved company credentials

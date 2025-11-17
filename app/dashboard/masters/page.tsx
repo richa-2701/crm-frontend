@@ -8,9 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Plus, Trash2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-// --- START OF FIX: Import 'masterDataApi' instead of the generic 'api' ---
 import { masterDataApi, type ApiMasterData } from "@/lib/api"
-// --- END OF FIX ---
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const MASTER_CATEGORIES = [
@@ -99,35 +97,46 @@ export default function MastersPage() {
     const activeCategoryLabel = MASTER_CATEGORIES.find(c => c.key === activeCategory)?.label || "Items";
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Masters Configuration</h1>
-                <p className="text-muted-foreground">Manage dropdown options used across the CRM.</p>
+        <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
+            <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Masters Configuration</h1>
+                <p className="text-sm md:text-base text-muted-foreground">Manage dropdown options used across the CRM.</p>
             </div>
 
             <Tabs value={activeCategory} onValueChange={setActiveCategory}>
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-9">
+                <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-1 h-auto">
                     {MASTER_CATEGORIES.map(cat => (
-                        <TabsTrigger key={cat.key} value={cat.key}>{cat.label}</TabsTrigger>
+                        <TabsTrigger
+                            key={cat.key}
+                            value={cat.key}
+                            className="text-xs md:text-sm px-2 py-2"
+                        >
+                            {cat.label}
+                        </TabsTrigger>
                     ))}
                 </TabsList>
             </Tabs>
 
             <Card>
-                <CardHeader>
-                    <CardTitle>Manage {activeCategoryLabel}</CardTitle>
-                    <CardDescription>Add, view, and delete options for the {activeCategoryLabel} field.</CardDescription>
+                <CardHeader className="space-y-1 p-4 md:p-6">
+                    <CardTitle className="text-lg md:text-xl">Manage {activeCategoryLabel}</CardTitle>
+                    <CardDescription className="text-xs md:text-sm">Add, view, and delete options for the {activeCategoryLabel} field.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 md:p-6">
                     <div className="space-y-4">
-                        <form onSubmit={handleAddItem} className="flex items-center gap-2">
+                        <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <Input
                                 placeholder={`New ${activeCategoryLabel} Name...`}
                                 value={newItemValue}
                                 onChange={e => setNewItemValue(e.target.value)}
                                 disabled={isSubmitting}
+                                className="flex-1"
                             />
-                            <Button type="submit" disabled={isSubmitting || !newItemValue.trim()}>
+                            <Button
+                                type="submit"
+                                disabled={isSubmitting || !newItemValue.trim()}
+                                className="w-full sm:w-auto whitespace-nowrap"
+                            >
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                                 Add
                             </Button>
@@ -147,8 +156,8 @@ export default function MastersPage() {
                             <Table>
                                 <TableHeader className="sticky top-0 bg-secondary">
                                     <TableRow>
-                                        <TableHead>{activeCategoryLabel} Name</TableHead>
-                                        <TableHead className="text-right w-[100px]">Action</TableHead>
+                                        <TableHead className="text-sm md:text-base">{activeCategoryLabel} Name</TableHead>
+                                        <TableHead className="text-right w-[80px] md:w-[100px] text-sm md:text-base">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -157,16 +166,16 @@ export default function MastersPage() {
                                     ) : filteredItems.length > 0 ? (
                                         filteredItems.map(item => (
                                             <TableRow key={item.id}>
-                                                <TableCell className="font-medium">{item.value}</TableCell>
+                                                <TableCell className="font-medium text-sm md:text-base break-words">{item.value}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)}>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(item.id)} className="h-8 w-8">
                                                         <Trash2 className="h-4 w-4 text-destructive" />
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
-                                        <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground">No items found.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground text-sm">No items found.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>
