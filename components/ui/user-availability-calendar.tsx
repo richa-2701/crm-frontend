@@ -44,7 +44,7 @@ export function UserAvailabilityCalendar({
 
         // --- START OF FIX: Use API functions that fetch only SCHEDULED events ---
         // Changed from getAllMeetings/getAllDemos to getScheduledMeetings/getScheduledDemos.
-        // This ensures that completed, canceled, etc., events are not included.
+        // This ensures that completed, cancelled, etc., events are not included.
         const [meetingsData, demosData, usersData, leadsData] = await Promise.all([
           api.getScheduledMeetings(), 
           api.getScheduledDemos(),

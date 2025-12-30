@@ -1,3 +1,4 @@
+//frontend/frontend/app/dashboard/events/page.tsx
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -49,7 +50,7 @@ const getStatusBadgeVariant = (status: EnhancedEvent['status']) => {
     case 'Completed': return 'default';
     case 'Pending': return 'secondary';
     case 'Overdue': return 'destructive';
-    case 'Canceled': return 'outline';
+    case 'Cancelled': return 'outline';
     case 'Rescheduled': return 'outline';
     default: return 'outline';
   }
@@ -65,7 +66,7 @@ interface EnhancedEvent {
   assigned_to: string;
   start_time: string;
   end_time: string;
-  status: 'Pending' | 'Completed' | 'Overdue' | 'Canceled' | 'Rescheduled';
+  status: 'Pending' | 'Completed' | 'Overdue' | 'Cancelled' | 'Rescheduled';
   createdAt: string;
   createdBy: string;
   remark?: string;
@@ -73,17 +74,17 @@ interface EnhancedEvent {
   duration_minutes?: number;
 }
 
-type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue' | 'canceled' | 'rescheduled';
+type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue' | 'cancelled' | 'rescheduled';
 type ViewMode = 'grid' | 'list';
 
-const getEventStatus = (event: { start_time: string; phase?: string }): 'Pending' | 'Completed' | 'Overdue' | 'Canceled' | 'Rescheduled' => {
+const getEventStatus = (event: { start_time: string; phase?: string }): 'Pending' | 'Completed' | 'Overdue' | 'Cancelled' | 'Rescheduled' => {
   if (event.phase === 'Completed' || event.phase === 'Done') return 'Completed';
-  if (event.phase === 'Canceled') return 'Canceled';
+  if (event.phase === 'Cancelled') return 'Cancelled';
   if (event.phase === 'Rescheduled') return 'Rescheduled';
-  
+
   const eventDate = parseAsUTCDate(event.start_time);
   if (!eventDate) return 'Pending';
-  
+
   if (eventDate < new Date()) return 'Overdue';
 
   return 'Pending';
@@ -234,7 +235,7 @@ function CancelEventModal({ isOpen, onClose, event, onSuccess, currentUser }: { 
     setIsLoading(true);
     try {
       await api.cancelEvent(event.type, event.numericId, { reason, updated_by: currentUser.username });
-      toast({ title: "Success", description: "Event has been canceled." });
+      toast({ title: "Success", description: "Event has been cancelled." });
       onSuccess();
     } catch (error) {
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
@@ -594,7 +595,7 @@ export default function EventsPage() {
                 <div className="flex items-center space-x-2"><RadioGroupItem value="completed" id="completed" /><Label htmlFor="completed">Completed</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="overdue" id="overdue" /><Label htmlFor="overdue">Overdue</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="rescheduled" id="rescheduled" /><Label htmlFor="rescheduled">Rescheduled</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="canceled" id="canceled" /><Label htmlFor="canceled">Canceled</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="cancelled" id="cancelled" /><Label htmlFor="cancelled">Cancelled</Label></div>
               </RadioGroup>
 
               <div className="flex items-center gap-2">
@@ -892,7 +893,7 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             </div>
           )}
 
-          {event.status === 'Canceled' && event.remark && (
+          {event.status === 'Cancelled' && event.remark && (
             <div className="grid grid-cols-3 items-start gap-4 pt-4 border-t">
               <Label htmlFor="cancellation-reason" className="text-right font-semibold flex items-start justify-end gap-2 pt-1 text-destructive">
                 <XCircle className="h-4 w-4" /> Cancellation Reason

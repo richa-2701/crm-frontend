@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import type { DateRange } from "react-day-picker"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 interface ManageActivitiesModalProps {
     task: ApiTask | null;
@@ -35,6 +36,7 @@ export function ManageActivitiesModal({ task, isOpen, isCompleting, onClose, onS
     
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [searchTerm, setSearchTerm] = useState("");
+    const [remark, setRemark] = useState("");
 
     const linkedLeads = useMemo(() => {
         if (!task || !task.lead_ids || !task.company_names) return [];
@@ -73,6 +75,7 @@ export function ManageActivitiesModal({ task, isOpen, isCompleting, onClose, onS
         } else {
             setDateRange(undefined);
             setSearchTerm("");
+            setRemark("");
         }
     }, [isOpen, fetchAllData]);
 
@@ -106,10 +109,16 @@ export function ManageActivitiesModal({ task, isOpen, isCompleting, onClose, onS
 
     const handleSubmit = async () => {
         if (!task) return;
+
+        if (isCompleting && !remark.trim()) {
+            toast.error("Please provide a remark before completing the task.");
+            return;
+        }
+
         setIsLoading(true);
         try {
             if (isCompleting) {
-                await api.completeTask({ task_id: task.id, activity_ids: Array.from(selectedActivityIds) });
+                await api.completeTask({ task_id: task.id, activity_ids: Array.from(selectedActivityIds), remark: remark.trim() });
                 toast.success("Task successfully marked as complete!");
             } else {
                 await api.syncTaskActivities(task.id, Array.from(selectedActivityIds));
@@ -167,7 +176,7 @@ export function ManageActivitiesModal({ task, isOpen, isCompleting, onClose, onS
                 </div>
                 
                 <div className="flex-grow overflow-y-auto min-h-0">
-                    {isLoading ? (<div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>) : 
+                    {isLoading ? (<div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>) :
                     Object.keys(filteredActivities).length > 0 ? (
                         <ScrollArea className="h-full pr-4 py-4">
                             {Object.entries(filteredActivities).map(([companyName, activities]) => (
@@ -208,6 +217,21 @@ export function ManageActivitiesModal({ task, isOpen, isCompleting, onClose, onS
                         </div>
                     )}
                 </div>
+
+                {isCompleting && (
+                    <div className="flex-shrink-0 py-4 border-t space-y-2">
+                        <label htmlFor="task-remark" className="text-sm font-medium">
+                            Completion Remark <span className="text-red-500">*</span>
+                        </label>
+                        <Textarea
+                            id="task-remark"
+                            placeholder="Enter completion remarks..."
+                            value={remark}
+                            onChange={(e) => setRemark(e.target.value)}
+                            className="min-h-[80px]"
+                        />
+                    </div>
+                )}
                 
                 <DialogFooter className="flex-shrink-0">
                     <Button variant="outline" onClick={onClose}>Cancel</Button>

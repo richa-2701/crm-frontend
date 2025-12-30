@@ -143,6 +143,7 @@ interface MasterDataOptions {
   verticles: string[];
   lead_type: string[];
   current_system: string[];
+  version: string[];
 }
 
 type ValidationErrors = {
@@ -177,7 +178,7 @@ export default function CreateLeadPage() {
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
 
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
-    source: [], segment: [], verticles: [], lead_type: [], current_system: []
+    source: [], segment: [], verticles: [], lead_type: [], current_system: [], version: []
   });
 
   const [formData, setFormData] = useState({
@@ -231,13 +232,14 @@ export default function CreateLeadPage() {
           const parsedUser = JSON.parse(userData)
           setUser(parsedUser)
 
-          const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData] = await Promise.all([
+          const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData, versionData] = await Promise.all([
             userApi.getUsers(),
             api.getByCategory("source"),
             api.getByCategory("segment"),
             api.getByCategory("verticles"),
             api.getByCategory("lead_type"),
-            api.getByCategory("current_system")
+            api.getByCategory("current_system"),
+            api.getByCategory("version")
           ]);
 
           setMasterOptions({
@@ -246,6 +248,7 @@ export default function CreateLeadPage() {
             verticles: verticlesData.map(item => item.value),
             lead_type: leadTypeData.map(item => item.value),
             current_system: currentSystemData.map(item => item.value),
+            version: versionData.map(item => item.value),
           });
 
           setCompanyUsers(usersData);
@@ -744,13 +747,22 @@ export default function CreateLeadPage() {
                   {visibleFields.has("version") && (
                     <div className="space-y-1">
                       <Label htmlFor="version">Version</Label>
-                      <Input id="version" value={formData.version} onChange={e => handleInputChange("version", e.target.value)} />
+                      <Select value={formData.version} onValueChange={value => handleInputChange("version", value)}>
+                        <SelectTrigger><SelectValue placeholder="Select version" /></SelectTrigger>
+                        <SelectContent>{masterOptions.version.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                      </Select>
                     </div>
                   )}
                   {visibleFields.has("database_type") && (
                     <div className="space-y-1">
                       <Label htmlFor="database_type">Database Type</Label>
-                      <Input id="database_type" value={formData.database_type} onChange={e => handleInputChange("database_type", e.target.value)} />
+                      <Select value={formData.database_type} onValueChange={value => handleInputChange("database_type", value)}>
+                        <SelectTrigger><SelectValue placeholder="Select database type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Local DB">Local DB</SelectItem>
+                          <SelectItem value="Cloud Server">Cloud Server</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                   {visibleFields.has("amc") && (
@@ -787,7 +799,7 @@ export default function CreateLeadPage() {
               {visibleFields.has("segment") && (
                 <div className="space-y-1">
                   <Label htmlFor="segment">Segment</Label>
-                  <Select value={formData.segment} onValuechange={value => handleInputChange("segment", value)}>
+                  <Select value={formData.segment} onValueChange={value => handleInputChange("segment", value)}>
                     <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
                     <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>
@@ -796,7 +808,7 @@ export default function CreateLeadPage() {
               {visibleFields.has("verticles") && (
                 <div className="space-y-1">
                   <Label htmlFor="verticles">Verticals</Label>
-                  <Select value={formData.verticles} onValuechange={value => handleInputChange("verticles", value)}>
+                  <Select value={formData.verticles} onValueChange={value => handleInputChange("verticles", value)}>
                     <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
                     <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>
@@ -805,7 +817,7 @@ export default function CreateLeadPage() {
               {visibleFields.has("lead_type") && (
                 <div className="space-y-1">
                   <Label htmlFor="lead_type">Lead Type</Label>
-                  <Select value={formData.lead_type} onValuechange={value => handleInputChange("lead_type", value)}>
+                  <Select value={formData.lead_type} onValueChange={value => handleInputChange("lead_type", value)}>
                     <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>{masterOptions.lead_type.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>
@@ -823,7 +835,7 @@ export default function CreateLeadPage() {
               {visibleFields.has("current_system") && (
                 <div className="space-y-1">
                   <Label htmlFor="current_system">Current System</Label>
-                  <Select value={formData.current_system} onValuechange={value => handleInputChange("current_system", value)}>
+                  <Select value={formData.current_system} onValueChange={value => handleInputChange("current_system", value)}>
                     <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
                     <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                   </Select>

@@ -112,6 +112,11 @@ export function TaskDetailModal({ task, isOpen, onClose, onActivityAdded }: Task
                                     Time Taken
                                 </span><span>{task.duration_minutes} minutes</span></>
                             )}
+
+                            {task.status === 'Completed' && task.remark && (
+                                <><span className="font-semibold text-right pr-4 self-start">Completion Remark</span>
+                                <p className="bg-muted/50 p-3 rounded-md col-span-1 whitespace-pre-wrap">{task.remark}</p></>
+                            )}
                             {/* --- END OF CHANGE --- */}
 
                             <span className="font-semibold text-right pr-4 self-start">Linked Leads</span>

@@ -617,8 +617,8 @@ export interface ApiTask {
   id: number;
   title: string;
   details?: string;
-  lead_ids?: string; 
-  company_names?: string; 
+  lead_ids?: string;
+  company_names?: string;
   assigned_to_user_id: number;
   assigned_to_username: string;
   created_by_user_id: number;
@@ -630,6 +630,7 @@ export interface ApiTask {
   completed_at?: string;
   started_at?: string;
   duration_minutes?: number;
+  remark?: string;
 }
 
 export interface ApiTaskCreatePayload {
@@ -644,6 +645,7 @@ export interface ApiTaskCreatePayload {
 export interface ApiTaskCompletePayload {
   task_id: number;
   activity_ids?: number[];
+  remark?: string;
 }
 
 // --------------------------------------------------------------
@@ -1083,10 +1085,15 @@ const unifiedApi = {
         EventEndTime: payload.end_time,
       }),
     }),
-  rescheduleDemo: (demoId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> => {
-      console.warn("api.rescheduleDemo is a placeholder.");
-      return Promise.reject(new Error("Rescheduling demos is not yet implemented on the backend."));
-  },
+  rescheduleDemo: (demoId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> =>
+    fetcher(`Demos/Reschedule`, {
+      method: "POST",
+      body: JSON.stringify({
+        DemoId: demoId,
+        StartTime: payload.start_time,
+        EventEndTime: payload.end_time,
+      }),
+    }),
   rescheduleEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> => {
     if (type === 'meeting') {
       return unifiedApi.rescheduleMeeting(id, payload);
@@ -1095,12 +1102,30 @@ const unifiedApi = {
     }
   },
   reassignEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventReassignPayload): Promise<{ message: string }> => {
-    console.warn("api.reassignEvent is a placeholder.");
-    return Promise.reject(new Error("Reassigning events is not yet implemented on the backend."));
+    const endpoint = type === 'meeting' ? 'Meetings/Reassign' : 'Demos/Reassign';
+    const idKey = type === 'meeting' ? 'MeetingId' : 'DemoId';
+    const body = {
+      [idKey]: id,
+      AssignedToUserId: payload.assigned_to_user_id,
+      UpdatedBy: payload.updated_by
+    };
+    return fetcher(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
   },
   cancelEvent: (type: 'meeting' | 'demo', id: number, payload: ApiEventCancelPayload): Promise<{ message: string }> => {
-    console.warn("api.cancelEvent is a placeholder.");
-    return Promise.reject(new Error("Canceling events is not yet implemented on the backend."));
+    const endpoint = type === 'meeting' ? 'Meetings/Cancel' : 'Demos/Cancel';
+    const idKey = type === 'meeting' ? 'MeetingId' : 'DemoId';
+    const body = {
+      [idKey]: id,
+      Reason: payload.reason,
+      UpdatedBy: payload.updated_by
+    };
+    return fetcher(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
   },
   updateEventNotes: (type: 'meeting' | 'demo', id: number, payload: ApiEventNotesUpdatePayload): Promise<{ message: string }> => {
     const endpoint = type === 'meeting' ? 'Meetings/UpdateNotes' : 'Demos/UpdateNotes';

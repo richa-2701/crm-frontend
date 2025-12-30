@@ -221,7 +221,7 @@ export default function ActivityPage() {
     const [isDoneModalOpen, setDoneModalOpen] = useState(false);
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'card'>('list'); 
-    const [activeFilter, setActiveFilter] = useState<"all" | "today" | "scheduled" | "completed" | "overdue" | "canceled">('all');
+    const [activeFilter, setActiveFilter] = useState<"all" | "today" | "scheduled" | "completed" | "overdue" | "cancelled">('all');
     const [searchTerm, setSearchTerm] = useState("");
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
     const router = useRouter();
@@ -295,7 +295,7 @@ export default function ActivityPage() {
                     }
                 }
 
-                if (statusLower !== 'completed' && statusLower !== 'canceled') {
+                if (statusLower !== 'completed' && statusLower !== 'cancelled') {
                     isNowActionable = true;
                 }
 
@@ -356,8 +356,8 @@ export default function ActivityPage() {
                         return act.logged_or_scheduled === 'Scheduled' && (statusLower === 'pending' || statusLower === 'scheduled');
                     case 'completed':
                         return statusLower.includes('completed') || statusLower.includes('done') || statusLower.includes('logged');
-                    case 'canceled':
-                        return statusLower === 'canceled';
+                    case 'cancelled':
+                        return statusLower === 'cancelled';
                     case 'overdue':
                         return statusLower === 'overdue';
                     default: // 'all'
@@ -403,7 +403,7 @@ export default function ActivityPage() {
         if (activity.type !== 'log') {
             toast({
                 title: "Action Not Available",
-                description: "Only logged activities can be edited. Scheduled activities must be rescheduled or canceled.",
+                description: "Only logged activities can be edited. Scheduled activities must be rescheduled or cancelled.",
                 variant: "default"
             });
             return;

@@ -39,7 +39,7 @@ const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive"
     new: "default",
     qualified: "secondary",
     unqualified: "destructive",
-    Canceled: "destructive",
+    Cancelled: "destructive",
     not_our_segment: "destructive",
     Overdue: "destructive",
     "Meeting Done": "outline",

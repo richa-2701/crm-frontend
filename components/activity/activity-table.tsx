@@ -29,7 +29,7 @@ const statusVariantMap: { [key: string]: "default" | "secondary" | "destructive"
     'activity logged': "default",
     qualified: "secondary",
     unqualified: "destructive",
-    canceled: "destructive",
+    cancelled: "destructive",
     overdue: "destructive",
     "meeting done": "outline",
     "demo done": "outline",
