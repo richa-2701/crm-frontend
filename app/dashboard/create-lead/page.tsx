@@ -347,8 +347,8 @@ export default function CreateLeadPage() {
       if (!firstErrorId) firstErrorId = "assigned_to";
     }
     if (!formData.source.trim()) {
-        newErrors.source = "Source is required.";
-        if (!firstErrorId) firstErrorId = "source";
+      newErrors.source = "Source is required.";
+      if (!firstErrorId) firstErrorId = "source";
     }
 
     const contactErrors: ValidationErrors['contacts'] = {};
@@ -463,7 +463,7 @@ export default function CreateLeadPage() {
       {/* Desktop: Show heading with button */}
       <div className="hidden md:flex justify-between items-center">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Create Lead</h1>
+          {/* <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Create Lead</h1> */}
           <p className="text-sm md:text-base text-muted-foreground">Add a new lead to your CRM system</p>
         </div>
         <Button size="sm" onClick={() => setIsSettingsModalOpen(true)}>
@@ -573,10 +573,10 @@ export default function CreateLeadPage() {
                         <Input id={`designation_${index}`} value={contact.designation} onChange={e => handleContactChange(index, "designation", e.target.value)} className="h-8 text-xs sm:text-sm" />
                       </div>
                     ) : visibleFields.has("contact_pan") && (
-                       <div className="space-y-1">
-                          <Label htmlFor={`contact_pan_${index}`} className="text-[10px] sm:text-xs">PAN</Label>
-                          <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" className="h-8 text-xs sm:text-sm" />
-                        </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`contact_pan_${index}`} className="text-[10px] sm:text-xs">PAN</Label>
+                        <Input id={`contact_pan_${index}`} value={contact.pan} onChange={e => handleContactChange(index, "pan", e.target.value)} placeholder="e.g., ABCDE1234F" className="h-8 text-xs sm:text-sm" />
+                      </div>
                     )}
                   </div>
                   {(visibleFields.has("contact_linkedin") || visibleFields.has("contact_email")) && (
@@ -690,36 +690,36 @@ export default function CreateLeadPage() {
               </div>
             )}
             {(visibleFields.has("phone_2") || visibleFields.has("team_size") || visibleFields.has("turnover")) && (
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ">
-                    {visibleFields.has("phone_2") && (
-                        <div className="space-y-1">
-                            <Label htmlFor="phone_2">Company Phone 2</Label>
-                            <PhoneInput country={"in"} value={formData.phone_2} onChange={phone => handleInputChange("phone_2", phone)} enableSearch={true} inputProps={{ id: "phone_2" }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" />
-                        </div>
-                    )}
-                    {visibleFields.has("team_size") && visibleFields.has("turnover") ? (
-                        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
-                            <div className="space-y-1">
-                                <Label htmlFor="team_size">Team Size</Label>
-                                <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="turnover">Turnover</Label>
-                                <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
-                            </div>
-                        </div>
-                    ) : visibleFields.has("team_size") ? (
-                        <div className="space-y-1">
-                            <Label htmlFor="team_size">Team Size</Label>
-                            <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
-                        </div>
-                    ) : visibleFields.has("turnover") && (
-                        <div className="space-y-1">
-                            <Label htmlFor="turnover">Turnover</Label>
-                            <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
-                        </div>
-                    )}
-                </div>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ">
+                {visibleFields.has("phone_2") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="phone_2">Company Phone 2</Label>
+                    <PhoneInput country={"in"} value={formData.phone_2} onChange={phone => handleInputChange("phone_2", phone)} enableSearch={true} inputProps={{ id: "phone_2" }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" />
+                  </div>
+                )}
+                {visibleFields.has("team_size") && visibleFields.has("turnover") ? (
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:col-span-1 lg:col-span-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="team_size">Team Size</Label>
+                      <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="turnover">Turnover</Label>
+                      <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
+                    </div>
+                  </div>
+                ) : visibleFields.has("team_size") ? (
+                  <div className="space-y-1">
+                    <Label htmlFor="team_size">Team Size</Label>
+                    <Input id="team_size" type="number" value={formData.team_size} onChange={e => handleInputChange("team_size", e.target.value)} />
+                  </div>
+                ) : visibleFields.has("turnover") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="turnover">Turnover</Label>
+                    <Input id="turnover" placeholder="e.g., 1 Cr" value={formData.turnover} onChange={e => handleInputChange("turnover", e.target.value)} />
+                  </div>
+                )}
+              </div>
             )}
             {(visibleFields.has("opportunity_business") || visibleFields.has("target_closing_date")) && (
               <div className="space-y-4 rounded-md border p-4">

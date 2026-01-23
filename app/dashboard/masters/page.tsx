@@ -92,16 +92,16 @@ export default function MastersPage() {
 
     const filteredItems = useMemo(() =>
         items.filter(item => item.value.toLowerCase().includes(searchTerm.toLowerCase())),
-    [items, searchTerm]);
+        [items, searchTerm]);
 
     const activeCategoryLabel = MASTER_CATEGORIES.find(c => c.key === activeCategory)?.label || "Items";
 
     return (
         <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
-            <div className="space-y-1">
+            {/* <div className="space-y-1">
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Masters Configuration</h1>
                 <p className="text-sm md:text-base text-muted-foreground">Manage dropdown options used across the CRM.</p>
-            </div>
+            </div> */}
 
             <Tabs value={activeCategory} onValueChange={setActiveCategory}>
                 <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 lg:grid-cols-9 gap-1 h-auto">
@@ -118,11 +118,11 @@ export default function MastersPage() {
             </Tabs>
 
             <Card>
-                <CardHeader className="space-y-1 p-4 md:p-6">
+                <CardHeader className="space-y-0.5 p-3 md:p-4 pb-2 md:pb-3">
                     <CardTitle className="text-lg md:text-xl">Manage {activeCategoryLabel}</CardTitle>
                     <CardDescription className="text-xs md:text-sm">Add, view, and delete options for the {activeCategoryLabel} field.</CardDescription>
                 </CardHeader>
-                <CardContent className="p-4 md:p-6">
+                <CardContent className="p-3 md:p-4 pt-2 md:pt-3">
                     <div className="space-y-4">
                         <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                             <Input

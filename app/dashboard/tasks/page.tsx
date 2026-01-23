@@ -191,10 +191,10 @@ export default function TasksPage() {
         <div className="space-y-3 md:space-y-4 px-3 sm:px-4 md:px-0">
             {/* Desktop: Show heading with description */}
             <div className="hidden md:block space-y-1">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Task Management</h1>
+                {/* <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Task Management</h1>
                 <p className="text-sm md:text-base text-muted-foreground">
                     Here are the tasks assigned to you. Manage your workflow to stay productive.
-                </p>
+                </p> */}
             </div>
 
             <Card className="border-0 md:border shadow-none md:shadow-sm">

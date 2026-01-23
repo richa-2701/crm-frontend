@@ -5,12 +5,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Settings, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api, ApiMessageMaster, ApiUser } from "@/lib/api";
 import { MessagesTable } from "@/components/messages/messages-table";
 import { CreateMessageModal } from "@/components/messages/create-message-modal";
 import { EditMessageModal } from "@/components/messages/edit-message-modal";
+import { SmtpSettingsModal } from "@/components/messages/smtp-settings-modal";
 
 export default function MessageMasterPage() {
     const [user, setUser] = useState<ApiUser | null>(null);
@@ -19,6 +20,7 @@ export default function MessageMasterPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isSmtpSettingsOpen, setIsSmtpSettingsOpen] = useState(false);
     const [selectedMessage, setSelectedMessage] = useState<ApiMessageMaster | null>(null);
     const { toast } = useToast();
 
@@ -51,7 +53,7 @@ export default function MessageMasterPage() {
             }
         }
     };
-    
+
     const handleEdit = (message: ApiMessageMaster) => {
         setSelectedMessage(message);
         setIsEditModalOpen(true);
@@ -68,13 +70,21 @@ export default function MessageMasterPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Message Master</h1>
+                    {/* <h1 className="text-3xl font-bold tracking-tight">Message Master</h1> */}
                     <p className="text-muted-foreground">Manage your reusable message templates for drip sequences.</p>
                 </div>
-                <Button onClick={() => setIsCreateModalOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Message
-                </Button>
+                <div className="flex items-center gap-2">
+                    {user.role === "admin" && (
+                        <Button variant="outline" onClick={() => setIsSmtpSettingsOpen(true)}>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Email Settings
+                        </Button>
+                    )}
+                    <Button onClick={() => setIsCreateModalOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Message
+                    </Button>
+                </div>
             </div>
             <Card>
                 <CardHeader>
@@ -101,6 +111,10 @@ export default function MessageMasterPage() {
                     message={selectedMessage}
                 />
             )}
+            <SmtpSettingsModal
+                isOpen={isSmtpSettingsOpen}
+                onClose={() => setIsSmtpSettingsOpen(false)}
+            />
         </div>
     );
 }

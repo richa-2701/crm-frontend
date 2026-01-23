@@ -1227,6 +1227,40 @@ const unifiedApi = {
     fetcher("MasterData/Create", { method: "POST", body: JSON.stringify({ ...item, IsActive: true }) }),
   deleteMasterData: (itemId: number): Promise<{message: string}> =>
     fetcher(`MasterData/Delete`, { method: "POST", body: JSON.stringify({ Id: itemId }) }),
+  updateMasterData: (item: { id: number; category: string; value: string; is_active: boolean }): Promise<{message: string}> =>
+    fetcher("MasterData/Update", { method: "POST", body: JSON.stringify({ Id: item.id, Category: item.category, Value: item.value, IsActive: item.is_active }) }),
+
+  // 📧 SMTP Settings (stored in MasterData)
+  getSmtpSettings: async (): Promise<{ email: string | null; password: string | null; emailId: number | null; passwordId: number | null }> => {
+    const emailData = await fetcher(`MasterData/GetByCategory`, { method: "POST", body: JSON.stringify({ Category: "SMTP_SENDER_EMAIL" }) }) as ApiMasterData[];
+    const passwordData = await fetcher(`MasterData/GetByCategory`, { method: "POST", body: JSON.stringify({ Category: "SMTP_PASSWORD" }) }) as ApiMasterData[];
+    return {
+      email: emailData.length > 0 ? emailData[0].value : null,
+      password: passwordData.length > 0 ? passwordData[0].value : null,
+      emailId: emailData.length > 0 ? emailData[0].id : null,
+      passwordId: passwordData.length > 0 ? passwordData[0].id : null,
+    };
+  },
+  saveSmtpSettings: async (email: string, password: string, existingEmailId: number | null, existingPasswordId: number | null): Promise<{ success: boolean }> => {
+    try {
+      // Save or update SMTP_SENDER_EMAIL
+      if (existingEmailId) {
+        await fetcher("MasterData/Update", { method: "POST", body: JSON.stringify({ Id: existingEmailId, Category: "SMTP_SENDER_EMAIL", Value: email, IsActive: true }) });
+      } else {
+        await fetcher("MasterData/Create", { method: "POST", body: JSON.stringify({ Category: "SMTP_SENDER_EMAIL", Value: email, IsActive: true }) });
+      }
+      // Save or update SMTP_PASSWORD
+      if (existingPasswordId) {
+        await fetcher("MasterData/Update", { method: "POST", body: JSON.stringify({ Id: existingPasswordId, Category: "SMTP_PASSWORD", Value: password, IsActive: true }) });
+      } else {
+        await fetcher("MasterData/Create", { method: "POST", body: JSON.stringify({ Category: "SMTP_PASSWORD", Value: password, IsActive: true }) });
+      }
+      return { success: true };
+    } catch (error) {
+      console.error("Error saving SMTP settings:", error);
+      return { success: false };
+    }
+  },
 
   // ✉️ Message Master
   getMessages: (): Promise<ApiMessageMaster[]> => 

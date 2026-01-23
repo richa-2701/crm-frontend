@@ -326,7 +326,10 @@ export default function DashboardPage() {
       <>
         <div className="space-y-3 md:space-y-4 pb-6 px-3 sm:px-4 md:px-0">
           {/* Page title - hidden on mobile, shown on desktop */}
-          <div className="mb-1 md:mb-2 hidden md:block"><h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1><p className="text-xs sm:text-sm md:text-base text-muted-foreground">Welcome back, {user.username}!{user.role === "admin" ? " (Admin)" : ""}</p></div>
+          <div className="mb-1 md:mb-2 hidden md:block">
+            {/* <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1> */}
+            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">Welcome back, {user.username}!{user.role === "admin" ? " (Admin)" : ""}</p>
+          </div>
           {overdueTasks.length > 0 && (
             <Card className="border-red-500/50"><CardHeader className="pb-3 md:pb-6"><CardTitle className="text-red-600 text-base sm:text-lg md:text-xl">Overdue Items</CardTitle><CardDescription className="text-xs sm:text-sm">These items require your immediate attention.</CardDescription></CardHeader>
               <CardContent>

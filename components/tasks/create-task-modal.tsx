@@ -35,19 +35,19 @@ export function CreateTaskModal({ currentUser, isOpen, onClose, onSuccess }: Cre
     const [dueTime, setDueTime] = useState("12:00");
     const [assignedToUserId, setAssignedToUserId] = useState<string>("")
     const [selectedLeads, setSelectedLeads] = useState<ApiLeadSearchResult[]>([]);
-    
+
     const [users, setUsers] = useState<ApiUser[]>([])
     const [allLeads, setAllLeads] = useState<ApiLeadSearchResult[]>([]);
     const [filteredLeads, setFilteredLeads] = useState<ApiLeadSearchResult[]>([]);
     const [isFetchingLeads, setIsFetchingLeads] = useState(false);
     const [hasFetchedInitialLeads, setHasFetchedInitialLeads] = useState(false);
-    
+
     const [leadSearch, setLeadSearch] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isLeadPopoverOpen, setIsLeadPopoverOpen] = useState(false);
 
     useEffect(() => {
-        if(isOpen) {
+        if (isOpen) {
             api.getUsers().then(setUsers).catch(() => toast.error("Failed to load user list."));
         } else {
             setTitle(""); setDetails(""); setDueDate(undefined); setDueTime("12:00"); setAssignedToUserId(""); setSelectedLeads([]); setLeadSearch(""); setHasFetchedInitialLeads(false); setAllLeads([]); setFilteredLeads([]);
@@ -70,13 +70,13 @@ export function CreateTaskModal({ currentUser, isOpen, onClose, onSuccess }: Cre
             }
         }
     };
-    
+
     const searchLeads = useCallback((searchTerm: string) => {
         if (!searchTerm) {
             setFilteredLeads(allLeads);
             return;
         }
-        const filtered = allLeads.filter(lead => 
+        const filtered = allLeads.filter(lead =>
             lead.company_name.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setFilteredLeads(filtered);
@@ -129,7 +129,7 @@ export function CreateTaskModal({ currentUser, isOpen, onClose, onSuccess }: Cre
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Create a New Task</DialogTitle>
                     <DialogDescription>Assign a task to a user with a due date, time, and optional lead links.</DialogDescription>
@@ -194,7 +194,7 @@ export function CreateTaskModal({ currentUser, isOpen, onClose, onSuccess }: Cre
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            
+
                             {selectedLeads.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                     {selectedLeads.map(lead => (

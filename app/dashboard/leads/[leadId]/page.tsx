@@ -315,6 +315,7 @@ export default function LeadDetailPage() {
                                   <IconInfoField label="Source" value={lead.source} icon={Globe} />
                                   <IconInfoField label="Created By" value={creatorName} icon={User} />
                                   <IconInfoField label="Segment" value={lead.segment} icon={Building} />
+                                  <IconInfoField label="Verticals" value={lead.verticles} icon={Building} />
                                   <IconInfoField label="Lead Type" value={lead.lead_type} icon={Tag} />
                                   <IconInfoField label="Team Size" value={lead.team_size} icon={Users} />
                                   <IconInfoField label="Turnover" value={lead.turnover} icon={TrendingUp} />
@@ -326,6 +327,8 @@ export default function LeadDetailPage() {
                               <CardHeader><CardTitle>System & Remarks</CardTitle></CardHeader>
                               <CardContent className="space-y-5">
                                   <IconInfoField label="Current System" value={lead.current_system} icon={FileText} />
+                                  <IconInfoField label="Machine Specification" value={lead.machine_specification} icon={FileText} />
+                                  <IconInfoField label="Challenges" value={lead.challenges} icon={FileText} />
                                   <IconInfoField label="Remarks" value={lead.remark} icon={MessageSquare} />
                               </CardContent>
                           </Card>

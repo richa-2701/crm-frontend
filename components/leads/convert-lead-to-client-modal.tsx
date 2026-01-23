@@ -66,10 +66,10 @@ const splitFullName = (fullName: string) => {
 }
 
 interface MasterDataOptions {
-    version: string[];
-    segment: string[];
-    verticles: string[];
-    current_system: string[];
+  version: string[];
+  segment: string[];
+  verticles: string[];
+  current_system: string[];
 }
 
 export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: ConvertLeadToClientModalProps) {
@@ -89,7 +89,7 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
   const [isLoading, setIsLoading] = useState(false)
 
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
-      version: [], segment: [], verticles: [], current_system: []
+    version: [], segment: [], verticles: [], current_system: []
   });
 
   const countryOptions = useMemo(() => Country.getAllCountries().map(c => ({ value: c.isoCode, label: c.name })), [])
@@ -98,34 +98,34 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
 
   useEffect(() => {
     if (isOpen) {
-        const fetchMasterData = async () => {
-            try {
-                const [versionData, segmentData, verticlesData, currentSystemData] = await Promise.all([
-                    api.getByCategory("version"),
-                    api.getByCategory("segment"),
-                    api.getByCategory("verticles"),
-                    api.getByCategory("current_system")
-                ]);
-                setMasterOptions({
-                    version: versionData.map(item => item.value),
-                    segment: segmentData.map(item => item.value),
-                    verticles: verticlesData.map(item => item.value),
-                    current_system: currentSystemData.map(item => item.value),
-                });
-            } catch (err) {
-                console.error("Failed to fetch master data for conversion modal:", err);
-                toast({ title: "Error", description: "Could not load dropdown options.", variant: "destructive" });
-            }
-        };
-        fetchMasterData();
+      const fetchMasterData = async () => {
+        try {
+          const [versionData, segmentData, verticlesData, currentSystemData] = await Promise.all([
+            api.getByCategory("version"),
+            api.getByCategory("segment"),
+            api.getByCategory("verticles"),
+            api.getByCategory("current_system")
+          ]);
+          setMasterOptions({
+            version: versionData.map(item => item.value),
+            segment: segmentData.map(item => item.value),
+            verticles: verticlesData.map(item => item.value),
+            current_system: currentSystemData.map(item => item.value),
+          });
+        } catch (err) {
+          console.error("Failed to fetch master data for conversion modal:", err);
+          toast({ title: "Error", description: "Could not load dropdown options.", variant: "destructive" });
+        }
+      };
+      fetchMasterData();
     }
   }, [isOpen, toast]);
-  
+
   useEffect(() => {
     if (lead && isOpen) {
       const countryObj = countryOptions.find(c => c.label === lead.country);
       const countryCode = countryObj?.value;
-      
+
       let stateCode: string | undefined;
       if (countryCode && lead.state) {
         const statesOfCountry = State.getStatesOfCountry(countryCode);
@@ -189,12 +189,12 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
     if (!lead) return
 
     if (!formData.gst || formData.gst.trim() === "") {
-        toast({
-            title: "Missing Information",
-            description: "GST No. is mandatory to convert a lead to a client.",
-            variant: "destructive",
-        });
-        return;
+      toast({
+        title: "Missing Information",
+        description: "GST No. is mandatory to convert a lead to a client.",
+        variant: "destructive",
+      });
+      return;
     }
 
     setIsLoading(true)
@@ -230,16 +230,16 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
           const parsed = JSON.parse(jsonString);
           message = parsed.Message || message;
         } catch (e) {
-            // Fallback for non-JSON messages
-            const simpleMessage = error.message.split(':').slice(1).join(':').trim();
-            message = simpleMessage || message;
+          // Fallback for non-JSON messages
+          const simpleMessage = error.message.split(':').slice(1).join(':').trim();
+          message = simpleMessage || message;
         }
         toast({
-            title: "Already Converted",
-            description: message,
-            variant: "default",
+          title: "Already Converted",
+          description: message,
+          variant: "default",
         });
-        router.push('/dashboard/clients'); 
+        router.push('/dashboard/clients');
         onClose();
       } else {
         toast({
@@ -257,7 +257,7 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto z-[100]">
         <DialogHeader><DialogTitle>Convert Lead to Client: {lead.company_name}</DialogTitle><DialogDescription>Review and update details before converting this lead into a client.</DialogDescription></DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -278,9 +278,9 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               <div key={contact.id || index} className="space-y-4 rounded-lg border bg-muted/50 p-4 relative">
                 {contacts.length > 1 && (<Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-7 w-7" onClick={() => removeContact(index)}><Trash2 className="h-4 w-4 text-red-500" /></Button>)}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
-                    <div className="space-y-2"><Label htmlFor={`prefix_${index}`}>Prefix *</Label><Select value={contact.prefix} onValueChange={v => handleContactChange(index, "prefix", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{namePrefixes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2"><Label htmlFor={`first_name_${index}`}>First Name *</Label><Input id={`first_name_${index}`} value={contact.first_name} onChange={e => handleContactChange(index, "first_name", e.target.value)} required /></div>
-                    <div className="space-y-2"><Label htmlFor={`last_name_${index}`}>Last Name *</Label><Input id={`last_name_${index}`} value={contact.last_name} onChange={e => handleContactChange(index, "last_name", e.target.value)} required /></div>
+                  <div className="space-y-2"><Label htmlFor={`prefix_${index}`}>Prefix *</Label><Select value={contact.prefix} onValueChange={v => handleContactChange(index, "prefix", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{namePrefixes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label htmlFor={`first_name_${index}`}>First Name *</Label><Input id={`first_name_${index}`} value={contact.first_name} onChange={e => handleContactChange(index, "first_name", e.target.value)} required /></div>
+                  <div className="space-y-2"><Label htmlFor={`last_name_${index}`}>Last Name *</Label><Input id={`last_name_${index}`} value={contact.last_name} onChange={e => handleContactChange(index, "last_name", e.target.value)} required /></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   <div className="space-y-2"><Label htmlFor={`phone_${index}`}>Phone *</Label><PhoneInput country={"in"} value={contact.phone} onChange={v => handleContactPhoneChange(index, v)} inputProps={{ id: `phone_${index}`, required: true }} containerClass="w-full" inputClass="!w-full !flex !h-10 !rounded-md !border !border-input !bg-background !pl-10 !px-3 !py-2 !text-sm" /></div>
@@ -315,22 +315,22 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               <div className="space-y-2">
                 <Label htmlFor="segment">Segment</Label>
                 <Select value={formData.segment} onValueChange={v => handleInputChange("segment", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
-                    <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select segment" /></SelectTrigger>
+                  <SelectContent>{masterOptions.segment.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="verticles">Verticals</Label>
                 <Select value={formData.verticles} onValueChange={v => handleInputChange("verticles", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
-                    <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select vertical" /></SelectTrigger>
+                  <SelectContent>{masterOptions.verticles.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="current_system">Current System</Label>
                 <Select value={formData.current_system} onValueChange={v => handleInputChange("current_system", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
-                    <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select system" /></SelectTrigger>
+                  <SelectContent>{masterOptions.current_system.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2"><Label htmlFor="machine_specification">Machine Specification</Label><Textarea id="machine_specification" value={formData.machine_specification} onChange={e => handleInputChange("machine_specification", e.target.value)} rows={2} /></div>
@@ -348,8 +348,8 @@ export function ConvertLeadToClientModal({ lead, isOpen, onClose, onSuccess }: C
               <div className="space-y-2">
                 <Label htmlFor="version">Version</Label>
                 <Select value={formData.version} onValueChange={v => handleInputChange("version", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select version" /></SelectTrigger>
-                    <SelectContent>{masterOptions.version.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select version" /></SelectTrigger>
+                  <SelectContent>{masterOptions.version.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>

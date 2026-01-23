@@ -55,7 +55,7 @@ export default function DripMasterPage() {
         <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Drip Master</h1>
+                    {/* <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Drip Master</h1> */}
                     <p className="text-sm md:text-base text-muted-foreground">Manage your automated messaging sequences.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">

@@ -180,7 +180,7 @@ export default function RecycleBinPage() {
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Recycle Bin</h1>
+                    {/* <h1 className="text-3xl font-bold tracking-tight">Recycle Bin</h1> */}
                     <p className="text-muted-foreground">Manage and restore deleted leads.</p>
                 </div>
             </div>

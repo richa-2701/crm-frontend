@@ -151,8 +151,8 @@ export default function GoogleCalendarPage() {
         <TooltipProvider>
             <div className="space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Team Calendar</h1>
-                    <p className="text-muted-foreground">View all scheduled meetings and demos for your team.</p>
+                    {/* <h1 className="text-3xl font-bold tracking-tight">Team Calendar</h1>
+                    <p className="text-muted-foreground">View all scheduled meetings and demos for your team.</p> */}
                 </div>
                 
                 <Card>

@@ -73,7 +73,7 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Clients</h1>
+        {/* <h1 className="text-3xl font-bold">Clients</h1> */}
         {/* You can add a "Create Client" button here if needed */}
       </header>
 
