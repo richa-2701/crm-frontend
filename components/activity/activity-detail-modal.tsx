@@ -34,6 +34,7 @@ const isBrowserPreviewable = (filePath: string) => {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") || "http://localhost:57214";
+const resolveAttachmentUrl = (path: string) => path.startsWith("https://") ? path : `${API_URL}${path}`;
 
 export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetailModalProps) {
     if (!activity) return null;
@@ -102,7 +103,7 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
                             <div className="col-span-1 space-y-2">
                                 {isBrowserPreviewable(attachmentPath) ? (
                                     <iframe
-                                        src={`${API_URL}${attachmentPath}`}
+                                        src={resolveAttachmentUrl(attachmentPath)}
                                         title="Attachment Preview"
                                         className="w-full h-48 rounded-md border bg-white"
                                     />
@@ -113,7 +114,7 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
                                     </div>
                                 )}
                                 <Button asChild variant="secondary" size="sm">
-                                    <a href={`${API_URL}${attachmentPath}`} download>
+                                    <a href={resolveAttachmentUrl(attachmentPath)} target="_blank" rel="noopener noreferrer" download>
                                         <Download className="mr-2 h-4 w-4" />
                                         Download
                                     </a>

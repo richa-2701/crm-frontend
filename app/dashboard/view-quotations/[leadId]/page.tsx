@@ -5,11 +5,109 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-// --- START OF FIX: Import the correct function name ---
-import { formatDateTime } from "@/lib/date-format";
-// --- END OF FIX ---
+import { Badge } from "@/components/ui/badge"
+import { formatDateTime } from "@/lib/date-format"
 import { api, type ApiActivity, type ApiLead } from "@/lib/api"
-import { Loader2, Download, Paperclip, ArrowLeft } from "lucide-react"
+import { Loader2, Download, Paperclip, ArrowLeft, Eye, EyeOff, FileText, Image as ImageIcon, File } from "lucide-react"
+
+const IMAGE_EXTS = ["jpg", "jpeg", "png", "gif", "webp", "bmp"]
+const PDF_EXTS = ["pdf"]
+
+function getExt(url: string) {
+  return (url.split(".").pop() || "").toLowerCase().split("?")[0]
+}
+
+function FilePreview({ url }: { url: string }) {
+  const ext = getExt(url)
+  if (IMAGE_EXTS.includes(ext)) {
+    return (
+      <div className="mt-3 rounded-md overflow-hidden border bg-muted/30 max-h-96">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt="Quotation preview" className="w-full object-contain max-h-96" />
+      </div>
+    )
+  }
+  if (PDF_EXTS.includes(ext)) {
+    return (
+      <div className="mt-3 rounded-md overflow-hidden border bg-muted/30 h-[500px]">
+        <iframe
+          src={`${url}#toolbar=0`}
+          className="w-full h-full"
+          title="PDF Preview"
+        />
+      </div>
+    )
+  }
+  return (
+    <div className="mt-3 rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground flex items-center gap-2">
+      <File className="h-4 w-4 shrink-0" />
+      Preview not available for this file type. Use the Download button to open it.
+    </div>
+  )
+}
+
+function getFileIcon(url: string) {
+  const ext = getExt(url)
+  if (IMAGE_EXTS.includes(ext)) return ImageIcon
+  if (PDF_EXTS.includes(ext)) return FileText
+  return File
+}
+
+function getFileTypeBadge(url: string) {
+  const ext = getExt(url)
+  if (IMAGE_EXTS.includes(ext)) return { label: ext.toUpperCase(), className: "bg-blue-100 text-blue-700 border-blue-200" }
+  if (PDF_EXTS.includes(ext))   return { label: "PDF",            className: "bg-red-100 text-red-700 border-red-200" }
+  return { label: ext.toUpperCase() || "FILE", className: "bg-gray-100 text-gray-700 border-gray-200" }
+}
+
+function QuotationCard({ q, resolveUrl }: { q: ApiActivity; resolveUrl: (p: string) => string }) {
+  const [showPreview, setShowPreview] = useState(false)
+  const url = resolveUrl(q.attachment_path!)
+  const FileIcon = getFileIcon(url)
+  const badge = getFileTypeBadge(url)
+  const ext = getExt(url)
+  const canPreview = IMAGE_EXTS.includes(ext) || PDF_EXTS.includes(ext)
+
+  return (
+    <div className="rounded-lg border p-4 space-y-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0">
+          <FileIcon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-semibold text-sm truncate">{q.details}</p>
+              <Badge variant="outline" className={`text-[11px] px-1.5 py-0 h-4 ${badge.className}`}>{badge.label}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Uploaded by <span className="font-medium">{q.created_by}</span> · {formatDateTime(q.created_at)}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {canPreview && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setShowPreview(v => !v)}
+            >
+              {showPreview
+                ? <><EyeOff className="mr-1.5 h-3.5 w-3.5" />Hide</>
+                : <><Eye className="mr-1.5 h-3.5 w-3.5" />Preview</>}
+            </Button>
+          )}
+          <a href={url} target="_blank" rel="noopener noreferrer" download>
+            <Button size="sm" className="h-8 text-xs">
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Download
+            </Button>
+          </a>
+        </div>
+      </div>
+      {showPreview && <FilePreview url={url} />}
+    </div>
+  )
+}
 
 export default function ViewQuotationsPage() {
   const router = useRouter()
@@ -25,18 +123,14 @@ export default function ViewQuotationsPage() {
       const fetchData = async () => {
         setIsLoading(true)
         try {
-          // --- START OF CHANGE: Use correct API method and filter results ---
           const [leadData, activitiesData] = await Promise.all([
             api.getLeadById(Number(leadId)),
-            api.getActivitiesByLead(Number(leadId)), // Use the correct API function to fetch activities
+            api.getActivitiesByLead(Number(leadId)),
           ])
           setLead(leadData)
-          // Filter activities to only show those marked as 'Quotation' and have an attachment
-          const quotationActivities = activitiesData.filter(activity => activity.activity_type === 'Quotation' && activity.attachment_path);
-          setQuotations(quotationActivities)
-          // --- END OF CHANGE ---
+          setQuotations(activitiesData.filter(a => a.activity_type === "Quotation" && a.attachment_path))
         } catch (error) {
-          console.error("Failed to fetch lead data or activities:", error)
+          console.error("Failed to fetch quotation data:", error)
         } finally {
           setIsLoading(false)
         }
@@ -45,9 +139,9 @@ export default function ViewQuotationsPage() {
     }
   }, [leadId])
 
-  // --- START OF CHANGE: Correctly construct the base API URL for downloads, removing the trailing /api if present ---
-  const API_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "").replace(/\/api$/, "");
-  // --- END OF CHANGE ---
+  // Resolve URL: S3 files are absolute (https://), legacy local paths need API_URL prefix
+  const API_URL = (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "").replace(/\/api$/, "")
+  const resolveUrl = (path: string) => path.startsWith("https://") ? path : `${API_URL}${path}`
 
   if (isLoading) {
     return (
@@ -59,60 +153,44 @@ export default function ViewQuotationsPage() {
   }
 
   return (
-    <>
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Quotations for {lead?.company_name}</h1>
-            <p className="text-muted-foreground">Review and download all quotations attached to this lead.</p>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Quotations for {lead?.company_name}</h1>
+          <p className="text-muted-foreground">Review, preview and download all quotations attached to this lead.</p>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attached Files ({quotations.length})</CardTitle>
-            <CardDescription>Each file was logged as a separate activity with the type 'Quotation'.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {quotations.length > 0 ? (
-              <div className="space-y-4">
-                {quotations.map((q) => (
-                  <div key={q.id} className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <p className="font-semibold flex items-center gap-2">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        {q.details}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {/* --- START OF FIX: Use the correct function name here --- */}
-                        Uploaded on: {formatDateTime(q.created_at)}
-                        {/* --- END OF FIX --- */}
-                      </p>
-                    </div>
-                    {/* --- START OF CHANGE: Simplify to a single download button and remove preview logic --- */}
-                    <div className="flex items-center gap-2">
-                        <a href={`${API_URL}${q.attachment_path}`} target="_blank" rel="noopener noreferrer" download>
-                            <Button>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                            </Button>
-                        </a>
-                    </div>
-                    {/* --- END OF CHANGE --- */}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                No quotations or attachments have been uploaded for this lead yet.
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
-    </>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Paperclip className="h-5 w-5" />
+            Attached Files
+            <Badge variant="secondary" className="ml-1">{quotations.length}</Badge>
+          </CardTitle>
+          <CardDescription>
+            PDFs and images can be previewed inline. Other file types can be downloaded.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {quotations.length > 0 ? (
+            <div className="space-y-3">
+              {quotations.map((q) => (
+                <QuotationCard key={q.id} q={q} resolveUrl={resolveUrl} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <Paperclip className="mx-auto h-10 w-10 mb-3 opacity-30" />
+              <p>No quotations uploaded for this lead yet.</p>
+              <p className="text-sm mt-1">Use "Add Quotation" from the Proposals page to attach one.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

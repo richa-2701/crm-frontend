@@ -38,7 +38,11 @@ export function MessagesTable({ messages, onEdit, onDelete, isLoading }: Message
                 <TableCell className="font-mono">{message.message_code}</TableCell>
                 <TableCell className="font-medium">{message.message_name}</TableCell>
                 <TableCell className="max-w-xs truncate">{message.message_content || "Attachment"}</TableCell>
-                <TableCell><Badge variant="outline" className="capitalize">{message.message_type}</Badge></TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize">
+                    {message.message_type === "text_media" ? "Text + Media" : message.message_type}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

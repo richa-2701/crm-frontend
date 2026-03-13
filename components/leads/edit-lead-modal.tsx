@@ -162,12 +162,16 @@ export function EditLeadModal({ lead, isOpen, onClose, onSave, users }: EditLead
             api.getByCategory("current_system"),
             api.getByCategory("version") 
         ]).then(([sourceData, segmentData, verticlesData, leadTypeData, statusData, currentSystemData, versionData]) => {
+            const masterStatuses = statusData.map(item => item.value);
+            const hardcodedStatuses = ["New", "Meeting Pending", "Meeting Done", "Demo Pending", "Demo Done", "Proposal Sent"];
+            const combinedStatuses = Array.from(new Set([...hardcodedStatuses, ...masterStatuses]));
+
             setMasterOptions({
                 source: sourceData.map(item => item.value),
                 segment: segmentData.map(item => item.value),
                 verticles: verticlesData.map(item => item.value),
                 lead_type: leadTypeData.map(item => item.value),
-                status: statusData.map(item => item.value),
+                status: combinedStatuses,
                 current_system: currentSystemData.map(item => item.value),
                 version: versionData.map(item => item.value),
             });

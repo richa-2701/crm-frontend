@@ -94,7 +94,20 @@ interface Lead extends ApiLead { id: string; last_activity?: ApiActivity | null 
 interface LoggedInUser { id: string; username: string; email: string; role: string; }
 interface CompanyUser { id: string; name: string; email: string; role: string; }
 
-const statusColors = { new: "default", qualified: "secondary", unqualified: "destructive", not_our_segment: "destructive", "Meeting Done": "outline", "Demo Done": "outline", "Proposal Sent": "outline", "Won/Deal Done": "success", Lost: "destructive" } as const;
+const statusColors = { 
+  new: "default", 
+  "New": "default",
+  qualified: "secondary", 
+  unqualified: "destructive", 
+  not_our_segment: "destructive", 
+  "Meeting Pending": "secondary",
+  "Meeting Done": "outline", 
+  "Demo Pending": "secondary",
+  "Demo Done": "outline", 
+  "Proposal Sent": "secondary", 
+  "Won/Deal Done": "success", 
+  Lost: "destructive" 
+} as const;
 const leadTypes = ["Hot Lead", "Cold Lead","Warm Lead"];
 interface ColumnConfig { id: string; label: string; key: keyof Lead | "actions" | "contact_name" | "phone" | "last_activity" | "designation" | "contact_email" | "contact_linkedin" | "contact_pan"; render?: (lead: Lead) => React.ReactNode; }
 const capitalize = (s: string) => {
@@ -585,7 +598,19 @@ export default function LeadsPage() {
   });
 
   const [isExporting, setIsExporting] = useState(false);
-  const statusOptions = Object.keys(statusColors);
+  const [masterStatuses, setMasterStatuses] = useState<string[]>([]);
+  const [masterLeadTypes, setMasterLeadTypes] = useState<string[]>([]);
+
+  const statusOptions = useMemo(() => {
+    const hardcoded = ["New", "Meeting Pending", "Meeting Done", "Demo Pending", "Demo Done", "Proposal Sent", "Won/Deal Done", "Lost"];
+    return Array.from(new Set([...hardcoded, ...masterStatuses]));
+  }, [masterStatuses]);
+
+  const leadTypeOptions = useMemo(() => {
+      const hardcoded = ["Hot Lead", "Cold Lead", "Warm Lead"];
+      return Array.from(new Set([...hardcoded, ...masterLeadTypes]));
+  }, [masterLeadTypes]);
+
   const [dripSequences, setDripSequences] = useState<ApiDripSequenceList[]>([]);
   const [showAssignDripModal, setShowAssignDripModal] = useState(false);
   const [showConvertLeadToClientModal, setShowConvertLeadToClientModal] = useState(false);
@@ -611,11 +636,15 @@ export default function LeadsPage() {
       }
       const parsedUser = JSON.parse(userData)
       setUser(parsedUser)
-      const [usersData, allLeadsData, dripsData] = await Promise.all([
+      const [usersData, allLeadsData, dripsData, statusData, leadTypeData] = await Promise.all([
         userApi.getUsers(),
         api.getAllLeads(),
-        api.getDripSequences()
+        api.getDripSequences(),
+        api.getByCategory("status"),
+        api.getByCategory("lead_type")
       ]);
+      setMasterStatuses(statusData.map(s => s.value));
+      setMasterLeadTypes(leadTypeData.map(l => l.value));
       const transformedLeads: Lead[] = allLeadsData.map((lead: ApiLead & { last_activity?: ApiActivity | null }) => ({
         id: lead.id.toString(), company_name: lead.company_name, contacts: lead.contacts || [], phone_2: lead.phone_2, email: lead.email || "", website: lead.website, linkedIn: lead.linkedIn, address: lead.address, address_2: lead.address_2, city: lead.city, state: lead.state, country: lead.country, pincode: lead.pincode, team_size: lead.team_size, turnover: lead.turnover, source: lead.source, segment: lead.segment, verticles: lead.verticles, remark: lead.remark, machine_specification: lead.machine_specification, challenges: lead.challenges, assigned_to: lead.assigned_to, created_by: lead.created_by, current_system: lead.current_system, lead_type: lead.lead_type, status: lead.status, created_at: lead.created_at, updated_at: lead.updated_at || lead.created_at,
         last_activity: lead.last_activity || null,
@@ -651,7 +680,7 @@ export default function LeadsPage() {
 
   const filteredLeads = useMemo(() => {
     let leadsToProcess = (viewMode === "my" && user)
-      ? allLeads.filter((lead) => lead.assigned_to === user.username)
+      ? allLeads.filter((lead) => lead.assigned_to?.toLowerCase() === user.username?.toLowerCase())
       : allLeads;
 
     leadsToProcess = leadsToProcess.filter(
@@ -661,7 +690,7 @@ export default function LeadsPage() {
     if (filters.address) { leadsToProcess = leadsToProcess.filter(lead => lead.address?.toLowerCase().includes(filters.address.toLowerCase())); }
     if (filters.lead_type) { leadsToProcess = leadsToProcess.filter(lead => lead.lead_type === filters.lead_type); }
     if (filters.status) { leadsToProcess = leadsToProcess.filter(lead => lead.status === filters.status); }
-    if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to === filters.assigned_to); }
+    if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to?.toLowerCase() === filters.assigned_to.toLowerCase()); }
 
     if (filters.created_at_start) {
         const startDate = new Date(`${filters.created_at_start}T00:00:00`);
@@ -1175,8 +1204,8 @@ export default function LeadsPage() {
                   <div className="space-y-4">
                     <h4 className="font-medium leading-none">Apply Filters</h4>
                     <div className="space-y-2"><Label htmlFor="address">Area / Address</Label><Input id="address" placeholder="e.g., Indore" value={filters.address} onChange={(e) => handleFilterChange("address", e.target.value)} /></div>
-                    <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={filters.lead_type === "" ? "all" : filters.lead_type} onValueChange={(value) => handleFilterChange("lead_type", value)}><SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem>{leadTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={filters.status === "" ? "all" : filters.status} onValueChange={(value) => handleFilterChange("status", value)}><SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{Object.keys(statusColors).map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label htmlFor="lead_type">Lead Type</Label><Select value={filters.lead_type === "" ? "all" : filters.lead_type} onValueChange={(value) => handleFilterChange("lead_type", value)}><SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem>{leadTypeOptions.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label htmlFor="status">Status</Label><Select value={filters.status === "" ? "all" : filters.status} onValueChange={(value) => handleFilterChange("status", value)}><SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{statusOptions.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label htmlFor="assigned_to">Assigned To</Label><Select value={filters.assigned_to === "" ? "all" : filters.assigned_to} onValueChange={(value) => handleFilterChange("assigned_to", value)}><SelectTrigger><SelectValue placeholder="All users" /></SelectTrigger><SelectContent><SelectItem value="all">All Users</SelectItem>{companyUsers.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-2">
@@ -1364,7 +1393,7 @@ export default function LeadsPage() {
         onConfirm={handleConfirmExport}
         allColumns={ALL_COLUMNS}
         currentTableFilters={filters}
-        allLeadTypes={leadTypes}
+        allLeadTypes={leadTypeOptions}
         allStatuses={statusOptions}
         allCompanyUsers={companyUsers}
         isExporting={isExporting}

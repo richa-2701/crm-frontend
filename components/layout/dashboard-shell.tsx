@@ -32,6 +32,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/google-calendar': 'Google Calendar',
   '/dashboard/message-master': 'Message Master',
   '/dashboard/drip-sequence': 'Drip Sequence',
+  '/dashboard/drip-today': "Today's Drip",
   '/dashboard/masters': 'Masters',
   '/dashboard/manage-users': 'Manage Users',
   '/dashboard/profile': 'Profile',
@@ -101,7 +102,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         />
         <main
           className={cn(
-            "flex-1 overflow-auto transition-all duration-300 pt-16 md:pt-0",
+            "flex-1 overflow-auto transition-all duration-300 md:pt-0",
             isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
           )}
         >

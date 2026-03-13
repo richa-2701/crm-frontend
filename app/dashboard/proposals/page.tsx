@@ -34,6 +34,7 @@ import {
   Activity,
   History,
   FileText as QuotationIcon,
+  FilePlus,
   FileDown,
   MessageSquareQuote,
   XIcon,
@@ -49,6 +50,7 @@ import { LeadActivitiesModal } from "@/components/leads/lead-activities-modal"
 import { LeadHistoryModal } from "@/components/leads/lead-history-modal"
 import { AssignDripModal } from "@/components/leads/assign-drip-modal";
 import { ConvertLeadToClientModal } from "@/components/leads/convert-lead-to-client-modal";
+import { AddQuotationModal } from "@/components/leads/add-quotation-modal";
 import { api, userApi, proposalApi, type ApiLead, type ApiUser, type ApiDripSequenceList, type ApiActivity, type ApiProposalSent } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -110,6 +112,7 @@ function TableRowComponent({
   handleDownloadPdf,
   handleAssignDrip,
   handleConvertLeadToClient,
+  handleAddQuotation,
   canManageAllLeads: canManage,
 }: {
   lead: Lead
@@ -123,6 +126,7 @@ function TableRowComponent({
   handleDownloadPdf: (lead: Lead) => void
   handleAssignDrip: (lead: Lead) => void
   handleConvertLeadToClient: (lead: Lead) => void
+  handleAddQuotation: (lead: Lead) => void
   canManageAllLeads: boolean
 }) {
 
@@ -218,14 +222,16 @@ function TableRowComponent({
                   <History className="mr-2 h-4 w-4" />
                   History
                 </DropdownMenuItem>
-                {/* --- START OF CHANGE: Add button to navigate to the view quotations page --- */}
+                <DropdownMenuItem onClick={() => handleAddQuotation(lead)}>
+                  <FilePlus className="mr-2 h-4 w-4" />
+                  Add Quotation
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href={`/dashboard/view-quotations/${lead.original_lead_id || lead.id}`}>
                     <QuotationIcon className="mr-2 h-4 w-4" />
                     <span>View Quotations</span>
                   </Link>
                 </DropdownMenuItem>
-                {/* --- END OF CHANGE --- */}
                 <DropdownMenuItem onClick={() => handleDownloadPdf(lead)}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Download PDF
@@ -504,6 +510,7 @@ export default function ProposalsPage() {
   const [dripSequences, setDripSequences] = useState<ApiDripSequenceList[]>([]);
   const [showAssignDripModal, setShowAssignDripModal] = useState(false);
   const [showConvertLeadToClientModal, setShowConvertLeadToClientModal] = useState(false);
+  const [showAddQuotationModal, setShowAddQuotationModal] = useState(false);
   const [filters, setFilters] = useState<LeadsPageFilters>({ address: "", lead_type: "", status: "", assigned_to: "", created_at_start: "", created_at_end: "" });
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -601,12 +608,12 @@ export default function ProposalsPage() {
 
   const filteredLeads = useMemo(() => {
     let leadsToProcess = (viewMode === "my" && user)
-      ? allLeads.filter((lead) => lead.assigned_to === user.username)
+      ? allLeads.filter((lead) => lead.assigned_to?.toLowerCase() === user.username?.toLowerCase())
       : allLeads;
 
     if (filters.address) { leadsToProcess = leadsToProcess.filter(lead => lead.address?.toLowerCase().includes(filters.address.toLowerCase())); }
     if (filters.lead_type) { leadsToProcess = leadsToProcess.filter(lead => lead.lead_type === filters.lead_type); }
-    if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to === filters.assigned_to); }
+    if (filters.assigned_to) { leadsToProcess = leadsToProcess.filter(lead => lead.assigned_to?.toLowerCase() === filters.assigned_to.toLowerCase()); }
 
     if (filters.created_at_start) {
         const startDate = new Date(`${filters.created_at_start}T00:00:00`);
@@ -766,6 +773,7 @@ export default function ProposalsPage() {
   const handleColumnFilterChange = (key: string, value: string) => { setColumnFilters(prev => ({...prev, [key]: value})); setCurrentPage(1); };
   const handleAssignDrip = (lead: Lead) => { setSelectedLead(lead); setShowAssignDripModal(true); };
   const handleConvertLeadToClient = (lead: Lead) => { setSelectedLead(lead); setShowConvertLeadToClientModal(true); };
+  const handleAddQuotation = (lead: Lead) => { setSelectedLead(lead); setShowAddQuotationModal(true); };
   const handleConversionSuccess = (convertedLeadId: string) => { setAllLeads(prevLeads => prevLeads.filter(lead => lead.id !== convertedLeadId)); toast({ title: "Lead Converted", description: "The lead has been successfully converted to a client." }); setShowConvertLeadToClientModal(false); router.push('/dashboard/clients'); };
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, }));
   function handleDragEnd(event: DragEndEvent) { const { active, over } = event; if (!over) return; if (active.id !== over.id) { setVisibleColumns((items) => { const oldIndex = items.findIndex((item) => item.id === active.id); const newIndex = items.findIndex((item) => item.id === over.id); return arrayMove(items, oldIndex, newIndex); }); } }
@@ -917,6 +925,7 @@ export default function ProposalsPage() {
                       handleDownloadPdf={handleDownloadPdf}
                       handleAssignDrip={handleAssignDrip}
                       handleConvertLeadToClient={handleConvertLeadToClient}
+                      handleAddQuotation={handleAddQuotation}
                       canManageAllLeads={canManageAllLeads(user)}
                     />
                   ))}
@@ -977,6 +986,13 @@ export default function ProposalsPage() {
             isOpen={showConvertLeadToClientModal}
             onClose={() => setShowConvertLeadToClientModal(false)}
             onSuccess={handleConversionSuccess}
+          />
+          <AddQuotationModal
+            isOpen={showAddQuotationModal}
+            onClose={() => setShowAddQuotationModal(false)}
+            leadId={Number(selectedLead.original_lead_id || selectedLead.id)}
+            leadName={selectedLead.company_name}
+            createdBy={user.username}
           />
         </>
       )}

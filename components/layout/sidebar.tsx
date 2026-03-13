@@ -2,27 +2,28 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { 
-  LayoutDashboard, 
-  Menu, 
-  Calendar, 
-  FileText, 
-  Mail, 
-  Workflow, 
-  MessageSquare, 
-  Upload, 
-  UploadCloud, 
-  ListChecks, 
-  Database, 
-  Calendar as CalendarIcon, 
+import {
+  LayoutDashboard,
+  Menu,
+  Calendar,
+  FileText,
+  Mail,
+  Workflow,
+  MessageSquare,
+  Upload,
+  UploadCloud,
+  ListChecks,
+  Database,
+  Calendar as CalendarIcon,
   Briefcase,
   BarChartHorizontal,
-  ChevronRight, 
+  ChevronRight,
   ChevronLeft,
   Users,
   ChevronDown,
   Trash2,
-  CheckSquare // <-- NEW: Icon for Tasks
+  CheckSquare,
+  Smartphone
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -74,16 +75,7 @@ const navigationConfig: NavItem[] = [
       { title: "Recycle Bin", href: "/dashboard/leads/recycle-bin", icon: Trash2 },
     ]
   },
-  {
-    type: 'group',
-    title: "Proposal",
-    icon: FileText,
-    adminOnly: false,
-    children: [
-      { title: "Proposal Sent", href: "/dashboard/proposals", icon: FileText },
-      { title: "Add Proposal", href: "/dashboard/add-quotation", icon: Upload },
-    ]
-  },
+  { type: 'link', title: "Proposal", href: "/dashboard/proposals", icon: FileText, adminOnly: false },
   { type: 'link', title: "Clients", href: "/dashboard/clients", icon: Briefcase, adminOnly: false },
   {
     type: 'group',
@@ -107,6 +99,7 @@ const navigationConfig: NavItem[] = [
     children: [
         { title: "Message Master", href: "/dashboard/message-master", icon: Mail },
         { title: "Drip Master", href: "/dashboard/drip-sequence", icon: Workflow },
+        { title: "Today's Drip", href: "/dashboard/drip-today", icon: Smartphone },
     ]
   },
   { type: 'link', title: "Masters", href: "/dashboard/masters", icon: Database, adminOnly: true },

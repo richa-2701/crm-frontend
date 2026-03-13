@@ -38,7 +38,7 @@ export default function UserLoginPage() {
     try {
       const userData = await api.userAuthenticate(username, password, companyName)
       if (userData && userData.id) {
-        localStorage.setItem("user", JSON.stringify(userData))
+        localStorage.setItem("user", JSON.stringify({ ...userData, role: userData.role?.toLowerCase() }))
         toast({ title: "Login Successful", description: `Welcome, ${userData.username}!` })
         router.push("/dashboard")
       } else {

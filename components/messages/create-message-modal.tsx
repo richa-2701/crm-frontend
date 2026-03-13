@@ -1,7 +1,6 @@
 // frontend/components/messages/create-message-modal.tsx
 "use client";
 import { useState } from "react";
-// --- CHANGE: Import DialogDescription ---
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,8 +33,8 @@ export function CreateMessageModal({ isOpen, onClose, onSuccess, currentUser }: 
       setFile(null);
       const fileInput = document.getElementById('file') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      
-      if (value === "text") {
+
+      if (value === "text" || value === "text_media") {
         setFormData(prev => ({ ...prev, [field]: value }));
       } else {
         setFormData(prev => ({ ...prev, [field]: value, message_content: "" }));
@@ -46,20 +45,17 @@ export function CreateMessageModal({ isOpen, onClose, onSuccess, currentUser }: 
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    } else {
-      setFile(null);
-    }
+    setFile(e.target.files?.[0] ?? null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.message_type !== 'text' && !file) {
-        toast({ title: "File Required", description: "Please select a file for media or document message types.", variant: "destructive" });
-        return;
+    const needsFile = formData.message_type === "media" || formData.message_type === "document" || formData.message_type === "text_media";
+    if (needsFile && !file) {
+      toast({ title: "File Required", description: "Please select a file for this message type.", variant: "destructive" });
+      return;
     }
-    
+
     setIsLoading(true);
     try {
       await api.createMessage({ ...formData, created_by: currentUser.username }, file);
@@ -75,21 +71,19 @@ export function CreateMessageModal({ isOpen, onClose, onSuccess, currentUser }: 
   };
 
   const handleClose = () => {
-    setFormData({
-      message_name: "",
-      message_content: "",
-      message_type: "text",
-    });
+    setFormData({ message_name: "", message_content: "", message_type: "text" });
     setFile(null);
     onClose();
   };
+
+  const showText = formData.message_type === "text" || formData.message_type === "text_media";
+  const showFile = formData.message_type !== "text";
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Message Template</DialogTitle>
-          {/* --- CHANGE: Add DialogDescription to fix console warning --- */}
           <DialogDescription>
             Create a reusable message for text, media, or documents to use in drip sequences.
           </DialogDescription>
@@ -107,24 +101,34 @@ export function CreateMessageModal({ isOpen, onClose, onSuccess, currentUser }: 
                 <SelectItem value="text">Text</SelectItem>
                 <SelectItem value="media">Media (Image/Video)</SelectItem>
                 <SelectItem value="document">Document</SelectItem>
+                <SelectItem value="text_media">Text + Media</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {formData.message_type === "text" ? (
+          {showText && (
             <div className="space-y-2">
               <Label htmlFor="message_content">Message Content</Label>
-              <Textarea id="message_content" value={formData.message_content || ''} onChange={e => handleInputChange("message_content", e.target.value)} rows={5} placeholder="Type your message here... You can use {contact_name} as a placeholder."/>
+              <Textarea
+                id="message_content"
+                value={formData.message_content || ''}
+                onChange={e => handleInputChange("message_content", e.target.value)}
+                rows={5}
+                placeholder="Type your message here... You can use {contact_name} as a placeholder."
+              />
             </div>
-          ) : (
+          )}
+          {showFile && (
             <div className="space-y-2">
               <Label htmlFor="file">File Attachment</Label>
-              <Input id="file" type="file" onChange={handleFileChange} required />
+              <Input id="file" type="file" onChange={handleFileChange} required={formData.message_type !== "text_media"} />
               {file && <p className="text-xs text-muted-foreground">Selected: {file.name}</p>}
             </div>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>{isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : "Save Message"}</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : "Save Message"}
+            </Button>
           </div>
         </form>
       </DialogContent>

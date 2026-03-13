@@ -489,7 +489,7 @@ export interface ApiMessageMaster {
   message_code: string;
   message_name: string;
   message_content: string | null;
-  message_type: "text" | "media" | "document";
+  message_type: "text" | "media" | "document" | "text_media";
   attachment_path: string | null;
   created_at: string;
   created_by: string;
@@ -498,14 +498,14 @@ export interface ApiMessageMaster {
 export interface ApiMessageMasterCreatePayload {
   message_name: string;
   message_content?: string;
-  message_type: "text" | "media" | "document";
+  message_type: "text" | "media" | "document" | "text_media";
   created_by: string;
 }
 
 export interface ApiMessageMasterUpdatePayload {
   message_name: string;
   message_content?: string | null;
-  message_type: "text" | "media" | "document";
+  message_type: "text" | "media" | "document" | "text_media";
   existing_attachment_path?: string | null;
 }
 
@@ -544,6 +544,35 @@ export interface ApiDripSequenceCreatePayload {
     time_to_send: string;
     sequence_order: number;
   }[];
+}
+
+export interface ApiManualDripCard {
+  assignment_id: number;
+  step_id: number;
+  customer_name: string;
+  lead_id: number;
+  drip_name: string;
+  day_to_send: number;
+  time_to_send: string;
+  message_content: string;
+  message_name: string;
+  message_type: string;
+  attachment_path: string | null;
+  scheduled_date: string;
+}
+
+export interface ApiDripHistoryItem {
+  assignment_id: number;
+  step_id: number;
+  customer_name: string;
+  drip_name: string;
+  day_to_send: number;
+  message_content: string | null;
+  message_type: string;
+  attachment_path: string | null;
+  scheduled_date: string;
+  sent_at: string | null;
+  status: "sent" | "pending";
 }
 
 export interface ApiReminder {
@@ -1310,8 +1339,27 @@ const unifiedApi = {
   deleteDripSequence: (id: number): Promise<{message: string}> =>
     fetcher(`DripSequence/Delete/${id}`, { method: "POST" }),
 
-  assignDripToLead: (leadId: number, dripSequenceId: number): Promise<{message: string}> =>
-    fetcher("DripSequence/AssignToLead", { method: "POST", body: JSON.stringify({ LeadId: leadId, DripSequenceId: dripSequenceId, StartDate: new Date().toISOString(), IsActive: true }) }),
+  assignDripToLead: (leadId: number, dripSequenceId: number): Promise<{message: string}> => {
+    const localDate = new Date();
+    const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    return fetcher("DripSequence/AssignToLead", { method: "POST", body: JSON.stringify({ LeadId: leadId, DripSequenceId: dripSequenceId, StartDate: dateStr, IsActive: true }) });
+  },
+
+  bulkAssignDripToLeads: (leadIds: number[], dripSequenceId: number): Promise<{message: string}> => {
+    const localDate = new Date();
+    const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    return fetcher("DripSequence/BulkAssign", { method: "POST", body: JSON.stringify({ LeadIds: leadIds, DripSequenceId: dripSequenceId, StartDate: dateStr, IsActive: true }) });
+  },
+
+  // 📱 Manual Drip Dashboard
+  getManualDripToday: (username: string): Promise<ApiManualDripCard[]> =>
+    fetcher(`DripSequence/ManualDrip/Today?username=${encodeURIComponent(username)}`, { method: "GET" }),
+
+  markManualDripSent: (assignmentId: number, stepId: number, username: string): Promise<{message: string}> =>
+    fetcher("DripSequence/ManualDrip/MarkSent", { method: "POST", body: JSON.stringify({ assignment_id: assignmentId, step_id: stepId, username }) }),
+
+  getDripHistory: (username: string): Promise<ApiDripHistoryItem[]> =>
+    fetcher(`DripSequence/ManualDrip/History?username=${encodeURIComponent(username)}`, { method: "GET" }),
 
   // ✅ Tasks
   createTask: (payload: ApiTaskCreatePayload): Promise<{message: string}> =>

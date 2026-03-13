@@ -121,10 +121,13 @@ export default function SchedulePage() {
         const sortedUsers = usersData.sort((a, b) => a.username.localeCompare(b.username));
         setUsers(sortedUsers.map((user: any) => ({ ...user, id: user.id.toString() })));
         
-        const meetingTypes = meetingTypesData.map(item => item.value);
-        setMeetingTypeOptions(meetingTypes);
-        if (meetingTypes.length > 0) {
-            setFormData(prev => ({ ...prev, meeting_type: meetingTypes[0] }));
+        const masterMeetingTypes = meetingTypesData.map(item => item.value);
+        const hardcodedMeetingTypes = ["4 Phase Meeting", "Discussion", "Others"];
+        const combinedMeetingTypes = Array.from(new Set([...masterMeetingTypes, ...hardcodedMeetingTypes]));
+        
+        setMeetingTypeOptions(combinedMeetingTypes);
+        if (combinedMeetingTypes.length > 0) {
+            setFormData(prev => ({ ...prev, meeting_type: combinedMeetingTypes[0] }));
         }
 
       } catch (error) {

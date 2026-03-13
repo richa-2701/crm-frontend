@@ -5,17 +5,19 @@ import { useEffect, useState, type ComponentType } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-    Loader2, 
-    Activity, 
-    Calendar, 
-    Phone, 
-    Mail, 
-    MessageSquare, 
-    Video, 
-    CheckCircle, 
+import {
+    Loader2,
+    Activity,
+    Calendar,
+    Phone,
+    Mail,
+    MessageSquare,
+    Video,
+    CheckCircle,
     Bell,
-    Trash2
+    Trash2,
+    Paperclip,
+    Download,
 } from "lucide-react"
 import { 
     activityApi, 
@@ -45,6 +47,7 @@ interface UnifiedTimelineItem {
   createdBy: string;
   Icon: ComponentType<{ className: string }>;
   color: string;
+  attachment_path?: string | null;
 }
 
 export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesModalProps) {
@@ -71,12 +74,16 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
 
           const mappedActivities: UnifiedTimelineItem[] = (Array.isArray(activitiesRes) ? activitiesRes : []).map((a: ApiActivity) => {
             const isDeleteLog = a.activity_type === 'system-delete';
+            const isQuotation = a.activity_type === 'Quotation';
             const lowerPhase = a.phase?.toLowerCase() || '';
             let Icon = Activity;
             let color = "bg-gray-100 text-gray-800";
             if (isDeleteLog) {
               Icon = Trash2;
               color = "bg-red-100 text-red-800";
+            } else if (isQuotation) {
+              Icon = Paperclip;
+              color = "bg-purple-100 text-purple-800";
             } else if (lowerPhase.includes("call")) {
               Icon = Phone; color = "bg-blue-100 text-blue-800";
             } else if (lowerPhase.includes("email")) {
@@ -88,11 +95,12 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
               id: `activity-${a.id}`,
               type: 'activity',
               date: new Date(a.created_at),
-              title: isDeleteLog ? "Activity Deleted" : `Logged: ${a.phase || 'Activity'}`,
+              title: isDeleteLog ? "Activity Deleted" : isQuotation ? "Quotation Attached" : `Logged: ${a.phase || 'Activity'}`,
               details: a.details,
               createdBy: a.created_by,
               Icon,
               color,
+              attachment_path: a.attachment_path ?? null,
             }
           });
 
@@ -185,6 +193,18 @@ export function LeadActivitiesModal({ lead, isOpen, onClose }: LeadActivitiesMod
                       <span className="text-sm text-muted-foreground">{formatDateTime(item.date.toISOString())}</span>
                     </div>
                     {item.details && <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.details}</p>}
+                    {item.attachment_path && (
+                      <a
+                        href={item.attachment_path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-1"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download Quotation
+                      </a>
+                    )}
                   </div>
                 ))
               )}

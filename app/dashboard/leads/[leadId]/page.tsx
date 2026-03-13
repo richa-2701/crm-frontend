@@ -143,33 +143,38 @@ export default function LeadDetailPage() {
     }
   };
 
-  // --- START OF FIX: Create a handler for authenticated downloads ---
   const handleDownloadAttachment = async (attachment: LeadAttachment) => {
-    setDownloadingId(attachment.id); // Set loading state for this specific button
+    // S3 files are public — open directly without going through the backend
+    if (attachment.file_path?.startsWith("https://")) {
+      const a = document.createElement('a');
+      a.href = attachment.file_path;
+      a.download = attachment.original_file_name;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+    // Legacy local file — proxy through the backend download endpoint
+    setDownloadingId(attachment.id);
     try {
         const fileBlob = await leadApi.downloadLeadAttachment(attachment.id);
-        
-        // Create a temporary URL for the blob
         const url = window.URL.createObjectURL(fileBlob);
-        
-        // Create a temporary link element to trigger the download
         const a = document.createElement('a');
         a.href = url;
-        a.download = attachment.original_file_name; // Use the original filename
+        a.download = attachment.original_file_name;
         document.body.appendChild(a);
         a.click();
-        
-        // Clean up by removing the link and revoking the URL
         a.remove();
         window.URL.revokeObjectURL(url);
-
     } catch (error: any) {
         toast({ title: "Error", description: error.message || "Could not download file.", variant: "destructive" });
     } finally {
-        setDownloadingId(null); // Clear loading state
+        setDownloadingId(null);
     }
   };
-  // --- END OF FIX ---
 
 
   if (isLoading) {

@@ -142,6 +142,7 @@ interface MasterDataOptions {
   segment: string[];
   verticles: string[];
   lead_type: string[];
+  status: string[];
   current_system: string[];
   version: string[];
 }
@@ -178,7 +179,7 @@ export default function CreateLeadPage() {
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
 
   const [masterOptions, setMasterOptions] = useState<MasterDataOptions>({
-    source: [], segment: [], verticles: [], lead_type: [], current_system: [], version: []
+    source: [], segment: [], verticles: [], lead_type: [], status: [], current_system: [], version: []
   });
 
   const [formData, setFormData] = useState({
@@ -211,6 +212,7 @@ export default function CreateLeadPage() {
     amc: "",
     gst: "",
     company_pan: "",
+    status: "New",
   })
 
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>()
@@ -232,21 +234,27 @@ export default function CreateLeadPage() {
           const parsedUser = JSON.parse(userData)
           setUser(parsedUser)
 
-          const [usersData, sourceData, segmentData, verticlesData, leadTypeData, currentSystemData, versionData] = await Promise.all([
+          const [usersData, sourceData, segmentData, verticlesData, leadTypeData, statusData, currentSystemData, versionData] = await Promise.all([
             userApi.getUsers(),
             api.getByCategory("source"),
             api.getByCategory("segment"),
             api.getByCategory("verticles"),
             api.getByCategory("lead_type"),
+            api.getByCategory("status"),
             api.getByCategory("current_system"),
             api.getByCategory("version")
           ]);
+
+          const masterStatuses = statusData.map(item => item.value);
+          const hardcodedStatuses = ["New", "Meeting Pending", "Meeting Done", "Demo Pending", "Demo Done", "Proposal Sent"];
+          const combinedStatuses = Array.from(new Set([...hardcodedStatuses, ...masterStatuses]));
 
           setMasterOptions({
             source: sourceData.map(item => item.value),
             segment: segmentData.map(item => item.value),
             verticles: verticlesData.map(item => item.value),
             lead_type: leadTypeData.map(item => item.value),
+            status: combinedStatuses,
             current_system: currentSystemData.map(item => item.value),
             version: versionData.map(item => item.value),
           });
