@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -10,8 +10,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Autocomplete } from "@/components/ui/autocomplete"
 import { api, type ApiDemo, type ApiLead } from "@/lib/api"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
-import { Loader2 } from "lucide-react"
-import { Input } from "@/components/ui/input" // Import Input component
+import { Loader2, Mic, MicOff, Trash2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
 
 export default function PostDemoPage() {
   const router = useRouter()
@@ -22,6 +22,14 @@ export default function PostDemoPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false)
+
+  // Audio recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const [formData, setFormData] = useState({
     demo_id: "",
@@ -63,6 +71,34 @@ export default function PostDemoPage() {
     fetchData()
   }, [toast, searchParams])
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch {
+      toast({ title: "Microphone Error", description: "Could not access microphone.", variant: "destructive" });
+    }
+  };
+
+  const stopRecording = () => { mediaRecorderRef.current?.stop(); setIsRecording(false); };
+
+  const discardRecording = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+  };
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (field === "lead_id") {
@@ -102,6 +138,20 @@ export default function PostDemoPage() {
       // --- END OF CHANGE ---
       
       await api.completeDemo(demoData);
+
+      // Upload MOM audio if recorded
+      if (audioBlob) {
+        setIsUploadingAudio(true);
+        try {
+          const audioFile = new File([audioBlob], "demo-mom.webm", { type: "audio/webm" });
+          await api.uploadDemoMOM(Number(formData.demo_id), audioFile);
+        } catch (audioErr) {
+          console.error("Failed to upload MOM audio:", audioErr);
+        } finally {
+          setIsUploadingAudio(false);
+        }
+      }
+
       setShowConfirmation(true)
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
@@ -174,11 +224,34 @@ export default function PostDemoPage() {
               <Label htmlFor="remark">Demo Notes *</Label>
               <Textarea id="remark" placeholder="Enter demo notes and client feedback..." value={formData.remark} onChange={(e) => handleInputChange("remark", e.target.value)} rows={5} required />
             </div>
+            {/* MOM Audio Recording */}
+            <div className="space-y-2 rounded-lg border p-3">
+              <Label className="text-sm font-medium">MOM Audio Recording (optional)</Label>
+              <p className="text-xs text-muted-foreground">Record a voice note as Minutes of Meeting</p>
+              {!audioUrl ? (
+                <Button
+                  type="button"
+                  variant={isRecording ? "destructive" : "outline"}
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className="h-9 text-sm gap-2"
+                >
+                  {isRecording ? <><MicOff className="h-4 w-4" /> Stop Recording</> : <><Mic className="h-4 w-4" /> Start Recording</>}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <audio controls src={audioUrl} className="w-full h-10" />
+                  <Button type="button" variant="ghost" size="sm" onClick={discardRecording} className="text-destructive hover:text-destructive gap-1 text-xs">
+                    <Trash2 className="h-3 w-3" /> Discard Recording
+                  </Button>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-              <Button type="submit" disabled={isLoading || !formData.demo_id}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Notes
+              <Button type="submit" disabled={isLoading || isUploadingAudio || !formData.demo_id}>
+                {(isLoading || isUploadingAudio) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isUploadingAudio ? "Uploading Audio..." : "Save Notes"}
               </Button>
             </div>
           </form>

@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/date-format";
-import { Phone, Mail, MessageSquare, CheckCircle, Download, FileText, Timer } from "lucide-react";
-import type { UnifiedActivity } from "@/app/dashboard/activity/page"; 
+import { Phone, Mail, MessageSquare, CheckCircle, Download, FileText, Timer, CalendarCheck } from "lucide-react";
+import type { UnifiedActivity } from "@/app/dashboard/activity/page";
 
 interface ActivityDetailModalProps {
     activity: UnifiedActivity | null;
@@ -40,73 +40,96 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
     if (!activity) return null;
 
     const Icon = activityTypeIcons[activity.activity_type] || activityTypeIcons.default;
-    const isScheduled = activity.logged_or_scheduled === 'Scheduled';
+    const isCompleted = !!activity.outcome; // combined completed-reminder log
+    const isScheduled = !isCompleted && activity.logged_or_scheduled === 'Scheduled';
     const attachmentPath = (activity.raw_activity as any).attachment_path;
+
+    const statusBadgeVariant = ['pending', 'scheduled', 'overdue'].includes(activity.status.toLowerCase()) ? 'secondary' : 'default';
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Icon className="h-5 w-5 text-primary" />
+                        {isCompleted ? <CalendarCheck className="h-5 w-5 text-primary" /> : <Icon className="h-5 w-5 text-primary" />}
                         Activity Details for {activity.company_name}
                     </DialogTitle>
                     <DialogDescription>
-                        {isScheduled ? "Details of the scheduled activity." : "Details of the logged activity."}
+                        {isCompleted ? "Details of the logged activity." : isScheduled ? "Details of the scheduled activity." : "Details of the logged activity."}
                     </DialogDescription>
                 </DialogHeader>
-                {/* --- START OF FIX: Removed max-h and overflow classes from the main grid container --- */}
-                <div className="grid grid-cols-[120px_1fr] gap-y-4 py-4 text-sm pr-4">
-                {/* --- END OF FIX --- */}
+
+                <div className="grid grid-cols-[130px_1fr] gap-y-4 py-4 text-sm pr-2">
                     <span className="font-semibold text-right pr-4">Status</span>
-                    <Badge variant={activity.status.toLowerCase() === 'pending' || activity.status.toLowerCase() === 'scheduled' ? 'secondary' : 'default'} className="capitalize w-fit">
-                        {activity.status.replace(/_/g, ' ')}
+                    <Badge variant={statusBadgeVariant} className="capitalize w-fit">
+                        {isCompleted ? 'Completed' : activity.status.replace(/_/g, ' ')}
                     </Badge>
-                    
+
                     <span className="font-semibold text-right pr-4">Activity Type</span>
                     <span>{activity.activity_type}</span>
 
-                    <span className="font-semibold text-right pr-4">
-                        {isScheduled ? "Scheduled For" : "Logged On"}
-                    </span>
-                    <span>{formatDateTime(activity.date)}</span>
-                    
-                    {isScheduled && activity.raw_activity.created_at && (
+                    {/* Scheduled For */}
+                    <span className="font-semibold text-right pr-4">Scheduled For</span>
+                    <span>{formatDateTime(isCompleted ? activity.scheduled_for! : activity.date)}</span>
+
+                    {/* Created On */}
+                    <span className="font-semibold text-right pr-4">Created On</span>
+                    <span>{formatDateTime(activity.creation_date)}</span>
+
+                    {/* Created By */}
+                    {(isCompleted ? activity.scheduled_by : (activity.raw_activity as any).created_by || (activity.raw_activity as any).assigned_to) && (
                         <>
-                            <span className="font-semibold text-right pr-4">Created On</span>
-                            <span>{formatDateTime(activity.raw_activity.created_at)}</span>
+                            <span className="font-semibold text-right pr-4">Created By</span>
+                            <span>{isCompleted ? activity.scheduled_by : ((activity.raw_activity as any).created_by || (activity.raw_activity as any).assigned_to)}</span>
                         </>
                     )}
-                    
-                    {activity.type === 'log' && activity.duration_minutes && activity.duration_minutes > 0 && (
-                         <>
-                            <span className="font-semibold text-right pr-4 flex items-center justify-end gap-2">
+
+                    {/* Completed On — only for completed reminder logs */}
+                    {isCompleted && activity.completed_on && (
+                        <>
+                            <span className="font-semibold text-right pr-4">Completed On</span>
+                            <span>{formatDateTime(activity.completed_on)}</span>
+                        </>
+                    )}
+
+                    {/* Duration */}
+                    {activity.duration_minutes && activity.duration_minutes > 0 && (
+                        <>
+                            <span className="font-semibold text-right pr-4 flex items-center justify-end gap-1">
                                 <Timer className="h-4 w-4 text-muted-foreground" />
                                 Time Taken
                             </span>
-                            <span>{activity.duration_minutes} minutes</span>
+                            <span>{activity.duration_minutes} min</span>
                         </>
                     )}
-                    
+
+                    {/* Details — original task message */}
                     <span className="font-semibold text-right pr-4 self-start">Details</span>
-                    {/* --- START OF FIX: Wrapped the details <p> in a scrollable div --- */}
-                    <div className="bg-muted/50 p-2 rounded-md col-span-1 max-h-48 overflow-y-auto">
-                         <p className="whitespace-pre-wrap break-words">
-                            {activity.details}
+                    <div className="bg-muted/50 p-2 rounded-md max-h-32 overflow-y-auto">
+                        <p className="whitespace-pre-wrap break-words">
+                            {isCompleted ? activity.original_details : activity.details}
                         </p>
                     </div>
-                    {/* --- END OF FIX --- */}
-                    
+
+                    {/* Outcome — only for completed reminder logs */}
+                    {isCompleted && (
+                        <>
+                            <span className="font-semibold text-right pr-4 self-start">Outcome</span>
+                            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-2 rounded-md max-h-32 overflow-y-auto">
+                                <p className="whitespace-pre-wrap break-words text-green-900 dark:text-green-100">
+                                    {activity.outcome}
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Attachment */}
                     {attachmentPath && (
                         <>
                             <span className="font-semibold text-right pr-4 self-start">Attachment</span>
                             <div className="col-span-1 space-y-2">
                                 {isBrowserPreviewable(attachmentPath) ? (
-                                    <iframe
-                                        src={resolveAttachmentUrl(attachmentPath)}
-                                        title="Attachment Preview"
-                                        className="w-full h-48 rounded-md border bg-white"
-                                    />
+                                    <iframe src={resolveAttachmentUrl(attachmentPath)} title="Attachment Preview" className="w-full h-48 rounded-md border bg-white" />
                                 ) : (
                                     <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border">
                                         <FileText className="h-5 w-5 flex-shrink-0" />
@@ -123,6 +146,7 @@ export function ActivityDetailModal({ activity, isOpen, onClose }: ActivityDetai
                         </>
                     )}
                 </div>
+
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Close</Button>
                 </DialogFooter>

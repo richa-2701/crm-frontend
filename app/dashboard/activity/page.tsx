@@ -40,7 +40,7 @@ import { formatDateTime, parseAsUTCDate } from "@/lib/date-format";
 
 
 export interface UnifiedActivity {
-    id: string; 
+    id: string;
     type: 'log' | 'reminder' | 'meeting' | 'demo';
     lead_id: number;
     company_name: string;
@@ -50,9 +50,31 @@ export interface UnifiedActivity {
     status: string;
     date: string;
     creation_date: string;
-    isActionable: boolean; 
+    isActionable: boolean;
     raw_activity: ApiActivity | ApiReminder | ApiMeeting | ApiDemo;
     duration_minutes?: number;
+    // Populated for completed reminder logs (mark-as-done)
+    outcome?: string;
+    original_details?: string;
+    scheduled_for?: string;
+    scheduled_by?: string;
+    completed_on?: string;
+}
+
+/** Parse the CRM_META tags embedded by CompleteAndLog into an activity_log details field. */
+function parseCrmMeta(details: string): { outcome: string; original_details: string; scheduled_for: string; scheduled_by: string; reminder_created_at: string } | null {
+    if (!details.includes('[CRM_META]')) return null;
+    const [outcome, rest1 = ''] = details.split('[CRM_META]');
+    const [original_details, rest2 = ''] = rest1.split('[CRM_SCHED]');
+    const [scheduled_for, rest3 = ''] = rest2.split('[CRM_BY]');
+    const [scheduled_by, reminder_created_at = ''] = rest3.split('[CRM_ON]');
+    return {
+        outcome: outcome.trim(),
+        original_details: original_details.trim(),
+        scheduled_for: scheduled_for.trim(),
+        scheduled_by: scheduled_by.trim(),
+        reminder_created_at: reminder_created_at.trim(),
+    };
 }
 
 function EditActivityModal({
@@ -251,33 +273,39 @@ export default function ActivityPage() {
             const unifiedList: UnifiedActivity[] = [];
 
             (loggedActivitiesData || []).forEach((log: ApiActivity) => {
-                // --- START OF FIX: Skip auto-generated activities ---
-                if (log.activity_type === 'auto-schedule' || log.activity_type === 'auto-complete') {
-                    return; // Do not add this activity to the list
-                }
-                // --- END OF FIX ---
+                if (log.activity_type === 'auto-schedule' || log.activity_type === 'auto-complete') return;
                 if (!log.created_at) return;
+
+                const meta = parseCrmMeta(log.details || '');
+
                 unifiedList.push({
                     id: `log-${log.id}`,
                     type: 'log',
                     lead_id: log.lead_id,
                     company_name: log.company_name || leadsMap.get(log.lead_id) || 'Unknown Lead',
                     activity_type: log.activity_type,
-                    details: log.details,
-                    logged_or_scheduled: 'Logged',
-                    status: log.phase || 'Activity Logged',
-                    date: log.created_at,
-                    creation_date: log.created_at,
+                    details: meta ? meta.original_details : log.details,
+                    logged_or_scheduled: meta ? 'Scheduled' : 'Logged',
+                    status: meta ? 'Completed' : (log.phase || 'Activity Logged'),
+                    date: meta ? meta.scheduled_for : log.created_at,
+                    creation_date: meta ? meta.reminder_created_at || log.created_at : log.created_at,
                     isActionable: false,
                     raw_activity: log,
                     duration_minutes: log.duration_minutes,
+                    ...(meta ? {
+                        outcome: meta.outcome,
+                        original_details: meta.original_details,
+                        scheduled_for: meta.scheduled_for,
+                        scheduled_by: meta.scheduled_by,
+                        completed_on: log.created_at,
+                    } : {}),
                 });
             });
 
             (remindersData || []).forEach((rem: ApiReminder) => {
-                if (rem.is_hidden_from_activity_log) {
-                    return; 
-                }
+                if (rem.is_hidden_from_activity_log) return;
+                // Completed reminders are shown via their activity_log entry (combined view)
+                if (rem.status?.toLowerCase() === 'completed') return;
 
                 const scheduledDate = parseAsUTCDate(rem.remind_time);
                 if (!scheduledDate || !rem.created_at) return;

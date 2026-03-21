@@ -22,26 +22,26 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Users, Calendar, Search, AlertCircle, Loader2, Check, LayoutGrid, List, User, Clock, FileText, MoreHorizontal, Edit, Calendar as CalendarIcon, XCircle, FileEdit, Timer } from "lucide-react"
+import { Users, Calendar, Search, AlertCircle, Loader2, Check, LayoutGrid, List, User, Clock, FileText, MoreHorizontal, Edit, Calendar as CalendarIcon, XCircle, FileEdit, Timer, MapPin, Link as LinkIcon, Volume2, Mic, MicOff, Trash2, Play, Mail, Fingerprint, ShieldCheck, Send } from "lucide-react"
 import { api, type ApiLead, type ApiMeeting, type ApiDemo, type ApiUser, type ApiEventReschedulePayload } from "@/lib/api"
-import { formatDateTime, parseAsUTCDate } from "@/lib/date-format" 
+import { formatDateTime, parseAsUTCDate } from "@/lib/date-format"
 import { useToast } from "@/hooks/use-toast"
 
 const convertLocalStringToUtcIso = (localString: string): string => {
-    if (!localString) return "";
-    
-    const [datePart, timePart] = localString.split('T');
-    if (!datePart || !timePart) {
-        console.warn("Invalid datetime-local string format:", localString);
-        return new Date(localString).toISOString(); 
-    }
+  if (!localString) return "";
 
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, minute] = timePart.split(':').map(Number);
-    
-    const localDate = new Date(year, month - 1, day, hour, minute);
-    
-    return localDate.toISOString();
+  const [datePart, timePart] = localString.split('T');
+  if (!datePart || !timePart) {
+    console.warn("Invalid datetime-local string format:", localString);
+    return new Date(localString).toISOString();
+  }
+
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+
+  const localDate = new Date(year, month - 1, day, hour, minute);
+
+  return localDate.toISOString();
 };
 
 
@@ -72,6 +72,17 @@ interface EnhancedEvent {
   remark?: string;
   attendees: string[];
   duration_minutes?: number;
+  meeting_agenda?: string;
+  meeting_link?: string;
+  location_text?: string;
+  latitude?: number;
+  longitude?: number;
+  mom_audio_path?: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  phone?: string;
+  email?: string;
+  end_location_text?: string;
 }
 
 type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue' | 'cancelled' | 'rescheduled';
@@ -94,75 +105,95 @@ const getEventStatus = (event: { start_time: string; phase?: string }): 'Pending
 // --- MODAL COMPONENTS ---
 
 function RescheduleModal({ isOpen, onClose, event, onSuccess, currentUser }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onSuccess: () => void, currentUser: ApiUser | null }) {
-    const { toast } = useToast();
-    const [startTime, setStartTime] = useState("");
-    const [duration, setDuration] = useState("60");
-    const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+  const [startTime, setStartTime] = useState("");
+  const [duration, setDuration] = useState("60");
+  const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        if (event?.start_time) {
-            const date = parseAsUTCDate(event.start_time);
-            if (date) {
-                date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-                setStartTime(date.toISOString().slice(0, 16));
-            }
-        }
-    }, [event]);
+  useEffect(() => {
+    if (event?.start_time) {
+      const date = parseAsUTCDate(event.start_time);
+      if (date) {
+        date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        setStartTime(date.toISOString().slice(0, 16));
+      }
+    }
+  }, [event]);
 
-    if (!isOpen || !event || !currentUser) return null;
+  if (!isOpen || !event || !currentUser) return null;
 
-    const handleSubmit = async () => {
-        if (!startTime || !duration) {
-            toast({ title: "Error", description: "Please fill in all fields.", variant: "destructive" });
-            return;
-        }
-        setIsLoading(true);
-        
-        const startUtc = convertLocalStringToUtcIso(startTime);
-        
-        const end = new Date(startTime);
-        end.setMinutes(end.getMinutes() + parseInt(duration, 10));
-        const endUtc = end.toISOString();
+  const handleSubmit = async () => {
+    if (!startTime || !duration) {
+      toast({ title: "Error", description: "Please fill in all fields.", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
 
-        try {
-            await api.rescheduleEvent(event.type, event.numericId, {
-                start_time: startUtc,
-                end_time: endUtc,
-                updated_by: currentUser.username,
-            });
+    const oldTimeUtc = event.start_time; // capture before update
+    const startUtc = convertLocalStringToUtcIso(startTime);
 
-            toast({ title: "Success", description: "Event has been rescheduled." });
-            onSuccess();
-        } catch (error) {
-            toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader><DialogTitle>Reschedule {event.type}</DialogTitle></DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="start_time">New Start Date & Time</Label>
-                        <Input id="start_time" type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="duration">Duration (minutes)</Label>
-                        <Input id="duration" type="number" value={duration} onChange={e => setDuration(e.target.value)} />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
+    const end = new Date(startTime);
+    end.setMinutes(end.getMinutes() + parseInt(duration, 10));
+    const endUtc = end.toISOString();
+
+    try {
+      await api.rescheduleEvent(event.type, event.numericId, {
+        start_time: startUtc,
+        end_time: endUtc,
+        updated_by: currentUser.username,
+      });
+
+      // Best-effort: send reschedule notification emails
+      const pythonBaseUrl = process.env.NEXT_PUBLIC_PYTHON_API_URL?.replace(/\/$/, "");
+      const companyAuthName = typeof window !== "undefined" ? localStorage.getItem("companyName") : null;
+      if (pythonBaseUrl && companyAuthName) {
+        fetch(`${pythonBaseUrl}/internal/send-reschedule-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_type: event.type === "meeting" ? "Meeting" : "Demo",
+            company_name: event.company_name,
+            salesperson_username: event.assigned_to,
+            old_time_utc: oldTimeUtc,
+            new_time_utc: startUtc,
+            contact_email: event.email || null,
+            company_auth_name: companyAuthName,
+          }),
+        }).catch(() => {}); // fire-and-forget
+      }
+
+      toast({ title: "Success", description: "Event has been rescheduled." });
+      onSuccess();
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Reschedule {event.type}</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="start_time">New Start Date & Time</Label>
+            <Input id="start_time" type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="duration">Duration (minutes)</Label>
+            <Input id="duration" type="number" value={duration} onChange={e => setDuration(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function ReassignModal({ isOpen, onClose, event, onSuccess, currentUser, users }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onSuccess: () => void, currentUser: ApiUser | null, users: ApiUser[] }) {
@@ -310,7 +341,115 @@ function EditNotesModal({ isOpen, onClose, event, onSuccess, currentUser }: { is
   );
 }
 
+// --- NEW: OTP & Email Modals ---
+
+function OTPVerificationModal({ isOpen, onClose, event, onVerify }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onVerify: (otp: string) => Promise<void> }) {
+    const [otp, setOtp] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    if (!isOpen || !event) return null;
+
+    const handleSubmit = async () => {
+        if (!otp) return;
+        setIsLoading(true);
+        try {
+            await onVerify(otp);
+            setOtp("");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                    <div className="flex justify-center mb-4">
+                        <div className="p-3 bg-blue-100 rounded-full">
+                            <Fingerprint className="h-8 w-8 text-blue-600" />
+                        </div>
+                    </div>
+                    <DialogTitle className="text-center text-xl">Enter Verification OTP</DialogTitle>
+                    <DialogDescription className="text-center">
+                        An OTP has been sent to the client at <strong>{event.email || "their registered email"}</strong>. 
+                        Please enter it to start the {event.type}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 flex justify-center">
+                    <Input 
+                        value={otp} 
+                        onChange={e => setOtp(e.target.value)} 
+                        placeholder="6-digit OTP" 
+                        className="text-center text-2xl tracking-widest h-12"
+                        maxLength={6}
+                    />
+                </div>
+                <DialogFooter className="sm:justify-center">
+                    <Button onClick={handleSubmit} disabled={isLoading || otp.length < 4} className="w-full">
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                        Verify & Start
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ClientEmailModal({ isOpen, onClose, event, onSubmit }: { isOpen: boolean, onClose: () => void, event: EnhancedEvent | null, onSubmit: (email: string) => Promise<void> }) {
+    const [email, setEmail] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    if (!isOpen || !event) return null;
+
+    const handleSubmit = async () => {
+        if (!email || !email.includes('@')) return;
+        setIsLoading(true);
+        try {
+            await onSubmit(email);
+            setEmail("");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                    <div className="flex justify-center mb-4">
+                        <div className="p-3 bg-orange-100 rounded-full">
+                            <Mail className="h-8 w-8 text-orange-600" />
+                        </div>
+                    </div>
+                    <DialogTitle className="text-center text-xl">Missing Client Email</DialogTitle>
+                    <DialogDescription className="text-center">
+                        OTP cannot be sent because the client email is missing. Please provide it to continue.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="client-email">Client Email Address</Label>
+                    <Input 
+                        id="client-email"
+                        type="email"
+                        value={email} 
+                        onChange={e => setEmail(e.target.value)} 
+                        placeholder="client@example.com" 
+                        className="mt-1"
+                    />
+                </div>
+                <DialogFooter className="sm:justify-center">
+                    <Button onClick={handleSubmit} disabled={isLoading || !email.includes('@')} className="w-full">
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                        Confirm & Send OTP
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function EventsPage() {
+  const { toast } = useToast();
   const [allEvents, setAllEvents] = useState<EnhancedEvent[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -322,6 +461,12 @@ export default function EventsPage() {
 
   const [eventToEdit, setEventToEdit] = useState<EnhancedEvent | null>(null);
   const [modalType, setModalType] = useState<'reschedule' | 'reassign' | 'cancel' | 'editNotes' | null>(null);
+  const [startingEvents, setStartingEvents] = useState<Set<string>>(new Set());
+  
+  // OTP related state
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [otpTargetEvent, setOtpTargetEvent] = useState<EnhancedEvent | null>(null);
 
   const [selectedEvent, setSelectedEvent] = useState<EnhancedEvent | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -346,42 +491,53 @@ export default function EventsPage() {
       const userNumberToNameMap = new Map<string, string>(
         usersData.map(user => [user.usernumber, user.username])
       );
-      
-      const mapApiEventToEnhancedEvent = (event: (ApiMeeting | ApiDemo) & { phase?: string; attendees?: string }, type: 'meeting' | 'demo'): EnhancedEvent => {
-          const isMeeting = type === 'meeting';
-          const meeting = event as ApiMeeting;
-          const demo = event as ApiDemo;
 
-          const startTime = isMeeting ? meeting.event_time : demo.start_time;
-          
-          const attendeesString = (event.attendees || "").toString();
-          const attendees = attendeesString ? attendeesString.split(',').filter(name => name.trim() !== '') : [];
+      const mapApiEventToEnhancedEvent = (event: (ApiMeeting | ApiDemo) & { phase?: string; attendees?: any }, type: 'meeting' | 'demo'): EnhancedEvent => {
+        const isMeeting = type === 'meeting';
+        const meeting = event as ApiMeeting;
+        const demo = event as ApiDemo;
 
-          return {
-              id: `${type}-${event.id}`,
-              numericId: event.id,
-              type: type,
-              meeting_type: isMeeting ? meeting.meeting_type : undefined,
-              lead_id: String(event.lead_id),
-              company_name: leadsMap.get(String(event.lead_id))?.company_name || 'Unknown Lead',
-              contact_name: leadsMap.get(String(event.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
-              assigned_to: isMeeting ? meeting.assigned_to : userNumberToNameMap.get(demo.assigned_to) || demo.assigned_to,
-              start_time: startTime,
-              end_time: isMeeting ? meeting.event_end_time : demo.event_end_time,
-              status: getEventStatus({ start_time: startTime, phase: event.phase }),
-              createdAt: event.created_at,
-              createdBy: isMeeting ? meeting.created_by : demo.scheduled_by,
-              remark: event.remark,
-              attendees: attendees,
-              duration_minutes: event.duration_minutes,
-          };
+        const startTime = isMeeting ? meeting.event_time : demo.start_time;
+
+        const attendeesString = (event.attendees || "").toString();
+        const attendees = attendeesString ? attendeesString.split(',').filter((name: string) => name.trim() !== '') : [];
+
+        return {
+          id: `${type}-${event.id}`,
+          numericId: event.id,
+          type: type,
+          meeting_type: isMeeting ? meeting.meeting_type : undefined,
+          lead_id: String(event.lead_id),
+          company_name: leadsMap.get(String(event.lead_id))?.company_name || 'Unknown Lead',
+          contact_name: leadsMap.get(String(event.lead_id))?.contacts?.[0]?.contact_name || 'N/A',
+          assigned_to: isMeeting ? meeting.assigned_to : userNumberToNameMap.get(demo.assigned_to) || demo.assigned_to,
+          start_time: startTime,
+          end_time: isMeeting ? meeting.event_end_time : demo.event_end_time,
+          status: getEventStatus({ start_time: startTime, phase: event.phase }),
+          createdAt: event.created_at,
+          createdBy: isMeeting ? meeting.created_by : demo.scheduled_by,
+          remark: event.remark,
+          attendees: attendees,
+          duration_minutes: event.duration_minutes,
+          meeting_agenda: (event as any).meeting_agenda,
+          meeting_link: (event as any).meeting_link,
+          location_text: (event as any).location_text,
+          latitude: (event as any).latitude,
+          longitude: (event as any).longitude,
+          mom_audio_path: (event as any).mom_audio_path,
+          actual_start_time: (event as any).actual_start_time,
+          actual_end_time: (event as any).actual_end_time,
+          phone: leadsMap.get(String(event.lead_id))?.contacts?.[0]?.phone || '',
+          email: leadsMap.get(String(event.lead_id))?.email || '',
+          end_location_text: (event as any).end_location_text,
+        };
       };
 
       const combinedEvents: EnhancedEvent[] = [
         ...meetingsData.filter(m => m && m.id).map(m => mapApiEventToEnhancedEvent(m, 'meeting')),
         ...demosData.filter(d => d && d.id).map(d => mapApiEventToEnhancedEvent(d, 'demo')),
       ];
-      
+
       combinedEvents.sort((a, b) => {
         const dateA = parseAsUTCDate(a.start_time) ?? new Date(0);
         const dateB = parseAsUTCDate(b.start_time) ?? new Date(0);
@@ -413,8 +569,127 @@ export default function EventsPage() {
   const handleSuccess = () => {
     setEventToEdit(null);
     setModalType(null);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
     loadEvents();
   }
+
+  const captureGPS = () => new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error("Geolocation not supported by this browser.")); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => reject(new Error("Could not get location. Please allow location access.")),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+
+   const handleStartEvent = async (event: EnhancedEvent) => {
+    setStartingEvents(prev => new Set([...prev, event.id]));
+    try {
+      // 1. Check if OTP is required for this user
+      const { isOtpRequired } = await api.checkIsEventOTP(event.numericId, event.type);
+      
+      if (isOtpRequired) {
+        setOtpTargetEvent(event);
+        if (!event.email) {
+          setIsEmailModalOpen(true);
+        } else {
+          await api.generateEventOTP(event.numericId, event.type);
+          setIsOtpModalOpen(true);
+          toast({ title: "OTP Sent", description: `Verification code sent to ${event.email}` });
+        }
+        return;
+      }
+
+      // 2. If no OTP, proceed with location capture
+      await startEventLocationCapture(event);
+    } catch (err) {
+      toast({ title: "Action Failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      if (!isOtpModalOpen && !isEmailModalOpen) {
+        setStartingEvents(prev => { const next = new Set(prev); next.delete(event.id); return next; });
+      }
+    }
+  };
+
+  const startEventLocationCapture = async (event: EnhancedEvent) => {
+      try {
+          const coords = await captureGPS();
+          const payload = { Latitude: coords.latitude, Longitude: coords.longitude };
+          
+          let response;
+          if (event.type === 'meeting') response = await api.saveMeetingLocation(event.numericId, payload);
+          else response = await api.saveDemoLocation(event.numericId, payload);
+          
+          const address = response?.location_text || "";
+          toast({ title: "Event Started", description: `Check-in at ${address || "captured location"}` });
+          loadEvents();
+      } catch (err) {
+          toast({ title: "Capture Failed", description: (err as Error).message, variant: "destructive" });
+      }
+  };
+
+  const handleVerifyOTP = async (otp: string) => {
+    if (!otpTargetEvent) return;
+    try {
+      const res = await api.verifyEventOTP(otpTargetEvent.numericId, otpTargetEvent.type, otp);
+      if (res.success) {
+        setIsOtpModalOpen(false);
+        await startEventLocationCapture(otpTargetEvent);
+        setOtpTargetEvent(null);
+      } else {
+        toast({ title: "Verification Failed", description: res.message || "Invalid OTP", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
+        setStartingEvents(prev => { const next = new Set(prev); if(otpTargetEvent) next.delete(otpTargetEvent.id); return next; });
+    }
+  };
+
+  const handleEmailSubmit = async (newEmail: string) => {
+      if (!otpTargetEvent) return;
+      try {
+          // Update client email first
+          await api.updateClient(parseInt(otpTargetEvent.lead_id), { company_email: newEmail });
+          toast({ title: "Email Updated", description: "Client email has been saved." });
+          
+          // Refresh event data to include new email
+          const updatedEvent = { ...otpTargetEvent, email: newEmail };
+          setOtpTargetEvent(updatedEvent);
+          setIsEmailModalOpen(false);
+
+          // Generate and send OTP
+          await api.generateEventOTP(updatedEvent.numericId, updatedEvent.type);
+          setIsOtpModalOpen(true);
+          toast({ title: "OTP Sent", description: `Verification code sent to ${newEmail}` });
+      } catch (err) {
+          toast({ title: "Failed to Update", description: (err as Error).message, variant: "destructive" });
+      }
+  };
+
+  const handleEndEvent = async (event: EnhancedEvent) => {
+    if (event.actual_end_time) {
+      toast({ title: "Already Ended", description: "This event has already been ended." });
+      return;
+    }
+    setStartingEvents(prev => new Set([...prev, event.id]));
+    try {
+      const coords = await captureGPS();
+      const payload = { Latitude: coords.latitude, Longitude: coords.longitude };
+
+      let response;
+      if (event.type === 'meeting') response = await api.endMeeting(event.numericId, payload);
+      else response = await api.endDemo(event.numericId, payload);
+
+      const address = response?.location_text || "";
+      toast({ title: "Event Ended", description: `Check-out at ${address || "captured location"}` });
+      loadEvents();
+    } catch (err) {
+      toast({ title: "End Failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setStartingEvents(prev => { const next = new Set(prev); next.delete(event.id); return next; });
+    }
+  };
 
   const filteredEvents = useMemo(() => {
     return allEvents
@@ -442,7 +717,7 @@ export default function EventsPage() {
     setSelectedEvent(event);
     setIsDetailModalOpen(true);
   };
-  
+
   const renderActionMenu = (event: EnhancedEvent) => {
     return (
       <DropdownMenu>
@@ -459,9 +734,19 @@ export default function EventsPage() {
           <DropdownMenuItem onClick={() => handleAction(event, 'reassign')}>
             <User className="mr-2 h-4 w-4" /> Reassign
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => handleAction(event, 'cancel')} className="text-destructive focus:text-destructive">
-            <XCircle className="mr-2 h-4 w-4" /> Cancel Event
-          </DropdownMenuItem>
+          {event.status === 'Completed' && (
+            <DropdownMenuItem onClick={() => handleAction(event, 'editNotes')}>
+              <FileEdit className="mr-2 h-4 w-4" /> Edit Notes
+            </DropdownMenuItem>
+          )}
+          {['Pending', 'Rescheduled', 'Overdue'].includes(event.status) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleAction(event, 'cancel')} className="text-destructive focus:text-destructive">
+                <XCircle className="mr-2 h-4 w-4" /> Cancel Event
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -625,37 +910,88 @@ export default function EventsPage() {
                       <Card key={event.id} onDoubleClick={() => handleEventDoubleClick(event)} className="flex flex-col justify-between h-full cursor-pointer hover:shadow-md transition-shadow">
                         <div className="flex-grow">
                           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-                              <div>
-                                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
-                                    {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
-                                  </p>
-                                  <CardTitle className="text-lg pt-1">{event.company_name}</CardTitle>
-                              </div>
-                              <div className="flex flex-col items-end gap-2">
-                                <Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge>
-                                {(isActionable || event.status === 'Completed') && renderActionMenu(event)}
-                              </div>
+                            <div>
+                              <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">
+                                {event.type === 'meeting' ? event.meeting_type || 'Meeting' : 'Demo'}
+                              </p>
+                              <CardTitle className="text-lg pt-1">{event.company_name}</CardTitle>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge>
+                              {(isActionable || event.status === 'Completed') && renderActionMenu(event)}
+                            </div>
                           </CardHeader>
-                          <CardContent className="text-sm space-y-3">
+                          <CardContent className="text-sm space-y-2">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <User className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{event.assigned_to}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <CalendarIcon className="h-4 w-4 shrink-0" />
+                              <span>{formatDateTime(event.start_time)}</span>
+                            </div>
+                            {event.phone && (
                               <div className="flex items-center gap-2 text-muted-foreground">
-                                  <User className="h-4 w-4" />
-                                  <span>{event.assigned_to}</span>
+                                <Clock className="h-4 w-4 shrink-0" />
+                                <span>{event.phone}</span>
                               </div>
-                               <div className="flex items-center gap-2 text-muted-foreground">
-                                  <CalendarIcon className="h-4 w-4" />
-                                  <span>{formatDateTime(event.start_time)}</span>
+                            )}
+                            {event.actual_start_time && (
+                              <div className="flex items-center gap-2 text-orange-600">
+                                <Play className="h-4 w-4 shrink-0" />
+                                <span className="text-xs">Started: {formatDateTime(event.actual_start_time)}</span>
                               </div>
-                              {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 && (
-                                  <div className="flex items-center gap-2 text-muted-foreground">
-                                      <Timer className="h-4 w-4" />
-                                      <span>{event.duration_minutes} minutes</span>
-                                  </div>
-                              )}
+                            )}
+                            {event.actual_end_time && (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <Check className="h-4 w-4 shrink-0" />
+                                <span className="text-xs">Ended: {formatDateTime(event.actual_end_time)}</span>
+                              </div>
+                            )}
+                            {event.actual_start_time && !event.actual_end_time && isActionable && (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600">
+                                  <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                                  In Progress
+                                </span>
+                              </div>
+                            )}
+                            {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 && (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Timer className="h-4 w-4 shrink-0" />
+                                <span>{event.duration_minutes} minutes</span>
+                              </div>
+                            )}
                           </CardContent>
                         </div>
                         {isActionable && (
-                          <CardFooter>
-                            <Button asChild className="w-full" onClick={e => e.stopPropagation()}><Link href={linkHref}><Check className="mr-2 h-4 w-4" />Mark as Done</Link></Button>
+                          <CardFooter className="flex gap-2 pt-3">
+                            {!event.actual_start_time ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-green-500 text-green-600 hover:bg-green-50"
+                                disabled={startingEvents.has(event.id)}
+                                onClick={e => { e.stopPropagation(); handleStartEvent(event); }}
+                              >
+                                {startingEvents.has(event.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />}
+                                Start
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 border-red-500 text-red-600 hover:bg-red-50"
+                                disabled={startingEvents.has(event.id) || !!event.actual_end_time}
+                                onClick={e => { e.stopPropagation(); handleEndEvent(event); }}
+                              >
+                                {startingEvents.has(event.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4" />}
+                                End
+                              </Button>
+                            )}
+                            <Button asChild size="sm" className="flex-1" onClick={e => e.stopPropagation()}>
+                              <Link href={linkHref}><Check className="mr-1 h-4 w-4" />Done</Link>
+                            </Button>
                           </CardFooter>
                         )}
                       </Card>
@@ -696,22 +1032,46 @@ export default function EventsPage() {
                             </TableCell>
                             <TableCell>{event.assigned_to}</TableCell>
                             <TableCell>{formatDateTime(event.start_time)}</TableCell>
-                             <TableCell>
-                                {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 ? (
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <Timer className="h-4 w-4 text-muted-foreground" />
-                                        <span>{event.duration_minutes} min</span>
-                                    </div>
-                                ) : (
-                                    <span className="text-muted-foreground text-center block">—</span>
-                                )}
+                            <TableCell>
+                              {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 ? (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Timer className="h-4 w-4 text-muted-foreground" />
+                                  <span>{event.duration_minutes} min</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-center block">—</span>
+                              )}
                             </TableCell>
                             <TableCell><Badge variant={getStatusBadgeVariant(event.status)}>{event.status}</Badge></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end items-center gap-2">
+                                {isActionable && !event.actual_start_time && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-green-500 text-green-600 hover:bg-green-50"
+                                    disabled={startingEvents.has(event.id)}
+                                    onClick={e => { e.stopPropagation(); handleStartEvent(event); }}
+                                  >
+                                    {startingEvents.has(event.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="mr-1 h-4 w-4" />}
+                                    Start
+                                  </Button>
+                                )}
+                                {isActionable && event.actual_start_time && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-red-500 text-red-600 hover:bg-red-50"
+                                    disabled={startingEvents.has(event.id) || !!event.actual_end_time}
+                                    onClick={e => { e.stopPropagation(); handleEndEvent(event); }}
+                                  >
+                                    {startingEvents.has(event.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4" />}
+                                    End
+                                  </Button>
+                                )}
                                 {isActionable && (
                                   <Button asChild size="sm" onClick={e => e.stopPropagation()}>
-                                    <Link href={linkHref}>Mark as Done</Link>
+                                    <Link href={linkHref}><Check className="mr-1 h-4 w-4" />Done</Link>
                                   </Button>
                                 )}
                                 {isActionable && renderActionMenu(event)}
@@ -804,6 +1164,20 @@ export default function EventsPage() {
         onSuccess={handleSuccess}
         currentUser={currentUser}
       />
+
+      <OTPVerificationModal 
+        isOpen={isOtpModalOpen}
+        onClose={() => setIsOtpModalOpen(false)}
+        event={otpTargetEvent}
+        onVerify={handleVerifyOTP}
+      />
+
+      <ClientEmailModal 
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        event={otpTargetEvent}
+        onSubmit={handleEmailSubmit}
+      />
     </div>
   )
 }
@@ -815,6 +1189,18 @@ interface EventDetailModalProps {
 }
 
 const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => {
+  const [momUrl, setMomUrl] = useState<string | null>(null);
+  const [momLoading, setMomLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !event) { setMomUrl(null); return; }
+    setMomLoading(true);
+    const fetch = event.type === 'meeting'
+      ? api.getMeetingMOM(event.numericId)
+      : api.getDemoMOM(event.numericId);
+    fetch.then(r => setMomUrl(r.url)).catch(() => { }).finally(() => setMomLoading(false));
+  }, [isOpen, event]);
+
   if (!event) return null;
 
   const allParticipants = Array.from(new Set([event.assigned_to, ...event.attendees]));
@@ -843,15 +1229,15 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
               <p id="meeting-type" className="col-span-2">{event.meeting_type}</p>
             </div>
           )}
-          
+
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="scheduled-by" className="text-right font-semibold flex items-center justify-end gap-2">
               <User className="h-4 w-4" /> Scheduled By
             </Label>
             <p id="scheduled-by" className="col-span-2">{event.createdBy}</p>
           </div>
-         
-           <div className="grid grid-cols-3 items-start gap-4">
+
+          <div className="grid grid-cols-3 items-start gap-4">
             <Label htmlFor="attendees" className="text-right font-semibold flex items-start justify-end gap-2 pt-1">
               <Users className="h-4 w-4" /> Attendees
             </Label>
@@ -874,6 +1260,48 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
             </Label>
             <p id="event-time" className="col-span-2">{formatDateTime(event.start_time)}</p>
           </div>
+
+          {event.actual_start_time && (
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label className="text-right font-semibold flex items-center justify-end gap-2 text-orange-600">
+                <Play className="h-4 w-4" /> Actual Start
+              </Label>
+              <p className="col-span-2 text-orange-600">{formatDateTime(event.actual_start_time)}</p>
+            </div>
+          )}
+
+          {event.actual_end_time && (
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label className="text-right font-semibold flex items-center justify-end gap-2 text-green-600">
+                <Check className="h-4 w-4" /> Actual End
+              </Label>
+              <p className="col-span-2 text-green-600">{formatDateTime(event.actual_end_time)}</p>
+            </div>
+          )}
+
+          {event.location_text && (
+            <div className="grid grid-cols-3 items-start gap-4">
+              <div className="flex items-start gap-2 justify-self-end pt-1">
+                <MapPin className="h-4 w-4 shrink-0 mt-[2px] text-muted-foreground" />
+                <span className="font-semibold text-sm leading-tight text-right text-foreground max-w-[110px]">
+                  Check-In Location
+                </span>
+              </div>
+              <div className="col-span-2 text-sm">{event.location_text}</div>
+            </div>
+          )}
+
+          {event.end_location_text && (
+            <div className="grid grid-cols-3 items-start gap-4">
+              <div className="flex items-start gap-2 justify-self-end pt-1">
+                <MapPin className="h-4 w-4 shrink-0 mt-[2px] text-muted-foreground" />
+                <span className="font-semibold text-sm leading-tight text-right text-foreground max-w-[110px]">
+                  End Location
+                </span>
+              </div>
+              <div className="col-span-2 text-sm">{event.end_location_text}</div>
+            </div>
+          )}
 
           {event.status === 'Completed' && event.duration_minutes && event.duration_minutes > 0 && (
             <div className="grid grid-cols-3 items-center gap-4">
@@ -899,6 +1327,42 @@ const EventDetailModal = ({ isOpen, onClose, event }: EventDetailModalProps) => 
                 <XCircle className="h-4 w-4" /> Cancellation Reason
               </Label>
               <p id="cancellation-reason" className="col-span-2 text-sm bg-muted/70 p-3 rounded-md whitespace-pre-wrap">{event.remark}</p>
+            </div>
+          )}
+
+          {event.meeting_agenda && (
+            <div className="grid grid-cols-3 items-start gap-4 pt-4 border-t">
+              <Label className="text-right font-semibold flex items-start justify-end gap-2 pt-1">
+                <FileText className="h-4 w-4" /> Agenda
+              </Label>
+              <p className="col-span-2 text-sm bg-muted/70 p-3 rounded-md whitespace-pre-wrap">{event.meeting_agenda}</p>
+            </div>
+          )}
+
+          {event.meeting_link && (
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label className="text-right font-semibold flex items-center justify-end gap-2">
+                <LinkIcon className="h-4 w-4" /> Meeting Link
+              </Label>
+              <a href={event.meeting_link} target="_blank" rel="noopener noreferrer"
+                className="col-span-2 text-sm text-blue-600 underline truncate hover:text-blue-800">
+                {event.meeting_link}
+              </a>
+            </div>
+          )}
+
+
+
+          {(momLoading || momUrl) && (
+            <div className="grid grid-cols-3 items-start gap-4 pt-4 border-t">
+              <Label className="text-right font-semibold flex items-start justify-end gap-2 pt-1">
+                <Volume2 className="h-4 w-4" /> MOM Audio
+              </Label>
+              <div className="col-span-2">
+                {momLoading
+                  ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  : <audio controls src={momUrl!} className="w-full h-10" />}
+              </div>
             </div>
           )}
         </div>

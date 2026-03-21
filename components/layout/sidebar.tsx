@@ -23,7 +23,10 @@ import {
   ChevronDown,
   Trash2,
   CheckSquare,
-  Smartphone
+  Smartphone,
+  IndianRupee,
+  Link2,
+  ReceiptText
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -89,7 +92,17 @@ const navigationConfig: NavItem[] = [
   },
   { type: 'link', title: "Activity", href: "/dashboard/activity", icon: MessageSquare, adminOnly: false },
   { type: 'link', title: "Tasks", href: "/dashboard/tasks", icon: CheckSquare, adminOnly: false }, // <-- NEW: Tasks Link
-  { type: 'link', title: "Reports", href: "/dashboard/reports", icon: BarChartHorizontal, adminOnly: true },
+  {
+    type: 'group',
+    title: "Reports",
+    icon: BarChartHorizontal,
+    adminOnly: true,
+    children: [
+      { title: "User Performance", href: "/dashboard/reports/user-performance", icon: Users },
+      { title: "Leads Report", href: "/dashboard/reports/leads", icon: ListChecks },
+      // { title: "Tally Report", href: "/dashboard/reports/tally", icon: IndianRupee },
+    ]
+  },
   { type: 'link', title: "Google Calendar", href: "/dashboard/google-calendar", icon: CalendarIcon, adminOnly: false },
   {
     type: 'group',
@@ -190,8 +203,8 @@ export function SidebarContent({ currentUser, onItemClick, isCollapsed = false, 
   });
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-auto py-4 custom-scrollbar">
+    <div className="flex flex-1 min-h-0 flex-col">
+      <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         <nav className="space-y-1 px-3">
           {accessibleNavItems.map((item) => {
             if (item.type === 'group') {

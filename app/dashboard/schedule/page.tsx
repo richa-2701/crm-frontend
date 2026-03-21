@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, Calendar, Monitor, Loader2, Check, ChevronsUpDown, X } from "lucide-react"
+import { AlertTriangle, Calendar, Monitor, Loader2, Check, ChevronsUpDown, X, Link as LinkIcon } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { api, ApiUser, ApiMeeting, ApiDemo, type ApiLeadSearchResult } from "@/lib/api"
 import { format } from 'date-fns';
@@ -80,6 +81,8 @@ export default function SchedulePage() {
     start_time: "",
     duration: "60",
     meeting_type: "Discussion",
+    meeting_agenda: "",
+    meeting_link: "",
     attendees: [] as string[],
   })
 
@@ -294,14 +297,21 @@ export default function SchedulePage() {
             };
 
             if (scheduleType === "meeting") {
-                await api.scheduleMeeting({ ...payload, meeting_type: formData.meeting_type });
+                await api.scheduleMeeting({
+                    ...payload,
+                    meeting_type: formData.meeting_type,
+                    meeting_agenda: formData.meeting_agenda || undefined,
+                    meeting_link: formData.meeting_link || undefined,
+                });
             } else {
-                await api.scheduleDemo({ 
+                await api.scheduleDemo({
                     lead_id: payload.lead_id,
                     assigned_to: payload.assigned_to,
                     start_time: payload.event_time,
                     event_end_time: payload.event_end_time,
                     scheduled_by: payload.created_by,
+                    meeting_agenda: formData.meeting_agenda || undefined,
+                    meeting_link: formData.meeting_link || undefined,
                     attendees: allAttendees,
                     company_auth_name: companyAuthName,
                 });
@@ -393,7 +403,7 @@ export default function SchedulePage() {
                       </Select>
                     </div>
 
-                    <div className="grid gap-3 grid-cols-2">
+                    <div className={`grid gap-3 ${scheduleType === "meeting" ? "grid-cols-3" : "grid-cols-2"}`}>
                       <div className="space-y-1">
                         <Label htmlFor="assigned_to" className="text-xs sm:text-sm">Assigned To *</Label>
                         <Select value={formData.assigned_to} onValueChange={(value) => handleInputChange("assigned_to", value)}>
@@ -411,65 +421,101 @@ export default function SchedulePage() {
                           </Select>
                         </div>
                       )}
+
+                      <div className="space-y-1">
+                        <Label className="text-xs sm:text-sm">Other Attendees</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className="w-full justify-between h-8 sm:h-10 overflow-hidden"
+                            >
+                              <div className="flex gap-1 flex-wrap overflow-hidden">
+                                  {formData.attendees.length === 0 && <span className="font-normal text-muted-foreground text-sm truncate">Select attendees...</span>}
+                                  {formData.attendees.length > 0 && (
+                                    <span className="text-sm truncate">{formData.attendees.length} selected</span>
+                                  )}
+                              </div>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                            <Command>
+                              <CommandInput placeholder="Search users..." />
+                              <CommandEmpty>No user found.</CommandEmpty>
+                              <CommandGroup>
+                                  <ScrollArea className="h-[200px]">
+                                  {users
+                                      .filter(u => u.username !== formData.assigned_to)
+                                      .map((user) => (
+                                      <CommandItem
+                                          key={user.id}
+                                          value={user.username}
+                                          onSelect={(currentValue) => {
+                                          const newAttendees = formData.attendees.includes(currentValue)
+                                              ? formData.attendees.filter(u => u !== currentValue)
+                                              : [...formData.attendees, currentValue];
+                                          handleInputChange("attendees", newAttendees);
+                                          }}
+                                      >
+                                          <Check className={cn("mr-2 h-4 w-4", formData.attendees.includes(user.username) ? "opacity-100" : "opacity-0")} />
+                                          {user.username}
+                                      </CommandItem>
+                                      ))}
+                                  </ScrollArea>
+                              </CommandGroup>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        {formData.attendees.length > 0 && (
+                          <div className="flex gap-1 flex-wrap mt-1">
+                            {formData.attendees.map(username => (
+                              <Badge variant="secondary" key={username} className="text-xs flex items-center gap-1">
+                                {username}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleInputChange("attendees", formData.attendees.filter(u => u !== username));
+                                  }}
+                                  className="ml-1 hover:text-destructive focus:outline-none"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <Label className="text-xs sm:text-sm">Other Attendees</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className="w-full justify-between h-auto min-h-[2.5rem]"
-                          >
-                            <div className="flex gap-1 flex-wrap">
-                                {formData.attendees.length === 0 && <span className="font-normal text-muted-foreground">Select attendees...</span>}
-                                {formData.attendees.map(username => (
-                                    <Badge
-                                    variant="secondary"
-                                    key={username}
-                                    className="mr-1"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleInputChange("attendees", formData.attendees.filter(u => u !== username));
-                                    }}
-                                    >
-                                    {username}
-                                    <X className="ml-1 h-3 w-3" />
-                                    </Badge>
-                                ))}
-                            </div>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                          <Command>
-                            <CommandInput placeholder="Search users..." />
-                            <CommandEmpty>No user found.</CommandEmpty>
-                            <CommandGroup>
-                                <ScrollArea className="h-[200px]">
-                                {users
-                                    .filter(u => u.username !== formData.assigned_to)
-                                    .map((user) => (
-                                    <CommandItem
-                                        key={user.id}
-                                        value={user.username}
-                                        onSelect={(currentValue) => {
-                                        const newAttendees = formData.attendees.includes(currentValue)
-                                            ? formData.attendees.filter(u => u !== currentValue)
-                                            : [...formData.attendees, currentValue];
-                                        handleInputChange("attendees", newAttendees);
-                                        }}
-                                    >
-                                        <Check className={cn("mr-2 h-4 w-4", formData.attendees.includes(user.username) ? "opacity-100" : "opacity-0")} />
-                                        {user.username}
-                                    </CommandItem>
-                                    ))}
-                                </ScrollArea>
-                            </CommandGroup>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                    <div className="grid gap-3 grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="meeting_agenda" className="text-xs sm:text-sm">Agenda (optional)</Label>
+                        <Textarea
+                          id="meeting_agenda"
+                          placeholder="What will be discussed in this meeting..."
+                          value={formData.meeting_agenda}
+                          onChange={(e) => handleInputChange("meeting_agenda", e.target.value)}
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="meeting_link" className="text-xs sm:text-sm flex items-center gap-1">
+                          <LinkIcon className="h-3 w-3" /> Meeting Link (optional)
+                        </Label>
+                        <Input
+                          id="meeting_link"
+                          type="url"
+                          placeholder="https://meet.google.com/..."
+                          value={formData.meeting_link}
+                          onChange={(e) => handleInputChange("meeting_link", e.target.value)}
+                          className="h-8 sm:h-10 text-sm"
+                        />
+                      </div>
                     </div>
     
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">

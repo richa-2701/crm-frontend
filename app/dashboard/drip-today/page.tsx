@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Share2, CheckCircle2, Loader2, CalendarCheck, Clock, Send } from "lucide-react"
+import { Share2, CheckCircle2, Loader2, CalendarCheck, Clock, Send, Play, XCircle } from "lucide-react"
 
 import { api, ApiManualDripCard, ApiDripHistoryItem, ApiUser } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -22,15 +22,22 @@ function DripCard({
   card,
   dismissing,
   sharing,
+  starting,
   onShare,
   onMarkSent,
+  onStart,
+  onEnd,
 }: {
   card: ApiManualDripCard
   dismissing: number | null
   sharing: number | null
+  starting: boolean
   onShare: (c: ApiManualDripCard) => void
   onMarkSent: (c: ApiManualDripCard) => void
+  onStart: (c: ApiManualDripCard) => void
+  onEnd: (c: ApiManualDripCard) => void
 }) {
+  const isActionable = !card.actual_end_time;
   return (
     <Card className="flex flex-col shadow-sm border text-sm">
       <CardHeader className="p-2 pb-1 space-y-0.5">
@@ -49,30 +56,73 @@ function DripCard({
         {card.attachment_path && (
           <p className="mt-1 text-[10px] text-muted-foreground truncate">📎 {card.attachment_path.split('/').pop()}</p>
         )}
+        {card.actual_start_time && (
+          <div className="flex items-center gap-1 mt-1 text-orange-600 text-[10px]">
+            <Play className="h-2.5 w-2.5" />
+            <span>Started: {new Date(card.actual_start_time).toLocaleTimeString()}</span>
+          </div>
+        )}
+        {card.actual_end_time && (
+          <div className="flex items-center gap-1 mt-1 text-green-600 text-[10px]">
+            <CheckCircle2 className="h-2.5 w-2.5" />
+            <span>Ended: {new Date(card.actual_end_time).toLocaleTimeString()}</span>
+          </div>
+        )}
       </CardContent>
-      <CardFooter className="p-2 pt-0 gap-1 flex">
+      <CardFooter className="p-2 pt-0 gap-1 flex flex-col">
+        <div className="flex gap-1 w-full">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 h-7 text-[11px] px-1 gap-1 border-blue-200 text-blue-600"
+            disabled={sharing === card.step_id}
+            onClick={() => onShare(card)}
+          >
+            {sharing === card.step_id
+              ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+              : <Share2 className="h-3 w-3 shrink-0" />}
+            <span className="hidden sm:inline">Share</span>
+          </Button>
+
+          {isActionable && (
+            <>
+              {!card.actual_start_time ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-7 text-[11px] px-1 gap-1 border-green-500 text-green-600 hover:bg-green-50"
+                  disabled={starting}
+                  onClick={() => onStart(card)}
+                >
+                  {starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                  <span>Start</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-7 text-[11px] px-1 gap-1 border-red-500 text-red-600 hover:bg-red-50"
+                  disabled={starting}
+                  onClick={() => onEnd(card)}
+                >
+                  {starting ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                  <span>End</span>
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+
         <Button
-          variant="outline"
           size="sm"
-          className="flex-1 h-7 text-[11px] px-1 gap-1"
-          disabled={sharing === card.step_id}
-          onClick={() => onShare(card)}
-        >
-          {sharing === card.step_id
-            ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-            : <Share2 className="h-3 w-3 shrink-0" />}
-          <span className="hidden sm:inline">Share</span>
-        </Button>
-        <Button
-          size="sm"
-          className="flex-1 h-7 text-[11px] px-1 gap-1 bg-green-600 hover:bg-green-700 text-white"
+          className="w-full h-7 text-[11px] px-1 gap-1 bg-green-600 hover:bg-green-700 text-white"
           disabled={dismissing === card.step_id}
           onClick={() => onMarkSent(card)}
         >
           {dismissing === card.step_id
             ? <Loader2 className="h-3 w-3 animate-spin shrink-0" />
             : <CheckCircle2 className="h-3 w-3 shrink-0" />}
-          <span className="hidden sm:inline">Sent</span>
+          <span>Mark as Sent</span>
         </Button>
       </CardFooter>
     </Card>
@@ -127,6 +177,7 @@ export default function DripTodayPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [dismissing, setDismissing] = useState<number | null>(null)
   const [sharing, setSharing] = useState<number | null>(null)
+  const [startingEvents, setStartingEvents] = useState<Set<string>>(new Set())
   const [username, setUsername] = useState<string>("")
 
   const fetchCards = useCallback(async (uname: string) => {
@@ -276,6 +327,65 @@ export default function DripTodayPage() {
     }
   }
 
+  const captureGPS = () => new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation not supported by this browser."))
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => reject(new Error("Could not get location. Please allow location access.")),
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  })
+
+  const handleStartTask = async (card: ApiManualDripCard) => {
+    const eventKey = `${card.assignment_id}-${card.step_id}`
+    setStartingEvents(prev => new Set([...prev, eventKey]))
+    try {
+      const coords = await captureGPS()
+      const payload = { Latitude: coords.latitude, Longitude: coords.longitude }
+      
+      // Using meeting location API as proxy for drip location if no specific API exists
+      const response = await api.saveMeetingLocation(card.assignment_id, payload)
+      const address = response?.location_text || ""
+      
+      toast.success(`Task started at ${address || "captured location"}`)
+      fetchCards(username)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setStartingEvents(prev => {
+        const next = new Set(prev)
+        next.delete(eventKey)
+        return next
+      })
+    }
+  }
+
+  const handleEndTask = async (card: ApiManualDripCard) => {
+    const eventKey = `${card.assignment_id}-${card.step_id}`
+    setStartingEvents(prev => new Set([...prev, eventKey]))
+    try {
+      const coords = await captureGPS()
+      const payload = { Latitude: coords.latitude, Longitude: coords.longitude }
+      
+      const response = await api.endMeeting(card.assignment_id, payload)
+      const address = response?.location_text || ""
+      
+      toast.success(`Task ended at ${address || "captured location"}`)
+      fetchCards(username)
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setStartingEvents(prev => {
+        const next = new Set(prev)
+        next.delete(eventKey)
+        return next
+      })
+    }
+  }
+
   // ── FILTER CARDS ──
   const now = new Date()
   const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0')
@@ -337,8 +447,11 @@ export default function DripTodayPage() {
                 card={card}
                 dismissing={dismissing}
                 sharing={sharing}
+                starting={startingEvents.has(`${card.assignment_id}-${card.step_id}`)}
                 onShare={handleShare}
                 onMarkSent={handleMarkSent}
+                onStart={handleStartTask}
+                onEnd={handleEndTask}
               />
             ))}
           </div>
@@ -373,8 +486,11 @@ export default function DripTodayPage() {
                   card={card}
                   dismissing={dismissing}
                   sharing={sharing}
+                  starting={startingEvents.has(`${card.assignment_id}-${card.step_id}`)}
                   onShare={handleShare}
                   onMarkSent={handleMarkSent}
+                  onStart={handleStartTask}
+                  onEnd={handleEndTask}
                 />
               </div>
             ))}

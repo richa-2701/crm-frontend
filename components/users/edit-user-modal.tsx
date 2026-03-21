@@ -73,6 +73,7 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
     try {
       await userApi.updateUser(user.email, {
         username: formData.username,
+        email: formData.email,
         usernumber: formData.usernumber,
         department: formData.department,
         role: formData.role,
@@ -125,9 +126,8 @@ export function EditUserModal({ user, isOpen, onClose, onUserUpdated }: EditUser
                 id="edit-email"
                 type="email"
                 value={formData.email}
-                readOnly
-                disabled
-                className="cursor-not-allowed bg-muted/50"
+                onChange={(e) => handleInputChange("email", e.target.value)}
+                required
               />
             </div>
           </div>

@@ -89,6 +89,45 @@ export interface ApiMasterData {
   is_active: boolean;
 }
 
+export interface TallyLedger {
+  LedgerName: string;
+  LedgerType: "Debtor" | "Creditor";
+  Gst: string;
+}
+
+export interface TallyMapping {
+  CRMClientId: number;
+  CRMCompanyName: string;
+  CRMGst: string;
+  MappingId: number | null;
+  TallyLedgerName: string | null;
+  TallyLedgerType: string | null;
+  MappedVia: string | null;
+  MappedAt: string | null;
+  IsMapped: boolean;
+}
+
+export interface TallyPaymentStatus {
+  CRMClientId: number;
+  TallyLedgerName: string;
+  ClosingBalance: number;
+  BalanceType: string;   // "Dr" = they owe you, "Cr" = you owe them
+  IsOutstanding: boolean;
+}
+
+export interface TallyOutstandingRow {
+  CRMClientId: number;
+  CRMCompanyName: string;
+  TallyLedgerName: string;
+  TallyLedgerType: string;
+  TotalAmount: number;
+  ReceivedAmount: number;
+  OutstandingAmount: number;
+  BalanceType: string;
+  IsOutstanding: boolean;
+  PaymentClear: boolean;
+}
+
 export interface ApiUser {
   id: number;
   username: string;
@@ -464,6 +503,15 @@ export interface ApiMeeting {
   created_at: string;
   attendees?: string[];
   duration_minutes?: number;
+  latitude?: number;
+  longitude?: number;
+  location_text?: string;
+  end_location_text?: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  meeting_agenda?: string;
+  meeting_link?: string;
+  mom_audio_path?: string;
 }
 
 export interface ApiDemo {
@@ -481,6 +529,15 @@ export interface ApiDemo {
   updated_at: string;
   attendees?: string[];
   duration_minutes?: number;
+  latitude?: number;
+  longitude?: number;
+  location_text?: string;
+  end_location_text?: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  meeting_agenda?: string;
+  meeting_link?: string;
+  mom_audio_path?: string;
 }
 
 
@@ -559,6 +616,10 @@ export interface ApiManualDripCard {
   message_type: string;
   attachment_path: string | null;
   scheduled_date: string;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ApiDripHistoryItem {
@@ -682,8 +743,9 @@ export interface ApiTaskCompletePayload {
 // --------------------------------------------------------------
 async function fetcher<T>(
   url: string,
-  options: RequestInit = {},
-  target: 'csharp' | 'python' = 'csharp'
+  options: RequestInit & { skipKeyMapping?: boolean } = {},
+  target: 'csharp' | 'python' = 'csharp',
+  silent = false
 ): Promise<T> {
   const baseUrl = target === 'csharp' ? CSHARP_API_BASE_URL : PYTHON_API_BASE_URL;
   if (!baseUrl) {
@@ -712,10 +774,12 @@ async function fetcher<T>(
 
     if (!response.ok) {
       const text = await response.text();
-      if (response.status === 409) {
-        console.warn(`[API Conflict]`, response.status, text);
-      } else {
-        console.error("[API Error]", response.status, text);
+      if (!silent) {
+        if (response.status === 409) {
+          console.warn(`[API Conflict]`, response.status, text);
+        } else {
+          console.error("[API Error]", response.status, text);
+        }
       }
       throw new Error(`API ${response.status}: ${text}`);
     }
@@ -735,11 +799,14 @@ async function fetcher<T>(
             const parsedJson = JSON.parse(jsonText);
             if (typeof parsedJson === 'string') {
                 try {
-                    return mapKeysToSnakeCase(JSON.parse(parsedJson));
+                    const inner = JSON.parse(parsedJson);
+                    if (options.skipKeyMapping) return inner as T;
+                    return mapKeysToSnakeCase(inner);
                 } catch {
                     return { message: parsedJson } as T;
                 }
             }
+            if (options.skipKeyMapping) return parsedJson as T;
             return mapKeysToSnakeCase(parsedJson) as T;
         } catch (e) {
             console.warn("Failed to parse JSON response, checking for plain text success. Response:", jsonText);
@@ -752,10 +819,12 @@ async function fetcher<T>(
     
     return response.text() as unknown as T;
   } catch (error: any) {
-    if (error && error.message && error.message.includes("409")) {
-        console.warn("[Network Fetch Conflict]", url, error.message);
-    } else {
-        console.error("[Network Fetch Failed]", url, error);
+    if (!silent) {
+      if (error && error.message && error.message.includes("409")) {
+          console.warn("[Network Fetch Conflict]", url, error.message);
+      } else {
+          console.error("[Network Fetch Failed]", url, error);
+      }
     }
     throw error;
   }
@@ -807,7 +876,12 @@ const unifiedApi = {
   createUser: (userData: Partial<ApiUser>): Promise<{status: string, message: string}> =>
     fetcher(`CreateCrmUser`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase(userData))}),
   updateUser: (email: string, userData: Partial<ApiUser>): Promise<{status: string, message: string}> =>
-    fetcher(`UpdateCrmUser`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase({ ...userData, Email: email })) }),
+  (() => {
+      const { email: newEmail, ...rest } = userData;
+      const payload: any = { ...rest, Email: email };
+      if (newEmail) payload.new_email = newEmail;
+      return fetcher(`UpdateCrmUser`, { method: "POST", body: JSON.stringify(mapKeysToPascalCase(payload)) });
+    })(),
   deleteUser: (email: string): Promise<{status: string, message: string}> => 
     fetcher(`DeleteCrmUser`, { method: "POST", body: JSON.stringify({ Email: email }) }),
 
@@ -977,6 +1051,8 @@ const unifiedApi = {
     event_end_time: string;
     created_by: string;
     meeting_type: string;
+    meeting_agenda?: string;
+    meeting_link?: string;
     attendees: string[];
     company_auth_name: string | null;
   }): Promise<ApiMeeting> => {
@@ -995,27 +1071,25 @@ const unifiedApi = {
       const pythonPayload = {
         event_type: "Meeting",
         company_name: companyName,
+        lead_id: payload.lead_id,
         start_time_utc: payload.event_time,
         end_time_utc: payload.event_end_time,
         scheduled_by: payload.created_by,
         attendee_usernames: payload.attendees,
         company_auth_name: payload.company_auth_name,
+        meeting_agenda: payload.meeting_agenda || null,
+        meeting_link: payload.meeting_link || null,
       };
 
       try {
-        console.log("Attempting to send email notification via Python API with payload:", pythonPayload);
         await fetcher(
           'internal/send-event-email',
-          {
-            method: 'POST',
-            body: JSON.stringify(pythonPayload)
-          },
-          'python'
+          { method: 'POST', body: JSON.stringify(pythonPayload) },
+          'python',
+          true // silent — email is best-effort
         );
-        console.log("Python API notification request sent successfully.");
-      } catch (error) {
-        console.error("Failed to send email notification via Python API:", error);
-        toast.error("Meeting was scheduled, but failed to send email notifications.");
+      } catch {
+        // Email notification is best-effort — meeting was already scheduled successfully
       }
     }
     
@@ -1028,6 +1102,8 @@ const unifiedApi = {
     start_time: string;
     event_end_time: string;
     scheduled_by: string;
+    meeting_agenda?: string;
+    meeting_link?: string;
     attendees: string[];
     company_auth_name: string | null;
   }): Promise<ApiDemo> => {
@@ -1046,27 +1122,25 @@ const unifiedApi = {
       const pythonPayload = {
         event_type: "Demo",
         company_name: companyName,
+        lead_id: payload.lead_id,
         start_time_utc: payload.start_time,
         end_time_utc: payload.event_end_time,
         scheduled_by: payload.scheduled_by,
         attendee_usernames: payload.attendees,
         company_auth_name: payload.company_auth_name,
+        meeting_agenda: payload.meeting_agenda || null,
+        meeting_link: payload.meeting_link || null,
       };
       
       try {
-        console.log("Attempting to send demo notification via Python API with payload:", pythonPayload);
         await fetcher(
           'internal/send-event-email',
-          {
-            method: 'POST',
-            body: JSON.stringify(pythonPayload)
-          },
-          'python'
+          { method: 'POST', body: JSON.stringify(pythonPayload) },
+          'python',
+          true // silent — email is best-effort
         );
-        console.log("Python API demo notification sent successfully.");
-      } catch (error) {
-        console.error("Failed to send demo notification via Python API:", error);
-        toast.error("Demo was scheduled, but failed to send email notifications.");
+      } catch {
+        // Email notification is best-effort — demo was already scheduled successfully
       }
     }
 
@@ -1104,6 +1178,34 @@ const unifiedApi = {
     fetcher("Meetings/Complete", { method: "POST", body: JSON.stringify(payload) }),
   completeDemo: (payload: { DemoId: number; Remark: string; DurationMinutes?: number }): Promise<{ message: string }> =>
     fetcher("Demos/Complete", { method: "POST", body: JSON.stringify(payload) }),
+
+  // GPS location
+  saveMeetingLocation: (meetingId: number, payload: { Latitude: number; Longitude: number; LocationText?: string }): Promise<{ message: string, location_text?: string }> =>
+    fetcher(`Meetings/SaveLocation/${meetingId}`, { method: "POST", body: JSON.stringify(payload) }),
+  saveDemoLocation: (demoId: number, payload: { Latitude: number; Longitude: number; LocationText?: string }): Promise<{ message: string, location_text?: string }> =>
+    fetcher(`Demos/SaveLocation/${demoId}`, { method: "POST", body: JSON.stringify(payload) }),
+  endMeeting: (meetingId: number, payload: { Latitude: number; Longitude: number; LocationText?: string }): Promise<{ message: string, location_text?: string }> =>
+    fetcher(`Meetings/End/${meetingId}`, { method: "POST", body: JSON.stringify(payload) }),
+  endDemo: (demoId: number, payload: { Latitude: number; Longitude: number; LocationText?: string }): Promise<{ message: string, location_text?: string }> =>
+    fetcher(`Demos/End/${demoId}`, { method: "POST", body: JSON.stringify(payload) }),
+
+  // MOM audio
+  uploadMeetingMOM: async (meetingId: number, audioFile: File): Promise<{ s3Key: string }> => {
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("meetingId", String(meetingId));
+    return fetcher("Meetings/UploadMOM", { method: "POST", body: formData });
+  },
+  uploadDemoMOM: async (demoId: number, audioFile: File): Promise<{ s3Key: string }> => {
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("demoId", String(demoId));
+    return fetcher("Demos/UploadMOM", { method: "POST", body: formData });
+  },
+  getMeetingMOM: (meetingId: number): Promise<{ url: string | null }> =>
+    fetcher(`Meetings/GetMOM/${meetingId}`, { method: "GET" }),
+  getDemoMOM: (demoId: number): Promise<{ url: string | null }> =>
+    fetcher(`Demos/GetMOM/${demoId}`, { method: "GET" }),
   
   rescheduleMeeting: (meetingId: number, payload: ApiEventReschedulePayload): Promise<{ message: string }> =>
     fetcher(`Meetings/Reschedule`, {
@@ -1387,17 +1489,164 @@ const unifiedApi = {
       body: JSON.stringify({ UserId: userId, StartDate: startDate, EndDate: endDate }) 
     }),
     
-  exportSummaryReport: (startDate: string, endDate: string): Promise<any> => 
-    fetcher(`Reports/ExportSummary`, { 
-      method: "POST", 
-      body: JSON.stringify({ StartDate: startDate, EndDate: endDate }) 
+  exportSummaryReport: (startDate: string, endDate: string): Promise<any> =>
+    fetcher(`Reports/ExportSummary`, {
+      method: "POST",
+      body: JSON.stringify({ StartDate: startDate, EndDate: endDate })
     }),
+
+  getLeadsReport: (startDate: string, endDate: string): Promise<any> =>
+    fetcher(`Reports/GetLeadsReport`, {
+      method: "POST",
+      body: JSON.stringify({ StartDate: startDate, EndDate: endDate }),
+      skipKeyMapping: true,
+    }),
+
+  getEventsPaginated: async (
+    page: number,
+    pageSize: number,
+    searchTerm: string,
+    statusFilter: string
+  ): Promise<{ data: any[], total: number, page: number, pageSize: number }> => {
+    return fetcher("Events/GetPaginated", {
+      method: "POST",
+      body: JSON.stringify({ page, pageSize, searchTerm, statusFilter }),
+      skipKeyMapping: true
+    });
+  },
+
+  getLocationFromGoogle: async (): Promise<{ location: { lat: number; lng: number }; accuracy: number } | null> => {
+    try {
+      return await fetcher("Location/Google", { method: "POST" });
+    } catch (error) {
+      console.error("Error fetching Google location:", error);
+      return null;
+    }
+  },
+
+  reverseGeocodeLocation: async (latitude: number, longitude: number): Promise<any> => {
+    try {
+      return await fetcher("Location/ReverseGeocode", {
+        method: "POST",
+        body: JSON.stringify({ Latitude: latitude, Longitude: longitude })
+      });
+    } catch (error) {
+      console.error("Error reverse geocoding location:", error);
+      return null;
+    }
+  },
+
+  checkIsEventOTP: async (eventId: number, eventType: string): Promise<{ isOtpRequired: boolean }> => {
+    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    const userId = userStr ? JSON.parse(userStr).id : null;
+    return fetcher("events/IsEventOTP", {
+      method: "POST",
+      body: JSON.stringify({ eventId, eventType, userId }),
+      skipKeyMapping: true
+    });
+  },
+
+  generateEventOTP: async (eventId: number, eventType: string): Promise<{ isOtpRequired: boolean, message?: string }> => {
+    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    const userId = userStr ? JSON.parse(userStr).id : null;
+
+    return fetcher("events/generate-otp", {
+      method: "POST",
+      body: JSON.stringify({ eventId, eventType, userId }),
+      skipKeyMapping: true
+    });
+  },
+
+  verifyEventOTP: async (eventId: number, eventType: string, otp: string): Promise<{ success: boolean, message?: string }> => {
+    return fetcher("events/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ eventId, eventType, otp }),
+      skipKeyMapping: true
+    });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // 🏦 TALLY INTEGRATION
+  // ─────────────────────────────────────────────────────────────
+
+  getTallySettings: (): Promise<{ TallyHost: string; TallyPort: string; TallyCompanyName: string }> =>
+    fetcher("Tally/GetSettings", { method: "GET" }),
+
+  saveTallySettings: async (
+    companyName: string,
+    host: string,
+    port: string,
+    existingIds: { companyNameId: number | null; hostId: number | null; portId: number | null }
+  ): Promise<{ success: boolean }> => {
+    try {
+      const upsert = async (category: string, value: string, existingId: number | null) => {
+        if (existingId) {
+          await fetcher("MasterData/Update", { method: "POST", body: JSON.stringify({ Id: existingId, Category: category, Value: value, IsActive: true }) });
+        } else {
+          await fetcher("MasterData/Create", { method: "POST", body: JSON.stringify({ Category: category, Value: value, IsActive: true }) });
+        }
+      };
+      await upsert("TALLY_COMPANY_NAME", companyName, existingIds.companyNameId);
+      await upsert("TALLY_HOST", host, existingIds.hostId);
+      await upsert("TALLY_PORT", port, existingIds.portId);
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  getTallySettingsWithIds: async (): Promise<{
+    companyName: string; host: string; port: string;
+    companyNameId: number | null; hostId: number | null; portId: number | null;
+  }> => {
+    const [cn, h, p] = await Promise.all([
+      fetcher("MasterData/GetByCategory", { method: "POST", body: JSON.stringify({ Category: "TALLY_COMPANY_NAME" }) }) as Promise<ApiMasterData[]>,
+      fetcher("MasterData/GetByCategory", { method: "POST", body: JSON.stringify({ Category: "TALLY_HOST" }) }) as Promise<ApiMasterData[]>,
+      fetcher("MasterData/GetByCategory", { method: "POST", body: JSON.stringify({ Category: "TALLY_PORT" }) }) as Promise<ApiMasterData[]>,
+    ]);
+    return {
+      companyName: cn[0]?.value ?? "",
+      host:        h[0]?.value ?? "localhost",
+      port:        p[0]?.value ?? "9000",
+      companyNameId: cn[0]?.id ?? null,
+      hostId:        h[0]?.id ?? null,
+      portId:        p[0]?.id ?? null,
+    };
+  },
+
+  fetchTallyLedgers: (): Promise<{ TotalCount: number; Ledgers: TallyLedger[] }> =>
+    fetcher("Tally/FetchLedgers", { method: "GET", skipKeyMapping: true }),
+
+  tallyAutoMap: (): Promise<{ Message: string; MatchedByGST: number; MatchedByName: number; Unmatched: number; TotalProcessed: number }> =>
+    fetcher("Tally/AutoMap", { method: "POST", body: "{}", skipKeyMapping: true }),
+
+  saveTallyMapping: (payload: { CRMClientId: number; TallyLedgerName: string; TallyLedgerType: string }): Promise<{ Message: string }> =>
+    fetcher("Tally/SaveMapping", { method: "POST", body: JSON.stringify(payload) }),
+
+  getTallyMappings: (): Promise<TallyMapping[]> =>
+    fetcher("Tally/GetMappings", { method: "GET", skipKeyMapping: true }),
+
+  deleteTallyMapping: (crmClientId: number): Promise<{ Message: string }> =>
+    fetcher("Tally/DeleteMapping", { method: "POST", body: JSON.stringify({ CRMClientId: crmClientId }) }),
+
+  getTallyPaymentStatus: (clientId: number): Promise<TallyPaymentStatus> =>
+    fetcher(`Tally/GetPaymentStatus/${clientId}`, { method: "GET" }),
+
+  getTallyOutstandingReport: (): Promise<TallyOutstandingRow[]> =>
+    fetcher("Tally/GetOutstandingReport", { method: "GET", skipKeyMapping: true }),
+
+  syncTallyPayments: (): Promise<{ Message: string; Synced: number; SyncedAt: string }> =>
+    fetcher("Tally/Sync", { method: "POST", body: "{}", skipKeyMapping: true }),
 };
 
 // --------------------------------------------------------------
 // EXPORTED API GROUPS
 // --------------------------------------------------------------
-export const api = { ...unifiedApi, getCompanyAuthName };
+export const api = { 
+  ...unifiedApi, 
+  getCompanyAuthName,
+  getEventsPaginated: unifiedApi.getEventsPaginated
+};
 
 
 export const masterDataApi = {
@@ -1494,6 +1743,7 @@ export const dripSequenceApi = {
 export const reportApi = {
   getUserPerformanceReport: unifiedApi.getUserPerformanceReport,
   exportSummaryReport: unifiedApi.exportSummaryReport,
+  getLeadsReport: unifiedApi.getLeadsReport,
 };
 
 export const chatApi = {
@@ -1518,4 +1768,18 @@ export const taskApi = {
   updateTaskStatus: unifiedApi.updateTaskStatus,
   //linkActivitiesToTask: unifiedApi.linkActivitiesToTask, This function does not exist
   completeTask: unifiedApi.completeTask,
+};
+
+export const tallyApi = {
+  getSettings:          unifiedApi.getTallySettings,
+  getSettingsWithIds:   unifiedApi.getTallySettingsWithIds,
+  saveSettings:         unifiedApi.saveTallySettings,
+  fetchLedgers:         unifiedApi.fetchTallyLedgers,
+  autoMap:              unifiedApi.tallyAutoMap,
+  saveMapping:          unifiedApi.saveTallyMapping,
+  getMappings:          unifiedApi.getTallyMappings,
+  deleteMapping:        unifiedApi.deleteTallyMapping,
+  getPaymentStatus:     unifiedApi.getTallyPaymentStatus,
+  getOutstandingReport: unifiedApi.getTallyOutstandingReport,
+  syncFromTally:        unifiedApi.syncTallyPayments,
 };

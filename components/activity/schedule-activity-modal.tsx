@@ -172,6 +172,7 @@ export function ScheduleActivityModal({ currentUser, isOpen, onClose, onSuccess 
             };
 
             await api.scheduleReminder(payload);
+
             toast({ title: "Success", description: "Reminder has been scheduled successfully." });
             onSuccess();
             onClose();
